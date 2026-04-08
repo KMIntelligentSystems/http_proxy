@@ -1,0 +1,24 @@
+{
+	"type": "module",
+	"scripts": {
+		"build": "tsc",
+		"start:proxy": "node dist/proxy.js",
+		"start:host": "node dist/host.js",
+		"dev:proxy": "tsc && node dist/proxy.js",
+		"dev:host": "tsc && node dist/host.js",
+		"dev:tui": "tsc && node dist/cli.js",
+		"start:tui": "node dist/cli.js"
+	},
+	"dependencies": {
+		"@mariozechner/pi-tui": "^0.65.2",
+		"chalk": "^5.4.1",
+		"http-proxy": "^1.18.1",
+		"ws": "^8.20.0"
+	},
+	"devDependencies": {
+		"@types/http-proxy": "^1.17.17",
+		"@types/node": "^25.5.0",
+		"@types/ws": "^8.18.1",
+		"typescript": "^6.0.2"
+	}
+}
