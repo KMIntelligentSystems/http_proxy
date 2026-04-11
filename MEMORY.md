@@ -1,63 +1,79 @@
-# HTTP Proxy + BLS Visualization Project
+# MEMORY.md — Preliminary
+
+> This file will evolve as the project matures. Current status: early-stage.
+
+## Project Overview
+
+Data visualization agent built on the Pi coding-agent SDK. Fetches data from
+external sources, transforms it, and renders interactive SVG charts in a browser.
 
 ## Architecture
 
 ```
 Browser ──► proxy (:8080) ──► host (:3000)
-                                ├── /ui          HTML + D3.js canvas
-                                ├── /ui/ws       WebSocket push (SVG + chart data)
-                                └── /ui/svg      POST endpoint for SVG messages
+                 ▲                  │  ├── /ui          HTML + D3.js canvas
+                 └── loopback ──────┘  ├── /ui/ws       WebSocket push
+                                       └── /ui/svg      POST endpoint for SVG messages
 ```
 
-## Entry Points
-
-| File | Purpose |
-|------|---------|
-| `src/proxy.ts` | HTTP reverse proxy (port 8080 → 3000), auth, WS upgrade |
-| `src/host.ts` | Backend: serves UI, WebSocket broadcast, SVG push API |
-| `src/cli.ts` | Pi TUI: spawns proxy+host, runs InteractiveMode |
-| `src/sdk.ts` | **NEW** — SDK session with custom tools (phase 1) |
-| `src/tools.ts` | **NEW** — Custom tool definitions (bls_fetch, push_chart, clear_canvas) |
-| `src/bls.ts` | **NEW** — BLS API client |
-
-## Custom Tools
-
-| Tool | Description |
-|------|-------------|
-| `bls_fetch` | Fetch time-series data from BLS Public API v2 |
-| `push_chart` | Push D3.js chart config to browser canvas via host API |
-| `clear_canvas` | Clear the browser canvas |
-
-## BLS API
-
-- **Base URL**: `https://api.bls.gov/publicAPI/v2/timeseries/data/`
-- **Key series**:
-  - `CUSR0000SA0` — CPI (Consumer Price Index, All Urban)
-  - `LNS14000000` — Unemployment Rate
-  - `CES0000000001` — Total Nonfarm Payrolls
-  - `CES0500000003` — Average Hourly Earnings
-- **Rate limits**: 25 req/day without key, 500 with key
-- **Env var**: `BLS_API_KEY` (optional)
-
-## Phases
-
-- [x] Phase 1: SDK session (`src/sdk.ts`) with custom tools, no TUI
-- [ ] Phase 2: Upgrade host UI to support D3.js chart rendering
-- [ ] Phase 3: Wire custom tools into TUI (`src/cli.ts`) via extensionFactories
-- [ ] Phase 4: Richer chart types, interactivity, analysis prompts
+| Component | File | Port | Role |
+|-----------|------|------|------|
+| proxy | `src/proxy.ts` | 8080 | Reverse proxy, auth, WS upgrade |
+| host | `src/host.ts` | 3000 | UI shell, WebSocket broadcast, SVG push API |
+| cli | `src/cli.ts` | — | Pi TUI: spawns proxy+host, registers tools, runs agent |
+| mcp-tools | `src/mcp-tools.ts` | — | MCP-to-pi tool bridge via mcporter |
 
 ## Tech Stack
 
-- TypeScript (ES module, Node 24)
-- Pi SDK (`@mariozechner/pi-coding-agent`)
-- TypeBox for tool parameter schemas
-- D3.js (browser-side, CDN)
-- BLS Public API v2
-- WebSocket for real-time chart push
+- **Runtime**: Node 24, ES modules, TypeScript 6
+- **Agent SDK**: `@mariozechner/pi-coding-agent` + `pi-tui` + `pi-agent-core`
+- **Tool schemas**: `@sinclair/typebox`
+- **MCP bridge**: `mcporter` → connects to MCP servers, exposes as pi tools
+- **Browser rendering**: D3.js (CDN, client-side)
+- **WebSocket**: `ws` library for real-time SVG push
 
-## Key Decisions
+## Build & Run
 
-- D3.js runs **client-side** (browser) — we push data + chart config, browser renders
-- Host UI upgraded with new message type `{ type: "chart", ... }` for D3 rendering
-- Custom tools registered via `customTools` array in `createAgentSession`
-- BLS data cached in-memory to respect rate limits
+```bash
+pnpm run build        # tsc
+pnpm run start:tui    # node dist/cli.js  (starts proxy + host + agent TUI)
+pnpm run dev:tui      # build + start
+```
+
+Proxy/host logs → `dist/proxy-host.log`
+
+## Custom Tools Registered
+
+| Tool | Defined in | Description |
+|------|-----------|-------------|
+| `push_svg` | `src/cli.ts` | Push SVG to browser canvas (posts to host :3000 with `x-loopback: 1`) |
+| `hello` | `src/cli.ts` | Test greeting tool |
+| MCP tools (codegen) | `src/mcp-tools.ts` → `localhost:3003/mcp` | Python execution via codegen MCP server |
+
+## Key Conventions
+
+- **SVG push**: `push_svg` posts to host `:3000` directly (bypasses proxy). Browser connects via proxy `:8080`.
+- **Canvas pre-check**: Always navigate to `http://localhost:8080/ui` with Playwright before pushing SVG. If no browser WS client is connected, `push_svg` returns 204 but nothing renders.
+- **No `<script>` tags in SVG push** — browsers block innerHTML script execution. Generate final SVG server-side.
+- **Dark theme**: bg `#161b22`, text `#c9d1d9`, grid `#30363d`, accents `#58a6ff` `#3fb950` `#f78166` `#d2a8ff`
+- **Data output**: When using Python/scripts, print final result as JSON to stdout.
+
+## What's Working
+
+- [x] CLI with MCP tool bridge (mcporter)
+- [x] Proxy + host process management from cli.ts
+- [x] push_svg tool for SVG canvas updates
+- [x] AGENTS.md system prompt with full pipeline description
+
+## What's Not Yet Done
+
+- [ ] Validate host UI supports D3.js rendering end-to-end
+- [ ] Test with real data source (BLS, FRED, etc.)
+- [ ] Playwright validation workflow
+- [ ] Richer chart types and interactivity
+
+## Notes
+
+- `createMcpTools()` in `src/mcp-tools.ts` accepts an array of MCP server configs — extensible for adding more servers
+- Proxy/host are spawned as child processes with stdout/stderr piped to a log file
+- `InteractiveMode` owns the terminal after boot — handles TUI input loop

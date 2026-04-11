@@ -16,6 +16,7 @@
 		"@sinclair/typebox": "^0.34.49",
 		"chalk": "^5.4.1",
 		"http-proxy": "^1.18.1",
+		"mcporter": "^0.8.1",
 		"ws": "^8.20.0"
 	},
 	"devDependencies": {
