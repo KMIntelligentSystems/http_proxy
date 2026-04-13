@@ -71,6 +71,34 @@ Proxy/host logs → `dist/proxy-host.log`
 - [ ] Test with real data source (BLS, FRED, etc.)
 - [ ] Playwright validation workflow
 - [ ] Richer chart types and interactivity
+- [ ] Semantic search over conversations, memories, and tools (see below)
+
+## Planned: Semantic Search with Ollama
+
+**Goal**: Make saved conversations, memories, tools, and other artefacts searchable
+via semantic similarity rather than just keyword matching.
+
+**Approach**:
+- Install [Ollama](https://ollama.com/) locally for embedding generation
+- Use an embedding model (e.g. `nomic-embed-text`, `mxbai-embed-large`, or `all-minilm`)
+- Index: conversations, MEMORY.md content, tool descriptions, agent outputs
+- Store embeddings in a local vector store (options: SQLite + `sqlite-vss`, LanceDB, ChromaDB, or flat JSON + cosine similarity for simplicity)
+- Query: embed the search query → find nearest neighbours → return relevant chunks
+
+**Key decisions still needed**:
+- Which embedding model (trade-off: quality vs speed vs memory)
+- Vector storage backend (lightweight file-based vs proper DB)
+- Chunking strategy (per-conversation, per-message, per-section)
+- When to index (on save? batch? on demand?)
+- Search API surface (CLI command? tool? both?)
+
+**Ollama basics**:
+```bash
+ollama pull nomic-embed-text          # download embedding model
+ollama run nomic-embed-text           # test it
+# API: POST http://localhost:11434/api/embeddings
+#   { "model": "nomic-embed-text", "prompt": "search text here" }
+```
 
 ## Notes
 

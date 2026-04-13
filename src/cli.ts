@@ -28,8 +28,14 @@ const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
       "Use these tools when asked to generate, scaffold, or transform code via the codegen service.",
     ],
   },
-  // Add more MCP servers here as needed:
-  // { name: "playwright", url: "http://localhost:3000/mcp", skillPath: ".pi/skills/playwright/SKILL.md" },
+  {
+    name: "playwright",
+    url: "http://localhost:3000/mcp",
+  },
+  {
+    name: "search",
+    url: "http://localhost:3004/mcp",
+  },
 ]);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(__dirname, "..");
