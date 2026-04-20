@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>OEWS National Drilldown — BLS 2024</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Geist+Mono:wght@400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Tokens ───────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0f13;
+  --surface:#13171d;
+  --surface-raised:#181d25;
+  --border:rgba(255,255,255,.06);
+  --border-hi:rgba(255,255,255,.12);
+  --text:#b8c0cc;
+  --text-dim:#636d7e;
+  --text-bright:#e8ecf2;
+  --text-muted:#3d4553;
+  --accent:#6eaaff;
+  --accent-dim:rgba(110,170,255,.12);
+  --accent-glow:rgba(110,170,255,.25);
+  --green:#4ade80;
+  --green-dim:rgba(74,222,128,.12);
+  --orange:#fb923c;
+  --orange-dim:rgba(251,146,60,.12);
+  --rose:#fb7185;
+  --rose-dim:rgba(251,113,133,.12);
+  --violet:#a78bfa;
+  --violet-dim:rgba(167,139,250,.12);
+  --gold:#fbbf24;
+  --gold-dim:rgba(251,191,36,.12);
+  --serif:'Instrument Serif', Georgia, serif;
+  --sans:'DM Sans', -apple-system, sans-serif;
+  --mono:'Geist Mono', 'SF Mono', 'Consolas', monospace;
+  --radius:8px;
+  --radius-lg:12px;
+  --shadow-sm:0 1px 3px rgba(0,0,0,.3);
+  --shadow-md:0 4px 16px rgba(0,0,0,.4);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.5);
+  --transition:all .2s cubic-bezier(.4,0,.2,1);
+}
+html{font-size:14px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.55;overflow:hidden;height:100vh}
+
+/* ── Noise Texture Overlay ────────────────────────────────────── */
+body::before{
+  content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  opacity:.03;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:128px 128px;
+}
+
+/* ── Layout ───────────────────────────────────────────────────── */
+.app{
+  display:grid;
+  grid-template-columns:340px 1fr;
+  grid-template-rows:auto 1fr auto;
+  height:100vh;
+}
+
+/* ── Header ───────────────────────────────────────────────────── */
+.header{
+  grid-column:1/-1;
+  padding:14px 28px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:20px;
+  backdrop-filter:blur(8px);
+  position:relative;
+  z-index:10;
+}
+.header::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--accent-dim),var(--violet-dim),transparent);
+}
+.header-brand{display:flex;align-items:baseline;gap:12px}
+.header h1{
+  font-family:var(--serif);
+  font-size:1.55rem;
+  font-weight:400;
+  color:var(--text-bright);
+  letter-spacing:-.02em;
+  line-height:1;
+}
+.header .edition{
+  font-family:var(--mono);
+  font-size:.68rem;
+  font-weight:500;
+  padding:3px 10px;
+  border-radius:20px;
+  background:var(--accent-dim);
+  color:var(--accent);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.header .spacer{flex:1}
+.header .source-tag{
+  font-size:.72rem;
+  color:var(--text-dim);
+  font-family:var(--mono);
+  letter-spacing:.02em;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────── */
+.sidebar{
+  grid-column:1;grid-row:2;
+  overflow-y:auto;
+  border-right:1px solid var(--border);
+  padding:20px;
+  display:flex;flex-direction:column;gap:18px;
+  background:var(--surface);
+}
+
+.filter-group{display:flex;flex-direction:column;gap:6px}
+.filter-group label{
+  font-size:.65rem;font-weight:600;color:var(--text-dim);
+  text-transform:uppercase;letter-spacing:.1em;
+  font-family:var(--mono);
+}
+
+select,input[type="text"]{
+  background:var(--bg);
+  border:1px solid var(--border);
+  color:var(--text);
+  padding:9px 12px;
+  border-radius:var(--radius);
+  font-size:.82rem;
+  font-family:var(--sans);
+  width:100%;outline:none;
+  transition:var(--transition);
+}
+select:focus,input:focus{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px var(--accent-dim);
+}
+select option{background:var(--bg);color:var(--text)}
+input::placeholder{color:var(--text-muted)}
+
+.search-wrap{position:relative}
+.search-wrap input{padding-left:36px}
+.search-wrap::before{
+  content:'⌕';
+  position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  font-size:1rem;color:var(--text-muted);pointer-events:none;
+}
+
+.occ-list{
+  flex:1;overflow-y:auto;
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  min-height:200px;
+}
+.occ-item{
+  padding:7px 12px;
+  cursor:pointer;
+  font-size:.78rem;
+  border-bottom:1px solid var(--border);
+  transition:var(--transition);
+  display:flex;align-items:baseline;gap:8px;
+}
+.occ-item:hover{background:var(--surface-raised)}
+.occ-item.selected{
+  background:var(--accent-dim);
+  border-left:3px solid var(--accent);
+  padding-left:9px;
+}
+.occ-item .code{
+  color:var(--text-muted);
+  font-family:var(--mono);
+  font-size:.68rem;
+  flex-shrink:0;
+  min-width:52px;
+}
+.occ-item.selected .code{color:var(--accent)}
+.occ-item .title{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.occ-item .emp{
+  color:var(--text-muted);
+  font-size:.68rem;
+  font-family:var(--mono);
+  flex-shrink:0;
+}
+.occ-item.selected .emp{color:var(--text-dim)}
+.occ-meta-row{
+  display:flex;justify-content:space-between;align-items:center;
+}
+.occ-count{
+  font-size:.68rem;color:var(--text-dim);
+  font-family:var(--mono);
+}
+
+/* ── Main Content ─────────────────────────────────────────────── */
+.main{
+  grid-column:2;grid-row:2;
+  overflow-y:auto;
+  padding:24px 28px;
+  display:flex;flex-direction:column;gap:20px;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────── */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-lg);
+  padding:20px;
+  transition:var(--transition);
+}
+.card:hover{border-color:var(--border-hi)}
+.card-title{
+  font-family:var(--mono);
+  font-size:.68rem;
+  font-weight:600;
+  color:var(--text-dim);
+  margin-bottom:14px;
+  text-transform:uppercase;
+  letter-spacing:.1em;
+  display:flex;align-items:center;gap:8px;
+}
+.card-title .icon{font-size:.9rem;opacity:.6}
+
+/* ── Empty State ──────────────────────────────────────────────── */
+.empty-state{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:400px;gap:16px;text-align:center;
+}
+.empty-state .glyph{
+  font-size:4rem;opacity:.15;
+  font-family:var(--serif);
+}
+.empty-state h2{
+  font-family:var(--serif);
+  font-size:1.6rem;
+  font-weight:400;
+  color:var(--text-dim);
+}
+.empty-state p{
+  font-size:.82rem;
+  color:var(--text-muted);
+  max-width:340px;
+  line-height:1.6;
+}
+
+/* ── KPI Row ──────────────────────────────────────────────────── */
+.occ-headline{
+  font-family:var(--serif);
+  font-size:1.25rem;
+  color:var(--text-bright);
+  margin-bottom:16px;
+  line-height:1.3;
+}
+.occ-headline .soc{
+  font-family:var(--mono);
+  font-size:.72rem;
+  color:var(--text-dim);
+  margin-right:8px;
+  vertical-align:2px;
+}
+.kpi-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
+  gap:10px;
+}
+.kpi{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px 12px;
+  text-align:center;
+  transition:var(--transition);
+  position:relative;
+  overflow:hidden;
+}
+.kpi::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:var(--border);transition:var(--transition);
+}
+.kpi:hover{border-color:var(--border-hi)}
+.kpi .value{
+  font-size:1.35rem;
+  font-weight:700;
+  color:var(--text-bright);
+  font-family:var(--mono);
+  letter-spacing:-.02em;
+}
+.kpi .label{
+  font-size:.62rem;
+  color:var(--text-dim);
+  margin-top:4px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+  font-family:var(--mono);
+}
+.kpi.accent::before{background:var(--accent)}
+.kpi.accent .value{color:var(--accent)}
+.kpi.green::before{background:var(--green)}
+.kpi.green .value{color:var(--green)}
+.kpi.violet::before{background:var(--violet)}
+.kpi.violet .value{color:var(--violet)}
+
+/* ── Metric Pills ─────────────────────────────────────────────── */
+.metric-pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{
+  padding:5px 12px;border-radius:20px;font-size:.68rem;cursor:pointer;
+  border:1px solid var(--border);background:transparent;color:var(--text-dim);
+  transition:var(--transition);font-family:var(--mono);letter-spacing:.02em;
+}
+.pill:hover{border-color:var(--text-dim);color:var(--text);background:var(--surface-raised)}
+.pill.active{background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600}
+
+/* ── Series ID Panel ──────────────────────────────────────────── */
+.series-panel{display:flex;flex-direction:column;gap:6px}
+.series-id-row{
+  display:flex;align-items:center;gap:10px;
+  background:var(--bg);
+  padding:8px 14px;
+  border-radius:var(--radius);
+  border:1px solid var(--border);
+  transition:var(--transition);
+}
+.series-id-row:hover{border-color:var(--border-hi)}
+.series-id-row .meta-label{
+  font-size:.65rem;color:var(--text-dim);min-width:90px;
+  font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;
+}
+.series-id-row .id{
+  font-family:var(--mono);font-size:.8rem;color:var(--accent);flex:1;
+  word-break:break-all;letter-spacing:.03em;
+}
+.btn{
+  padding:6px 14px;border-radius:var(--radius);font-size:.7rem;cursor:pointer;
+  border:1px solid var(--border);background:var(--surface-raised);color:var(--text);
+  font-family:var(--mono);transition:var(--transition);white-space:nowrap;
+  letter-spacing:.03em;text-transform:uppercase;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim)}
+.btn.primary{
+  background:var(--accent);color:var(--bg);border-color:var(--accent);font-weight:600;
+  box-shadow:0 0 20px var(--accent-dim);
+}
+.btn.primary:hover{background:#85bbff;box-shadow:0 0 30px var(--accent-glow)}
+.btn.copied{background:var(--green);border-color:var(--green);color:var(--bg)}
+
+.actions-row{
+  margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+}
+
+/* ── Status ────────────────────────────────────────────────────── */
+.status{display:inline-flex;align-items:center;gap:5px;font-size:.68rem;font-family:var(--mono);color:var(--text-dim)}
+.status .dot{width:7px;height:7px;border-radius:50%;transition:var(--transition)}
+.status .dot.cached{background:var(--green);box-shadow:0 0 6px var(--green-dim)}
+.status .dot.pending{background:var(--orange);box-shadow:0 0 6px var(--orange-dim)}
+.status .dot.none{background:var(--text-muted)}
+
+/* ── Chart ─────────────────────────────────────────────────────── */
+.chart-container{position:relative;min-height:320px}
+.chart-container svg{width:100%;height:320px}
+.chart-container .no-data{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--text-muted);font-size:.82rem;gap:6px;
+}
+.chart-container .no-data .nd-icon{font-size:1.8rem;opacity:.4}
+
+.wage-dist-chart svg{width:100%;height:200px}
+
+/* ── Table ─────────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto;max-height:340px;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:.76rem}
+th{
+  position:sticky;top:0;
+  background:var(--surface);
+  color:var(--text-dim);
+  font-weight:600;text-align:left;
+  padding:10px 12px;
+  border-bottom:2px solid var(--border-hi);
+  font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;
+  font-family:var(--mono);white-space:nowrap;
+}
+td{padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap;transition:background .1s}
+tr:hover td{background:var(--surface-raised)}
+td.num{text-align:right;font-family:var(--mono);font-size:.74rem;letter-spacing:.02em}
+td.highlight{color:var(--accent)}
+tr.row-selected td{background:var(--accent-dim)}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:0;margin-bottom:14px}
+.tab{
+  padding:8px 18px;font-size:.72rem;cursor:pointer;
+  color:var(--text-dim);border-bottom:2px solid transparent;
+  transition:var(--transition);font-family:var(--mono);
+  letter-spacing:.04em;text-transform:uppercase;
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── Footer ───────────────────────────────────────────────────── */
+.footer{
+  grid-column:1/-1;
+  padding:10px 28px;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  font-size:.65rem;
+  color:var(--text-muted);
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);
+  letter-spacing:.02em;
+}
+.footer a{color:var(--accent);text-decoration:none;transition:var(--transition)}
+.footer a:hover{color:#85bbff;text-decoration:underline}
+
+/* ── Tooltip ──────────────────────────────────────────────────── */
+.tooltip{
+  position:fixed;pointer-events:none;
+  background:var(--surface-raised);
+  border:1px solid var(--border-hi);
+  border-radius:var(--radius);
+  padding:10px 14px;
+  font-size:.74rem;color:var(--text);
+  z-index:1000;
+  box-shadow:var(--shadow-lg);
+  max-width:300px;
+  backdrop-filter:blur(12px);
+}
+.tooltip .tt-title{font-weight:600;color:var(--text-bright);margin-bottom:4px;font-family:var(--mono);font-size:.72rem}
+.tooltip .tt-row{display:flex;justify-content:space-between;gap:14px}
+.tooltip .tt-label{color:var(--text-dim);font-size:.7rem}
+.tooltip .tt-val{font-family:var(--mono);color:var(--accent);font-weight:600}
+
+/* ── Spinner ──────────────────────────────────────────────────── */
+.loading{display:flex;align-items:center;gap:8px;color:var(--text-dim);font-size:.8rem}
+.spinner{
+  width:14px;height:14px;
+  border:2px solid var(--border);
+  border-top-color:var(--accent);
+  border-radius:50%;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Scrollbar ────────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted)}
+
+/* ── Histogram ─────────────────────────────────────────────────── */
+.histogram-container{position:relative;min-height:360px}
+.histogram-container svg{width:100%;height:380px}
+.hist-bar{transition:opacity .2s}
+.hist-bar:hover{opacity:.85}
+.hist-toggle{display:flex;gap:4px;margin-left:auto}
+.hist-toggle .pill{font-size:.62rem;padding:4px 10px}
+.hist-summary{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
+.hist-stat{display:flex;flex-direction:column;gap:2px}
+.hist-stat .hs-val{font-family:var(--mono);font-size:1rem;font-weight:600;color:var(--text-bright)}
+.hist-stat .hs-label{font-family:var(--mono);font-size:.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+
+/* ── Animations ───────────────────────────────────────────────── */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+.animate-in{animation:fadeUp .4s cubic-bezier(.4,0,.2,1) forwards}
+.fade-in{animation:fadeIn .3s ease forwards}
+
+/* ── Stagger delays ───────────────────────────────────────────── */
+.delay-1{animation-delay:.05s;opacity:0}
+.delay-2{animation-delay:.1s;opacity:0}
+.delay-3{animation-delay:.15s;opacity:0}
+.delay-4{animation-delay:.2s;opacity:0}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">
+      <h1>OEWS National Drilldown</h1>
+      <span class="edition">May 2024</span>
+    </div>
+    <span class="spacer"></span>
+    <span class="source-tag">Bureau of Labor Statistics · Occupational Employment &amp; Wage Statistics</span>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="filter-group">
+      <label>Search</label>
+      <div class="search-wrap">
+        <input type="text" id="searchInput" placeholder="Title or SOC code…"/>
+      </div>
+    </div>
+    <div class="filter-group">
+      <label>Occupation Group</label>
+      <select id="groupFilter">
+        <option value="all">All Levels</option>
+        <option value="major">Major (XX-0000)</option>
+        <option value="minor">Minor (XX-X000)</option>
+        <option value="broad">Broad (XX-XXX0)</option>
+        <option value="detailed" selected>Detailed (XX-XXXX)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Major Group</label>
+      <select id="majorFilter">
+        <option value="all">All Major Groups</option>
+      </select>
+    </div>
+    <div class="occ-meta-row">
+      <label style="font-size:.65rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono)">Occupations</label>
+      <span class="occ-count" id="occCount">0 results</span>
+    </div>
+    <div class="occ-list" id="occList"></div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main" id="mainContent">
+    <!-- Empty state shown by default -->
+    <div class="empty-state" id="emptyState">
+      <div class="glyph">§</div>
+      <h2>Select an Occupation</h2>
+      <p>Choose from the sidebar to explore wages, employment, percentile distributions, and BLS time series data.</p>
+      <div style="font-family:var(--mono);font-size:.65rem;color:var(--text-muted);margin-top:8px">↑↓ or j/k to navigate · Enter to select</div>
+    </div>
+
+    <!-- KPI Row (hidden until selection) -->
+    <div class="card animate-in" id="kpiCard" style="display:none">
+      <div class="occ-headline" id="kpiTitle"></div>
+      <div class="kpi-row" id="kpiRow"></div>
+    </div>
+
+    <!-- Wage Interval Histogram -->
+    <div class="card animate-in delay-1" id="histCard" style="display:none">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="card-title" style="margin:0"><span class="icon">▥</span> Wage Interval Distribution</div>
+        <div class="hist-toggle" id="histToggle">
+          <div class="pill" data-mode="employment">Employment</div>
+          <div class="pill" data-mode="count">Occ Count</div>
+          <div class="pill active" data-mode="pdf">PDF</div>
+        </div>
+      </div>
+      <div class="histogram-container" id="histChart"></div>
+      <div class="hist-summary" id="histSummary"></div>
+    </div>
+
+    <!-- Wage Distribution -->
+    <div class="card animate-in delay-2" id="wageDistCard" style="display:none">
+      <div class="card-title"><span class="icon">◆</span> Wage Distribution — Annual Percentiles</div>
+      <div class="wage-dist-chart" id="wageDist"></div>
+    </div>
+
+    <!-- Series ID & API -->
+    <div class="card animate-in delay-3" id="seriesCard" style="display:none">
+      <div class="card-title"><span class="icon">⟡</span> BLS Series IDs</div>
+      <div class="series-panel" id="seriesPanel"></div>
+      <div class="actions-row">
+        <button class="btn primary" id="fetchBtn" disabled>Fetch Time Series</button>
+        <span class="status" id="cacheStatus"><span class="dot none"></span>No data cached</span>
+        <span style="flex:1"></span>
+        <button class="btn" id="copyApiBtn">Copy API Payload</button>
+      </div>
+    </div>
+
+    <!-- Timeseries Chart -->
+    <div class="card animate-in delay-4" id="tsCard" style="display:none">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+        <div class="card-title" style="margin:0"><span class="icon">↗</span> Time Series</div>
+        <div class="metric-pills" id="tsMetricPills"></div>
+      </div>
+      <div class="chart-container" id="tsChart">
+        <div class="no-data"><span class="nd-icon">⊘</span>Fetch BLS data to view time series</div>
+      </div>
+    </div>
+
+    <!-- Comparison Table -->
+    <div class="card" id="tableCard">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:4px;flex-wrap:wrap">
+        <div class="card-title" style="margin:0"><span class="icon">≡</span> Comparison</div>
+        <div class="tab-bar" style="margin:0;border:0">
+          <div class="tab active" data-tab="wages">Wages</div>
+          <div class="tab" data-tab="employment">Employment</div>
+        </div>
+        <span style="flex:1"></span>
+        <button class="btn" id="exportCsv">↓ Export CSV</button>
+      </div>
+      <div class="table-wrap" id="tableWrap">
+        <table><thead><tr></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>Source: U.S. Bureau of Labor Statistics, OEWS Survey, May 2024 · <a href="https://www.bls.gov/oes/" target="_blank">bls.gov/oes</a></span>
+    <span id="footerRight">National cross-industry estimates · 1,403 occupations</span>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip" style="display:none"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// DATA & STATE
+// ══════════════════════════════════════════════════════════════════
+let DATA = null;
+const STATE = {
+  search: '',
+  group: 'detailed',
+  major: 'all',
+  selected: null,
+  tsMetric: 'A_MEAN',
+  tableTab: 'wages',
+  cache: {},
+};
+
+const FMT = {
+  int: v => v == null ? '—' : v.toLocaleString('en-US'),
+  dollar: v => v == null ? '—' : '$' + v.toLocaleString('en-US', {minimumFractionDigits: v < 1000 ? 2 : 0, maximumFractionDigits: 2}),
+  pct: v => v == null ? '—' : v.toFixed(1) + '%',
+};
+
+function fmtMetric(key, val) {
+  const cat = DATA?.metric_catalog.find(m => m.key === key);
+  return cat ? FMT[cat.format](val) : (val ?? '—');
+}
+
+function seriesId(occ, datatypeCode) {
+  const s = occ.stencil;
+  return s.survey + s.seasonal + s.areatype + s.area_code + s.industry_code + s.occ_code + datatypeCode;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+(async () => {
+  try {
+    const resp = await fetch('/ui/data/oe_national_2024.json');
+    DATA = await resp.json();
+    buildMajorFilter();
+    applyFilters();
+    renderHistogram();
+    console.log(`Loaded ${DATA.occupations.length} occupations`);
+    document.getElementById('footerRight').textContent =
+      `National cross-industry estimates · ${DATA.occupations.length.toLocaleString()} occupations`;
+  } catch (e) {
+    console.error('Failed to load data', e);
+    document.getElementById('mainContent').innerHTML =
+      '<div class="card" style="margin:40px"><p style="color:var(--orange)">Failed to load occupation data. Ensure dist/oe_national_2024.json is served.</p></div>';
+  }
+})();
+
+// ══════════════════════════════════════════════════════════════════
+// FILTERS
+// ══════════════════════════════════════════════════════════════════
+function buildMajorFilter() {
+  const sel = document.getElementById('majorFilter');
+  const majors = DATA.occupations.filter(o => o.o_group === 'major')
+    .sort((a, b) => a.occ_code.localeCompare(b.occ_code));
+  for (const m of majors) {
+    const opt = document.createElement('option');
+    opt.value = m.occ_code.substring(0, 2);
+    opt.textContent = `${m.occ_code.substring(0, 2)} — ${m.occ_title}`;
+    sel.appendChild(opt);
+  }
+}
+
+function filteredOccupations() {
+  if (!DATA) return [];
+  let list = DATA.occupations;
+  if (STATE.group !== 'all') list = list.filter(o => o.o_group === STATE.group);
+  if (STATE.major !== 'all') list = list.filter(o => o.occ_code.startsWith(STATE.major));
+  if (STATE.search) {
+    const q = STATE.search.toLowerCase();
+    list = list.filter(o => o.occ_title.toLowerCase().includes(q) || o.occ_code.includes(q));
+  }
+  return list;
+}
+
+function applyFilters() {
+  const list = filteredOccupations();
+  renderOccList(list);
+  document.getElementById('occCount').textContent = `${list.length} result${list.length !== 1 ? 's' : ''}`;
+  renderTable(list);
+}
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  STATE.search = e.target.value.trim();
+  applyFilters();
+});
+document.getElementById('groupFilter').addEventListener('change', e => {
+  STATE.group = e.target.value;
+  applyFilters();
+});
+document.getElementById('majorFilter').addEventListener('change', e => {
+  STATE.major = e.target.value;
+  applyFilters();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// OCCUPATION LIST
+// ══════════════════════════════════════════════════════════════════
+function renderOccList(list) {
+  const container = document.getElementById('occList');
+  container.innerHTML = '';
+  const show = list.slice(0, 500);
+  for (const occ of show) {
+    const div = document.createElement('div');
+    div.className = 'occ-item' + (occ.occ_code === STATE.selected ? ' selected' : '');
+    const emp = occ.metrics.TOT_EMP.value;
+    div.innerHTML = `<span class="code">${occ.occ_code}</span><span class="title">${occ.occ_title}</span><span class="emp">${emp ? FMT.int(emp) : ''}</span>`;
+    div.addEventListener('click', () => selectOccupation(occ.occ_code));
+    container.appendChild(div);
+  }
+  if (list.length > 500) {
+    const more = document.createElement('div');
+    more.className = 'occ-item';
+    more.style.color = 'var(--text-muted)';
+    more.style.justifyContent = 'center';
+    more.textContent = `… and ${list.length - 500} more — refine your search`;
+    container.appendChild(more);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SELECT OCCUPATION
+// ══════════════════════════════════════════════════════════════════
+function selectOccupation(code) {
+  STATE.selected = code;
+  document.querySelectorAll('.occ-item').forEach(el => {
+    const elCode = el.querySelector('.code')?.textContent;
+    el.classList.toggle('selected', elCode === code);
+  });
+  const occ = DATA.occupations.find(o => o.occ_code === code);
+  if (!occ) return;
+
+  // Hide empty state, show cards
+  document.getElementById('emptyState').style.display = 'none';
+
+  renderKPIs(occ);
+  renderHistogram();
+  renderWageDist(occ);
+  renderSeriesPanel(occ);
+  renderTimeseriesPanel(occ);
+
+  // Re-trigger animations
+  document.querySelectorAll('.card.animate-in').forEach(c => {
+    c.style.animation = 'none';
+    c.offsetHeight; // force reflow
+    c.style.animation = '';
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// KPI CARDS
+// ══════════════════════════════════════════════════════════════════
+function renderKPIs(occ) {
+  const card = document.getElementById('kpiCard');
+  card.style.display = '';
+  document.getElementById('kpiTitle').innerHTML =
+    `<span class="soc">${occ.occ_code}</span>${occ.occ_title}`;
+
+  const kpis = [
+    { key: 'TOT_EMP', label: 'Employment', style: 'green' },
+    { key: 'A_MEDIAN', label: 'Annual Median', style: 'accent' },
+    { key: 'A_MEAN', label: 'Annual Mean', style: '' },
+    { key: 'H_MEDIAN', label: 'Hourly Median', style: 'violet' },
+    { key: 'A_PCT10', label: '10th Percentile', style: '' },
+    { key: 'A_PCT90', label: '90th Percentile', style: '' },
+  ];
+
+  document.getElementById('kpiRow').innerHTML = kpis.map(k => {
+    const v = occ.metrics[k.key]?.value;
+    return `<div class="kpi ${k.style}"><div class="value">${fmtMetric(k.key, v)}</div><div class="label">${k.label}</div></div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// WAGE DISTRIBUTION (BOX/RANGE CHART)
+// ══════════════════════════════════════════════════════════════════
+function renderWageDist(occ) {
+  const card = document.getElementById('wageDistCard');
+  const container = document.getElementById('wageDist');
+  container.innerHTML = '';
+
+  const p10 = occ.metrics.A_PCT10?.value;
+  const p25 = occ.metrics.A_PCT25?.value;
+  const p50 = occ.metrics.A_MEDIAN?.value;
+  const p75 = occ.metrics.A_PCT75?.value;
+  const p90 = occ.metrics.A_PCT90?.value;
+  const mean = occ.metrics.A_MEAN?.value;
+
+  if ([p10, p25, p50, p75, p90].some(v => v == null)) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  const allOcc = DATA.occupations.find(o => o.occ_code === '00-0000');
+  const natMedian = allOcc?.metrics.A_MEDIAN?.value;
+
+  const margin = { top: 42, right: 40, bottom: 52, left: 60 };
+  const width = container.clientWidth || 700;
+  const height = 200;
+  const iw = width - margin.left - margin.right;
+  const ih = height - margin.top - margin.bottom;
+
+  const svg = d3.select(container).append('svg')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  const lo = p10 * 0.88;
+  const hi = p90 * 1.12;
+  const x = d3.scaleLinear().domain([lo, hi]).range([0, iw]);
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+  const cy = ih / 2;
+  const boxH = 38;
+
+  // Background gradient for whisker range
+  const defs = svg.append('defs');
+  const grad = defs.append('linearGradient').attr('id', 'whiskerGrad');
+  grad.append('stop').attr('offset', '0%').attr('stop-color', '#6eaaff').attr('stop-opacity', 0);
+  grad.append('stop').attr('offset', '50%').attr('stop-color', '#6eaaff').attr('stop-opacity', .06);
+  grad.append('stop').attr('offset', '100%').attr('stop-color', '#6eaaff').attr('stop-opacity', 0);
+
+  g.append('rect').attr('x', x(p10)).attr('y', cy - boxH).attr('width', x(p90) - x(p10)).attr('height', boxH * 2)
+    .attr('fill', 'url(#whiskerGrad)').attr('rx', 4);
+
+  // Whisker line
+  g.append('line').attr('x1', x(p10)).attr('x2', x(p90)).attr('y1', cy).attr('y2', cy)
+    .attr('stroke', 'rgba(255,255,255,.12)').attr('stroke-width', 2);
+
+  // Whisker caps
+  [p10, p90].forEach(v => {
+    g.append('line').attr('x1', x(v)).attr('x2', x(v)).attr('y1', cy - boxH/2).attr('y2', cy + boxH/2)
+      .attr('stroke', 'rgba(255,255,255,.15)').attr('stroke-width', 2);
+  });
+
+  // IQR box
+  g.append('rect').attr('x', x(p25)).attr('y', cy - boxH/2)
+    .attr('width', x(p75) - x(p25)).attr('height', boxH)
+    .attr('fill', 'rgba(110,170,255,.1)').attr('stroke', 'var(--accent)').attr('stroke-width', 1.5)
+    .attr('rx', 4);
+
+  // Median line
+  g.append('line').attr('x1', x(p50)).attr('x2', x(p50)).attr('y1', cy - boxH/2 - 5).attr('y2', cy + boxH/2 + 5)
+    .attr('stroke', 'var(--accent)').attr('stroke-width', 3).attr('stroke-linecap', 'round');
+
+  // Mean diamond
+  if (mean != null) {
+    const mx = x(mean);
+    g.append('polygon')
+      .attr('points', `${mx},${cy-9} ${mx+7},${cy} ${mx},${cy+9} ${mx-7},${cy}`)
+      .attr('fill', 'var(--violet)').attr('stroke', 'var(--bg)').attr('stroke-width', 1);
+  }
+
+  // National median reference
+  if (natMedian != null && natMedian >= lo && natMedian <= hi) {
+    g.append('line').attr('x1', x(natMedian)).attr('x2', x(natMedian)).attr('y1', -10).attr('y2', ih + 10)
+      .attr('stroke', 'var(--orange)').attr('stroke-width', 1).attr('stroke-dasharray', '3,4').attr('opacity', .7);
+    g.append('text').attr('x', x(natMedian)).attr('y', -16).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--orange)').attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('letter-spacing', '.03em')
+      .text(`NAT'L MEDIAN $${(natMedian/1000).toFixed(0)}K`);
+  }
+
+  // Percentile labels
+  const labels = [
+    { v: p10, label: 'P10' },
+    { v: p25, label: 'P25' },
+    { v: p50, label: 'MEDIAN' },
+    { v: p75, label: 'P75' },
+    { v: p90, label: 'P90' },
+  ];
+  labels.forEach(l => {
+    g.append('text').attr('x', x(l.v)).attr('y', cy + boxH/2 + 18).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--text-dim)').attr('font-size', '9px').attr('font-family', 'var(--mono)')
+      .attr('letter-spacing', '.06em').text(l.label);
+    g.append('text').attr('x', x(l.v)).attr('y', cy + boxH/2 + 31).attr('text-anchor', 'middle')
+      .attr('fill', l.label === 'MEDIAN' ? 'var(--accent)' : 'var(--text)')
+      .attr('font-size', '11px').attr('font-family', 'var(--mono)').attr('font-weight', l.label === 'MEDIAN' ? '600' : '400')
+      .text('$' + (l.v >= 1000 ? (l.v/1000).toFixed(0) + 'K' : l.v));
+  });
+
+  // Mean label
+  if (mean != null) {
+    g.append('text').attr('x', x(mean)).attr('y', cy - boxH/2 - 14).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--violet)').attr('font-size', '9px').attr('font-family', 'var(--mono)')
+      .attr('letter-spacing', '.03em').text(`MEAN $${(mean/1000).toFixed(0)}K`);
+  }
+
+  // Legend
+  const leg = svg.append('g').attr('transform', `translate(${margin.left}, 14)`);
+  const items = [
+    { color: 'var(--accent)', label: 'Median', type: 'line' },
+    { color: 'var(--violet)', label: 'Mean', type: 'diamond' },
+    { color: 'var(--orange)', label: "Nat'l Median", type: 'dash' },
+  ];
+  let lx = 0;
+  items.forEach(it => {
+    if (it.type === 'line') {
+      leg.append('line').attr('x1', lx).attr('x2', lx+12).attr('y1', 5).attr('y2', 5)
+        .attr('stroke', it.color).attr('stroke-width', 3).attr('stroke-linecap', 'round');
+    } else if (it.type === 'diamond') {
+      leg.append('polygon').attr('points', `${lx+6},0 ${lx+11},5 ${lx+6},10 ${lx+1},5`).attr('fill', it.color);
+    } else {
+      leg.append('line').attr('x1', lx).attr('x2', lx+12).attr('y1', 5).attr('y2', 5)
+        .attr('stroke', it.color).attr('stroke-width', 1).attr('stroke-dasharray', '3,3');
+    }
+    leg.append('text').attr('x', lx + 16).attr('y', 9).attr('fill', 'var(--text-dim)')
+      .attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('letter-spacing', '.03em').text(it.label);
+    lx += 16 + it.label.length * 5.5 + 14;
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SERIES ID PANEL
+// ══════════════════════════════════════════════════════════════════
+function renderSeriesPanel(occ) {
+  const card = document.getElementById('seriesCard');
+  card.style.display = '';
+  const panel = document.getElementById('seriesPanel');
+
+  const keyMetrics = [
+    { key: 'TOT_EMP', dt: '01', label: 'Employment' },
+    { key: 'A_MEAN', dt: '04', label: 'Ann Mean' },
+    { key: 'A_MEDIAN', dt: '13', label: 'Ann Median' },
+    { key: 'H_MEAN', dt: '03', label: 'Hr Mean' },
+    { key: 'H_MEDIAN', dt: '08', label: 'Hr Median' },
+  ];
+
+  panel.innerHTML = keyMetrics.map(m => {
+    const sid = seriesId(occ, m.dt);
+    const cached = STATE.cache[sid];
+    const statusClass = cached ? 'cached' : 'none';
+    const statusText = cached ? `${cached.data.length} pts` : '—';
+    return `<div class="series-id-row">
+      <span class="meta-label">${m.label}</span>
+      <span class="id">${sid}</span>
+      <span class="status"><span class="dot ${statusClass}"></span>${statusText}</span>
+      <button class="btn copy-id-btn" data-id="${sid}">Copy</button>
+    </div>`;
+  }).join('');
+
+  panel.querySelectorAll('.copy-id-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      navigator.clipboard.writeText(btn.dataset.id).then(() => {
+        btn.classList.add('copied');
+        btn.textContent = 'Copied';
+        setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'Copy'; }, 1200);
+      });
+    });
+  });
+
+  const fetchBtn = document.getElementById('fetchBtn');
+  fetchBtn.disabled = false;
+  fetchBtn.onclick = () => fetchBLSData(occ);
+
+  document.getElementById('copyApiBtn').onclick = () => {
+    const ids = keyMetrics.map(m => seriesId(occ, m.dt));
+    const payload = JSON.stringify({ seriesid: ids, startyear: '2014', endyear: '2024', registrationkey: '<YOUR_KEY>' }, null, 2);
+    navigator.clipboard.writeText(payload);
+  };
+
+  updateCacheStatus(occ);
+}
+
+function updateCacheStatus(occ) {
+  const sid = seriesId(occ, '04');
+  const cached = STATE.cache[sid];
+  const el = document.getElementById('cacheStatus');
+  if (cached) {
+    el.innerHTML = `<span class="dot cached"></span>Cached · ${cached.fetched}`;
+  } else {
+    el.innerHTML = `<span class="dot none"></span>No data cached`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// BLS API FETCH
+// ══════════════════════════════════════════════════════════════════
+async function fetchBLSData(occ) {
+  const fetchBtn = document.getElementById('fetchBtn');
+  fetchBtn.disabled = true;
+  fetchBtn.innerHTML = '<span class="spinner" style="display:inline-block;width:12px;height:12px;border-width:1.5px;vertical-align:middle;margin-right:6px"></span>Fetching…';
+
+  const metrics = [
+    { key: 'TOT_EMP', dt: '01' },
+    { key: 'H_MEAN', dt: '03' },
+    { key: 'A_MEAN', dt: '04' },
+    { key: 'H_MEDIAN', dt: '08' },
+    { key: 'A_MEDIAN', dt: '13' },
+  ];
+  const seriesIds = metrics.map(m => seriesId(occ, m.dt));
+
+  try {
+    const resp = await fetch('/ui/api/bls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seriesid: seriesIds, startyear: '2019', endyear: '2024' })
+    });
+    const json = await resp.json();
+    if (json.status === 'REQUEST_SUCCEEDED' && json.Results?.series) {
+      const now = new Date().toLocaleTimeString();
+      for (const s of json.Results.series) {
+        const points = s.data.map(d => ({
+          year: +d.year, period: d.period, value: parseFloat(d.value), periodName: d.periodName
+        })).sort((a, b) => a.year - b.year);
+        STATE.cache[s.seriesID] = { data: points, fetched: now };
+      }
+      renderSeriesPanel(occ);
+      renderTimeseries(occ);
+    } else {
+      console.error('BLS API error:', json.message);
+      alert('BLS API returned: ' + (json.message || []).join('\n'));
+    }
+  } catch (e) {
+    console.error('Fetch error:', e);
+    alert('Network error fetching BLS data: ' + e.message);
+  } finally {
+    fetchBtn.disabled = false;
+    fetchBtn.textContent = 'Fetch Time Series';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TIMESERIES CHART
+// ══════════════════════════════════════════════════════════════════
+function renderTimeseriesPanel(occ) {
+  const card = document.getElementById('tsCard');
+  card.style.display = '';
+
+  const pills = document.getElementById('tsMetricPills');
+  const metricOpts = [
+    { key: 'A_MEAN', dt: '04', label: 'Ann Mean' },
+    { key: 'A_MEDIAN', dt: '13', label: 'Ann Median' },
+    { key: 'H_MEAN', dt: '03', label: 'Hr Mean' },
+    { key: 'H_MEDIAN', dt: '08', label: 'Hr Median' },
+    { key: 'TOT_EMP', dt: '01', label: 'Employment' },
+  ];
+  pills.innerHTML = metricOpts.map(m =>
+    `<div class="pill${STATE.tsMetric === m.key ? ' active' : ''}" data-metric="${m.key}" data-dt="${m.dt}">${m.label}</div>`
+  ).join('');
+  pills.querySelectorAll('.pill').forEach(p => {
+    p.addEventListener('click', () => {
+      STATE.tsMetric = p.dataset.metric;
+      pills.querySelectorAll('.pill').forEach(pp => pp.classList.toggle('active', pp.dataset.metric === STATE.tsMetric));
+      renderTimeseries(occ);
+    });
+  });
+
+  renderTimeseries(occ);
+}
+
+function renderTimeseries(occ) {
+  const container = document.getElementById('tsChart');
+  container.innerHTML = '';
+
+  const dtMap = { TOT_EMP: '01', H_MEAN: '03', A_MEAN: '04', H_MEDIAN: '08', A_MEDIAN: '13' };
+  const dt = dtMap[STATE.tsMetric];
+  const sid = seriesId(occ, dt);
+  const cached = STATE.cache[sid];
+
+  if (!cached || !cached.data.length) {
+    container.innerHTML = '<div class="no-data"><span class="nd-icon">⊘</span>Fetch BLS data to view time series</div>';
+    return;
+  }
+
+  const periods = [...new Set(cached.data.map(d => d.period))];
+  const data = periods.length === 1 ? cached.data : cached.data.filter(d => d.period === 'A01' || d.period === 'M13');
+  if (!data.length) {
+    container.innerHTML = '<div class="no-data"><span class="nd-icon">⊘</span>No annual data available</div>';
+    return;
+  }
+
+  const margin = { top: 24, right: 36, bottom: 44, left: 80 };
+  const width = container.clientWidth || 700;
+  const height = 320;
+  const iw = width - margin.left - margin.right;
+  const ih = height - margin.top - margin.bottom;
+
+  const svg = d3.select(container).append('svg')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  const defs = svg.append('defs');
+  const areaGrad = defs.append('linearGradient').attr('id', 'areaGrad').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 1);
+  areaGrad.append('stop').attr('offset', '0%').attr('stop-color', '#6eaaff').attr('stop-opacity', .15);
+  areaGrad.append('stop').attr('offset', '100%').attr('stop-color', '#6eaaff').attr('stop-opacity', 0);
+
+  const x = d3.scaleLinear().domain(d3.extent(data, d => d.year)).range([0, iw]);
+  const yMin = d3.min(data, d => d.value) * 0.92;
+  const yMax = d3.max(data, d => d.value) * 1.08;
+  const y = d3.scaleLinear().domain([yMin, yMax]).range([ih, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Grid lines
+  g.append('g').selectAll('line').data(y.ticks(5)).join('line')
+    .attr('x1', 0).attr('x2', iw).attr('y1', d => y(d)).attr('y2', d => y(d))
+    .attr('stroke', 'rgba(255,255,255,.04)').attr('stroke-width', 1);
+
+  // Area
+  const area = d3.area().x(d => x(d.year)).y0(ih).y1(d => y(d.value)).curve(d3.curveMonotoneX);
+  g.append('path').datum(data).attr('d', area).attr('fill', 'url(#areaGrad)');
+
+  // Line
+  const line = d3.line().x(d => x(d.year)).y(d => y(d.value)).curve(d3.curveMonotoneX);
+  g.append('path').datum(data).attr('d', line)
+    .attr('fill', 'none').attr('stroke', 'var(--accent)').attr('stroke-width', 2.5)
+    .attr('stroke-linecap', 'round');
+
+  // Dots
+  g.selectAll('.dot').data(data).join('circle')
+    .attr('cx', d => x(d.year)).attr('cy', d => y(d.value)).attr('r', 4)
+    .attr('fill', 'var(--accent)').attr('stroke', 'var(--surface)').attr('stroke-width', 2.5);
+
+  // X axis
+  g.append('g').attr('transform', `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(data.length).tickFormat(d3.format('d')))
+    .call(g => g.select('.domain').attr('stroke', 'rgba(255,255,255,.08)'))
+    .call(g => g.selectAll('.tick line').attr('stroke', 'rgba(255,255,255,.06)'))
+    .selectAll('text').attr('fill', 'var(--text-dim)').attr('font-size', '10px').attr('font-family', 'var(--mono)');
+
+  // Y axis
+  const isCurrency = STATE.tsMetric.startsWith('A_') || STATE.tsMetric.startsWith('H_');
+  const yFormat = isCurrency
+    ? (STATE.tsMetric.startsWith('A_') ? d => '$' + (d >= 1000 ? (d/1000).toFixed(0) + 'K' : d) : d => '$' + d.toFixed(2))
+    : d => d >= 1000 ? (d/1000).toFixed(0) + 'K' : d;
+
+  g.append('g')
+    .call(d3.axisLeft(y).ticks(5).tickFormat(yFormat))
+    .call(g => g.select('.domain').remove())
+    .call(g => g.selectAll('.tick line').attr('stroke', 'rgba(255,255,255,.06)'))
+    .selectAll('text').attr('fill', 'var(--text-dim)').attr('font-size', '10px').attr('font-family', 'var(--mono)');
+
+  // Latest value badge
+  const last = data[data.length - 1];
+  const badgeW = 76;
+  const badgeX = Math.min(x(last.year) + 10, iw - badgeW);
+  g.append('rect')
+    .attr('x', badgeX).attr('y', y(last.value) - 13)
+    .attr('width', badgeW).attr('height', 24).attr('rx', 6)
+    .attr('fill', 'var(--accent)');
+  g.append('text')
+    .attr('x', badgeX + badgeW/2).attr('y', y(last.value) + 2)
+    .attr('text-anchor', 'middle').attr('fill', 'var(--bg)')
+    .attr('font-size', '11px').attr('font-weight', '700').attr('font-family', 'var(--mono)')
+    .text(fmtMetric(STATE.tsMetric, last.value));
+
+  // Tooltip overlay
+  const tooltip = document.getElementById('tooltip');
+  const overlay = g.append('rect').attr('width', iw).attr('height', ih).attr('fill', 'transparent');
+  overlay.on('mousemove', function(event) {
+    const [mx] = d3.pointer(event);
+    const yr = Math.round(x.invert(mx));
+    const pt = data.find(d => d.year === yr);
+    if (!pt) { tooltip.style.display = 'none'; return; }
+    tooltip.style.display = '';
+    tooltip.style.left = (event.clientX + 14) + 'px';
+    tooltip.style.top = (event.clientY - 12) + 'px';
+    tooltip.innerHTML = `<div class="tt-title">${yr}</div><div class="tt-row"><span class="tt-label">${STATE.tsMetric}</span><span class="tt-val">${fmtMetric(STATE.tsMetric, pt.value)}</span></div>`;
+  });
+  overlay.on('mouseleave', () => tooltip.style.display = 'none');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// COMPARISON TABLE
+// ══════════════════════════════════════════════════════════════════
+function renderTable(list) {
+  const wrap = document.getElementById('tableWrap');
+  const isWages = STATE.tableTab === 'wages';
+
+  const cols = isWages ? [
+    { key: 'occ_code', label: 'SOC', type: 'text' },
+    { key: 'occ_title', label: 'Occupation', type: 'text' },
+    { key: 'A_MEDIAN', label: 'Ann Median', type: 'metric' },
+    { key: 'A_MEAN', label: 'Ann Mean', type: 'metric' },
+    { key: 'H_MEDIAN', label: 'Hr Median', type: 'metric' },
+    { key: 'A_PCT10', label: 'P10', type: 'metric' },
+    { key: 'A_PCT90', label: 'P90', type: 'metric' },
+  ] : [
+    { key: 'occ_code', label: 'SOC', type: 'text' },
+    { key: 'occ_title', label: 'Occupation', type: 'text' },
+    { key: 'TOT_EMP', label: 'Employment', type: 'metric' },
+    { key: 'EMP_PRSE', label: 'Emp RSE%', type: 'metric' },
+    { key: 'A_MEAN', label: 'Ann Mean', type: 'metric' },
+    { key: 'MEAN_PRSE', label: 'Mean RSE%', type: 'metric' },
+  ];
+
+  const showList = list.slice(0, 200);
+
+  let html = '<table><thead><tr>';
+  html += cols.map(c => `<th>${c.label}</th>`).join('');
+  html += '</tr></thead><tbody>';
+  for (const occ of showList) {
+    const isSelected = occ.occ_code === STATE.selected;
+    html += `<tr class="${isSelected ? 'row-selected' : ''}" data-code="${occ.occ_code}">`;
+    for (const c of cols) {
+      if (c.type === 'text') {
+        if (c.key === 'occ_code') {
+          html += `<td><span style="font-family:var(--mono);color:var(--text-muted);font-size:.68rem">${occ.occ_code}</span></td>`;
+        } else {
+          html += `<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis">${occ[c.key]}</td>`;
+        }
+      } else {
+        const v = occ.metrics[c.key]?.value;
+        const cls = c.key === 'A_MEDIAN' && isSelected ? 'num highlight' : 'num';
+        html += `<td class="${cls}">${fmtMetric(c.key, v)}</td>`;
+      }
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('tr[data-code]').forEach(tr => {
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', () => selectOccupation(tr.dataset.code));
+  });
+}
+
+// Tab switching
+document.querySelectorAll('.tab-bar .tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab-bar .tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    STATE.tableTab = tab.dataset.tab;
+    renderTable(filteredOccupations());
+  });
+});
+
+// CSV export
+document.getElementById('exportCsv').addEventListener('click', () => {
+  const list = filteredOccupations();
+  const cols = ['occ_code', 'occ_title', 'TOT_EMP', 'A_MEDIAN', 'A_MEAN', 'H_MEDIAN', 'A_PCT10', 'A_PCT25', 'A_PCT75', 'A_PCT90'];
+  let csv = cols.join(',') + '\n';
+  for (const occ of list) {
+    csv += cols.map(c => {
+      if (c === 'occ_code' || c === 'occ_title') return `"${occ[c]}"`;
+      return occ.metrics[c]?.value ?? '';
+    }).join(',') + '\n';
+  }
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'oews_national_2024.csv';
+  a.click();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// KEYBOARD NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+  const list = filteredOccupations();
+  if (!list.length) return;
+  const idx = list.findIndex(o => o.occ_code === STATE.selected);
+  if (e.key === 'ArrowDown' || e.key === 'j') {
+    e.preventDefault();
+    const next = Math.min(idx + 1, list.length - 1);
+    selectOccupation(list[next >= 0 ? next : 0].occ_code);
+    scrollToSelected();
+  } else if (e.key === 'ArrowUp' || e.key === 'k') {
+    e.preventDefault();
+    const prev = Math.max(idx - 1, 0);
+    selectOccupation(list[prev].occ_code);
+    scrollToSelected();
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// WAGE INTERVAL HISTOGRAM
+// ══════════════════════════════════════════════════════════════════
+// Bin edges: each bin runs from edges[i] to edges[i+1].
+// The last bin (L) is open-ended; we cap it at 140 for display.
+const HIST_EDGES = [0, 9.25, 12.00, 15.50, 19.75, 25.50, 32.75, 42.00, 54.00, 69.50, 89.50, 115.00, 140];
+const WAGE_INTERVALS = [
+  { range: 'A', idx: 0,  label: 'A: <$9.25' },
+  { range: 'B', idx: 1,  label: 'B: $9.25–11.99' },
+  { range: 'C', idx: 2,  label: 'C: $12–15.49' },
+  { range: 'D', idx: 3,  label: 'D: $15.50–19.74' },
+  { range: 'E', idx: 4,  label: 'E: $19.75–25.49' },
+  { range: 'F', idx: 5,  label: 'F: $25.50–32.74' },
+  { range: 'G', idx: 6,  label: 'G: $32.75–41.99' },
+  { range: 'H', idx: 7,  label: 'H: $42–53.99' },
+  { range: 'I', idx: 8,  label: 'I: $54–69.49' },
+  { range: 'J', idx: 9,  label: 'J: $69.50–89.49' },
+  { range: 'K', idx: 10, label: 'K: $89.50–114.99' },
+  { range: 'L', idx: 11, label: 'L: $115+' },
+];
+
+let histMode = 'pdf'; // 'employment' | 'count' | 'pdf'
+
+function computeHistogramData() {
+  if (!DATA) return [];
+  const occs = DATA.occupations.filter(o => o.o_group === 'detailed' && o.metrics.H_MEAN?.value != null);
+  const totalEmp = DATA.occupations.find(o => o.occ_code === '00-0000')?.metrics.TOT_EMP?.value || 1;
+
+  const bins = WAGE_INTERVALS.map(iv => {
+    const lo = HIST_EDGES[iv.idx];
+    const hi = HIST_EDGES[iv.idx + 1]; // display edge (140 for L)
+    const isLast = iv.idx === HIST_EDGES.length - 2;
+    const matches = occs.filter(o => {
+      const v = o.metrics.H_MEAN.value;
+      return v >= lo && (isLast ? true : v < hi);
+    });
+    const empTotal = matches.reduce((s, o) => s + (o.metrics.TOT_EMP?.value || 0), 0);
+    const pctEmp = empTotal / totalEmp;
+    const width = hi - lo; // bin width in dollars
+    return { ...iv, lo, hi, isLast, binWidth: width, wage_count: matches.length, employment_total: empTotal, pct_employment: pctEmp };
+  });
+
+  const totalPct = bins.reduce((s, b) => s + b.pct_employment, 0);
+  // PDF = probability density: proportion / bin_width so that area sums to 1
+  bins.forEach(b => b.pdf = totalPct > 0 ? (b.pct_employment / totalPct) / b.binWidth : 0);
+
+  return bins;
+}
+
+function renderHistogram() {
+  const card = document.getElementById('histCard');
+  card.style.display = '';
+  const container = document.getElementById('histChart');
+  container.innerHTML = '';
+
+  const bins = computeHistogramData();
+  if (!bins.length) return;
+
+  const accessor = histMode === 'employment'
+    ? b => b.pct_employment * 100
+    : histMode === 'count' ? b => b.wage_count
+    : b => b.pdf;
+
+  const yLabel = histMode === 'employment' ? '% of Total Employment'
+    : histMode === 'count' ? 'Occupation Count' : 'Probability Density';
+
+  const valFormat = histMode === 'employment'
+    ? v => v.toFixed(1) + '%'
+    : histMode === 'count' ? v => v.toFixed(0)
+    : v => v.toFixed(4);
+
+  const margin = { top: 28, right: 24, bottom: 52, left: 64 };
+  const width = container.clientWidth || 700;
+  const height = 380;
+  const iw = width - margin.left - margin.right;
+  const ih = height - margin.top - margin.bottom;
+
+  const svg = d3.select(container).append('svg')
+    .attr('viewBox', `0 0 ${width} ${height}`)
+    .attr('preserveAspectRatio', 'xMidYMid meet');
+
+  const defs = svg.append('defs');
+  const barGrad = defs.append('linearGradient').attr('id', 'histBarGrad').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 1);
+  barGrad.append('stop').attr('offset', '0%').attr('stop-color', '#6eaaff').attr('stop-opacity', .9);
+  barGrad.append('stop').attr('offset', '100%').attr('stop-color', '#6eaaff').attr('stop-opacity', .45);
+  const selGrad = defs.append('linearGradient').attr('id', 'histSelGrad').attr('x1', 0).attr('y1', 0).attr('x2', 0).attr('y2', 1);
+  selGrad.append('stop').attr('offset', '0%').attr('stop-color', '#4ade80').attr('stop-opacity', .95);
+  selGrad.append('stop').attr('offset', '100%').attr('stop-color', '#4ade80').attr('stop-opacity', .5);
+
+  // Linear x-scale: bin edges map to pixel positions — no gaps
+  const xMin = HIST_EDGES[0];
+  const xMax = HIST_EDGES[HIST_EDGES.length - 1];
+  const x = d3.scaleLinear().domain([xMin, xMax]).range([0, iw]);
+
+  const yMax = d3.max(bins, accessor) * 1.15;
+  const y = d3.scaleLinear().domain([0, yMax]).range([ih, 0]);
+
+  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+  // Grid lines
+  g.append('g').selectAll('line').data(y.ticks(5)).join('line')
+    .attr('x1', 0).attr('x2', iw).attr('y1', d => y(d)).attr('y2', d => y(d))
+    .attr('stroke', 'rgba(255,255,255,.04)');
+
+  // Which bin is the selected occupation in?
+  let selRange = null;
+  if (STATE.selected && DATA) {
+    const occ = DATA.occupations.find(o => o.occ_code === STATE.selected);
+    const hm = occ?.metrics.H_MEAN?.value;
+    if (hm != null) {
+      const bin = bins.find(b => hm >= b.lo && (b.isLast ? true : hm < b.hi));
+      if (bin) selRange = bin.range;
+    }
+  }
+
+  // Bars — variable width, no gaps
+  const tooltip = document.getElementById('tooltip');
+  g.selectAll('.hist-bar').data(bins).join('rect')
+    .attr('class', 'hist-bar')
+    .attr('x', d => x(d.lo))
+    .attr('y', d => y(accessor(d)))
+    .attr('width', d => x(d.hi) - x(d.lo))
+    .attr('height', d => ih - y(accessor(d)))
+    .attr('fill', d => d.range === selRange ? 'url(#histSelGrad)' : 'url(#histBarGrad)')
+    .attr('stroke', 'var(--surface)').attr('stroke-width', 0.5)
+    .on('mousemove', function(event, d) {
+      tooltip.style.display = '';
+      tooltip.style.left = (event.clientX + 14) + 'px';
+      tooltip.style.top = (event.clientY - 12) + 'px';
+      const widthStr = d.isLast ? '$' + d.lo + '+' : '$' + d.lo.toFixed(2) + ' – $' + (d.hi - 0.01).toFixed(2);
+      tooltip.innerHTML = `<div class="tt-title">Range ${d.range} (${widthStr}/hr)</div>`
+        + `<div class="tt-row"><span class="tt-label">Bin width</span><span class="tt-val">$${d.binWidth.toFixed(2)}</span></div>`
+        + `<div class="tt-row"><span class="tt-label">Occupations</span><span class="tt-val">${d.wage_count}</span></div>`
+        + `<div class="tt-row"><span class="tt-label">Employment</span><span class="tt-val">${FMT.int(d.employment_total)}</span></div>`
+        + `<div class="tt-row"><span class="tt-label">% of Total</span><span class="tt-val">${(d.pct_employment * 100).toFixed(2)}%</span></div>`;
+    })
+    .on('mouseleave', () => tooltip.style.display = 'none');
+
+  // Value labels on top of bars (only if bar is wide enough)
+  g.selectAll('.bar-label').data(bins).join('text')
+    .attr('x', d => x(d.lo) + (x(d.hi) - x(d.lo)) / 2)
+    .attr('y', d => y(accessor(d)) - 5)
+    .attr('text-anchor', 'middle')
+    .attr('fill', d => accessor(d) > 0 && (x(d.hi) - x(d.lo)) > 30 ? 'var(--text)' : 'transparent')
+    .attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('font-weight', '500')
+    .text(d => accessor(d) > 0 ? valFormat(accessor(d)) : '');
+
+  // Range letter labels inside bars (at bottom)
+  g.selectAll('.range-label').data(bins).join('text')
+    .attr('x', d => x(d.lo) + (x(d.hi) - x(d.lo)) / 2)
+    .attr('y', ih - 6)
+    .attr('text-anchor', 'middle')
+    .attr('fill', d => (x(d.hi) - x(d.lo)) > 16 ? 'rgba(255,255,255,.25)' : 'transparent')
+    .attr('font-size', '10px').attr('font-family', 'var(--mono)').attr('font-weight', '700')
+    .text(d => d.range);
+
+  // X axis with tick marks at each bin edge
+  const xAxis = g.append('g').attr('transform', `translate(0,${ih})`);
+  xAxis.call(d3.axisBottom(x)
+    .tickValues(HIST_EDGES)
+    .tickFormat(d => d === 140 ? '' : '$' + d)
+  )
+  .call(g => g.select('.domain').attr('stroke', 'rgba(255,255,255,.12)'))
+  .call(g => g.selectAll('.tick line').attr('stroke', 'rgba(255,255,255,.1)').attr('y2', 6))
+  .selectAll('text')
+    .attr('fill', 'var(--text-dim)').attr('font-size', '8px').attr('font-family', 'var(--mono)')
+    .attr('transform', 'rotate(-40)').attr('text-anchor', 'end').attr('dy', '0.5em').attr('dx', '-0.3em');
+
+  // X axis label
+  svg.append('text')
+    .attr('x', margin.left + iw / 2).attr('y', height - 2)
+    .attr('text-anchor', 'middle').attr('fill', 'var(--text-muted)')
+    .attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('letter-spacing', '.06em')
+    .text('HOURLY MEAN WAGE ($)');
+
+  // Y axis
+  g.append('g')
+    .call(d3.axisLeft(y).ticks(5).tickFormat(histMode === 'pdf' ? d3.format('.3f') : histMode === 'employment' ? d => d.toFixed(0) + '%' : d3.format(',')))
+    .call(g => g.select('.domain').remove())
+    .call(g => g.selectAll('.tick line').attr('stroke', 'rgba(255,255,255,.06)'))
+    .selectAll('text').attr('fill', 'var(--text-dim)').attr('font-size', '9px').attr('font-family', 'var(--mono)');
+
+  // Y axis label
+  svg.append('text')
+    .attr('transform', `rotate(-90)`)
+    .attr('x', -(margin.top + ih / 2)).attr('y', 14)
+    .attr('text-anchor', 'middle').attr('fill', 'var(--text-muted)')
+    .attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('letter-spacing', '.06em')
+    .text(yLabel.toUpperCase());
+
+  // Selected occupation marker line
+  if (STATE.selected && DATA) {
+    const occ = DATA.occupations.find(o => o.occ_code === STATE.selected);
+    const hm = occ?.metrics.H_MEAN?.value;
+    if (hm != null) {
+      const px = x(Math.min(hm, xMax - 1));
+      const bin = bins.find(b => hm >= b.lo && (b.isLast ? true : hm < b.hi));
+      if (bin) {
+        // Vertical marker at exact wage
+        g.append('line').attr('x1', px).attr('x2', px).attr('y1', 0).attr('y2', ih)
+          .attr('stroke', 'var(--green)').attr('stroke-width', 2).attr('stroke-dasharray', '4,3').attr('opacity', .7);
+        // Label
+        g.append('text').attr('x', px).attr('y', -8)
+          .attr('text-anchor', px > iw * 0.7 ? 'end' : 'middle').attr('fill', 'var(--green)')
+          .attr('font-size', '9px').attr('font-family', 'var(--mono)').attr('font-weight', '600')
+          .text(`$${hm.toFixed(2)}/hr — Range ${bin.range}`);
+      }
+    }
+  }
+
+  // Summary stats
+  const totalOccs = bins.reduce((s, b) => s + b.wage_count, 0);
+  const totalEmp = bins.reduce((s, b) => s + b.employment_total, 0);
+  const peakBin = bins.reduce((a, b) => accessor(b) > accessor(a) ? b : a);
+  const summary = document.getElementById('histSummary');
+  summary.innerHTML = `
+    <div class="hist-stat"><span class="hs-val">${totalOccs}</span><span class="hs-label">Occupations</span></div>
+    <div class="hist-stat"><span class="hs-val">${FMT.int(totalEmp)}</span><span class="hs-label">Total Employment</span></div>
+    <div class="hist-stat"><span class="hs-val">Range ${peakBin.range}</span><span class="hs-label">Peak Interval</span></div>
+  `;
+}
+
+// Histogram toggle handlers
+document.getElementById('histToggle').addEventListener('click', e => {
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  histMode = pill.dataset.mode;
+  document.querySelectorAll('#histToggle .pill').forEach(p => p.classList.toggle('active', p.dataset.mode === histMode));
+  renderHistogram();
+});
+
+function scrollToSelected() {
+  const el = document.querySelector('.occ-item.selected');
+  el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

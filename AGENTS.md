@@ -14,6 +14,12 @@ renders interactive visualizations, and validates the results in a browser.
 The pipeline is flexible. Steps can be combined, reordered, or repeated.
 You may delegate work to sub-agents when tasks are complex or parallelizable.
 
+## Session Bootstrapping
+
+- On startup, inspect the `./conversations/` directory for saved session files.
+- Load any available summaries or transcripts to recover relevant context before proceeding.
+- If no prior conversations are found, continue with the current session as usual.
+
 ## Architecture
 
 ```

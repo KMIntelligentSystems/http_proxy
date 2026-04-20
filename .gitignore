@@ -26,3 +26,6 @@ Thumbs.db
 *.suo
 *.user
 data/.env
+
+*.xlsx
+*.pdf

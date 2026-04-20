@@ -1,8 +1,24 @@
 import http from "node:http";
+import https from "node:https";
+import fs from "node:fs";
+import path from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3000", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
+
+// Load BLS API key from data/.env
+let BLS_API_KEY = "";
+try {
+  const envPath = path.resolve(import.meta.dirname ?? ".", "..", "data", ".env");
+  const envText = fs.readFileSync(envPath, "utf-8");
+  const match = envText.match(/^BLS_API_KEY=(.+)$/m);
+  if (match) BLS_API_KEY = match[1].trim().replace(/["']/g, "");
+  if (BLS_API_KEY) console.log(`[host] BLS API key loaded (${BLS_API_KEY.slice(0, 6)}…)`);
+  else console.warn(`[host] BLS_API_KEY not found in ${envPath}`);
+} catch (e) {
+  console.warn(`[host] Could not read data/.env for BLS key`);
+}
 
 // Browser WS clients connected to /ui/ws — receives SVG push messages
 const browserClients = new Set<WebSocket>();
@@ -75,9 +91,88 @@ const server = http.createServer((req, res) => {
 
   // Requests tagged x-loopback arrived via proxy — serve real content
   if (req.headers["x-loopback"] === "1") {
+    // OEWS drilldown UI
     if (req.url === "/ui" || req.url === "/ui/") {
+      const uiPath = path.resolve(import.meta.dirname ?? ".", "..", "src", "ui", "oe-drilldown.html");
+      try {
+        const html = fs.readFileSync(uiPath, "utf-8");
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(html);
+      } catch {
+        // Fallback to SVG canvas
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(UI_HTML);
+      }
+      return;
+    }
+
+    // Serve data files under /ui/data/*
+    if (req.url?.startsWith("/ui/data/")) {
+      const fileName = req.url.replace("/ui/data/", "");
+      const filePath = path.resolve(import.meta.dirname ?? ".", "..", "dist", fileName);
+      try {
+        const data = fs.readFileSync(filePath);
+        const ext = path.extname(fileName);
+        const ct = ext === ".json" ? "application/json" : ext === ".csv" ? "text/csv" : "application/octet-stream";
+        res.writeHead(200, { "Content-Type": ct, "Cache-Control": "public, max-age=3600" });
+        res.end(data);
+      } catch {
+        res.writeHead(404);
+        res.end("Data file not found");
+      }
+      return;
+    }
+
+    // Legacy SVG canvas at /ui/canvas
+    if (req.url === "/ui/canvas") {
       res.writeHead(200, { "Content-Type": "text/html" });
       res.end(UI_HTML);
+      return;
+    }
+
+    // POST /ui/api/bls — proxy BLS API requests to avoid CORS
+    if (req.url === "/ui/api/bls" && req.method === "POST") {
+      const body: Buffer[] = [];
+      req.on("data", (chunk) => body.push(chunk));
+      req.on("end", () => {
+        let parsed: any = {};
+        try { parsed = JSON.parse(Buffer.concat(body).toString()); } catch {}
+        // Inject API key if available and not already provided
+        if (BLS_API_KEY && !parsed.registrationkey) {
+          parsed.registrationkey = BLS_API_KEY;
+        }
+        const payload = Buffer.from(JSON.stringify(parsed));
+        const blsReq = https.request(
+          {
+            hostname: "api.bls.gov",
+            path: "/publicAPI/v2/timeseries/data/",
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Content-Length": payload.length,
+            },
+          },
+          (blsRes) => {
+            const chunks: Buffer[] = [];
+            blsRes.on("data", (c) => chunks.push(c));
+            blsRes.on("end", () => {
+              const result = Buffer.concat(chunks);
+              res.writeHead(blsRes.statusCode ?? 200, {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+              });
+              res.end(result);
+            });
+          }
+        );
+        blsReq.on("error", (err) => {
+          console.error(`[bls proxy error] ${err.message}`);
+          res.writeHead(502);
+          res.end(JSON.stringify({ status: "REQUEST_FAILED", message: [err.message] }));
+        });
+        blsReq.write(payload);
+        blsReq.end();
+      });
       return;
     }
 
