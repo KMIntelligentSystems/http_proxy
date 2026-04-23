@@ -994,15 +994,16 @@ async function fetchBLSData(occ) {
     { key: 'H_MEDIAN', dt: '08' },
     { key: 'A_MEDIAN', dt: '13' },
   ];
-  const seriesIds = metrics.map(m => seriesId(occ, m.dt));
-
+  const seriesIds = metrics.map(m => seriesId(occ, m.dt));//"OEUN000000011300045101101"//
+console.log('series ID ', seriesId)
   try {
     const resp = await fetch('/ui/api/bls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seriesid: seriesIds, startyear: '2019', endyear: '2024' })
+      body: JSON.stringify({ seriesid: seriesIds, startyear: '2019', endyear: '2020/ui' })
     });
     const json = await resp.json();
+    console.log('JSON', json)
     if (json.status === 'REQUEST_SUCCEEDED' && json.Results?.series) {
       const now = new Date().toLocaleTimeString();
       for (const s of json.Results.series) {
@@ -1246,7 +1247,7 @@ document.getElementById('exportCsv').addEventListener('click', () => {
   }
   const blob = new Blob([csv], { type: 'text/csv' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = ERL.createObjectURL(blob);
   a.download = 'oews_national_2024.csv';
   a.click();
 });
