@@ -452,8 +452,26 @@ tr.row-selected td{background:var(--accent-dim)}
 .histogram-container svg{width:100%;height:380px}
 .hist-bar{transition:opacity .2s}
 .hist-bar:hover{opacity:.85}
-.hist-toggle{display:flex;gap:4px;margin-left:auto}
+.hist-controls{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.hist-toggle-group{display:flex;align-items:center;gap:8px;margin-left:auto}
+.hist-toggle{display:flex;gap:4px}
 .hist-toggle .pill{font-size:.62rem;padding:4px 10px}
+.density-toggle{font-size:.62rem;padding:4px 12px}
+.density-toggle.active{background:var(--green);color:var(--bg);border-color:var(--green);box-shadow:0 0 18px var(--green-dim)}
+.kde-toggle{font-size:.62rem;padding:4px 12px}
+.kde-toggle.active{background:var(--orange);color:var(--bg);border-color:var(--orange);box-shadow:0 0 18px var(--orange-dim)}
+.stats-panel{margin-top:14px;padding:16px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);font-size:.74rem}
+.stats-panel .sp-title{font-family:var(--mono);font-size:.62rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat-cell{display:flex;justify-content:space-between;padding:4px 8px;border-radius:4px;background:var(--surface)}
+.stat-cell .sc-label{color:var(--text-dim);font-family:var(--mono);font-size:.68rem}
+.stat-cell .sc-val{color:var(--text-bright);font-family:var(--mono);font-size:.72rem;font-weight:600}
+.stat-cell.pqde .sc-val{color:var(--violet)}
+.stat-cell.kde .sc-val{color:var(--orange)}
+.stat-cell.delta .sc-val{color:var(--rose)}
+.legend-row{display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:.65rem;color:var(--text-dim)}
+.legend-swatch{width:18px;height:3px;border-radius:2px}
 .hist-summary{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)}
 .hist-stat{display:flex;flex-direction:column;gap:2px}
 .hist-stat .hs-val{font-family:var(--mono);font-size:1rem;font-weight:600;color:var(--text-bright)}
@@ -536,12 +554,16 @@ tr.row-selected td{background:var(--accent-dim)}
 
     <!-- Wage Interval Histogram -->
     <div class="card animate-in delay-1" id="histCard" style="display:none">
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div class="hist-controls">
         <div class="card-title" style="margin:0"><span class="icon">▥</span> Wage Interval Distribution</div>
-        <div class="hist-toggle" id="histToggle">
-          <div class="pill" data-mode="employment">Employment</div>
-          <div class="pill" data-mode="count">Occ Count</div>
-          <div class="pill active" data-mode="pdf">PDF</div>
+        <div class="hist-toggle-group">
+          <div class="hist-toggle" id="histToggle">
+            <div class="pill" data-mode="employment">Employment</div>
+            <div class="pill" data-mode="count">Occ Count</div>
+            <div class="pill active" data-mode="pdf">PDF</div>
+          </div>
+          <div class="pill density-toggle active" id="densityToggle" title="Toggle PQDE smooth density overlay (O'Malley JSM 2008)">PQDE</div>
+          <div class="pill kde-toggle" id="kdeToggle" title="Toggle Gaussian KDE from employment-weighted point data">KDE</div>
         </div>
       </div>
       <div class="histogram-container" id="histChart"></div>
@@ -615,6 +637,8 @@ const STATE = {
   selected: null,
   tsMetric: 'A_MEAN',
   tableTab: 'wages',
+  showDensity: true,
+  showKDE: false,
   cache: {},
 };
 
@@ -637,10 +661,36 @@ function seriesId(occ, datatypeCode) {
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
+const DATA_SOURCES = [
+  '/ui/data/oe_national_2024.json',
+  '/data/oe_national_2024.json',
+  '/dist/oe_national_2024.json',
+  '../dist/oe_national_2024.json',
+  './oe_national_2024.json',
+];
+
+async function loadOEWSData() {
+  const errors = [];
+  for (const url of DATA_SOURCES) {
+    try {
+      const resp = await fetch(url, { cache: 'no-cache' });
+      if (!resp.ok) {
+        errors.push(`${url} → ${resp.status}`);
+        continue;
+      }
+      const json = await resp.json();
+      console.log(`Loaded OEWS data from ${url}`);
+      return json;
+    } catch (err) {
+      errors.push(`${url} → ${err.message}`);
+    }
+  }
+  throw new Error(`All data sources failed:\n${errors.join('\n')}`);
+}
+
 (async () => {
   try {
-    const resp = await fetch('/ui/data/oe_national_2024.json');
-    DATA = await resp.json();
+    DATA = await loadOEWSData();
     buildMajorFilter();
     applyFilters();
     renderHistogram();
@@ -650,7 +700,7 @@ function seriesId(occ, datatypeCode) {
   } catch (e) {
     console.error('Failed to load data', e);
     document.getElementById('mainContent').innerHTML =
-      '<div class="card" style="margin:40px"><p style="color:var(--orange)">Failed to load occupation data. Ensure dist/oe_national_2024.json is served.</p></div>';
+      `<div class="card" style="margin:40px"><p style="color:var(--orange)">Failed to load occupation data from known paths.<br/>${e.message.replace(/\n/g,'<br/>')}</p></div>`;
   }
 })();
 
@@ -1294,6 +1344,323 @@ const WAGE_INTERVALS = [
   { range: 'L', idx: 11, label: 'L: $115+' },
 ];
 
+function fitPiecewiseQuadraticDensity(bins) {
+  const n = bins.length;
+  if (!n) return null;
+  const edges = bins.map(b => b.lo);
+  edges.push(bins[n - 1].hi);
+  const massesRaw = bins.map(b => b.pct_employment);
+  console.log('mass raw oct emp', massesRaw)
+  const totalMass = massesRaw.reduce((sum, v) => sum + v, 0);
+  if (totalMass <= 0 || !isFinite(totalMass)) return null;
+  const masses = massesRaw.map(v => v / totalMass);
+  const nVars = n * 3;
+  const rows = [];
+  const rhs = [];
+  console.log('mass total', masses)
+  const width = i => edges[i + 1] - edges[i];
+  const idxA = i => 3 * i;
+  const idxB = i => 3 * i + 1;
+  const idxC = i => 3 * i + 2;
+  console.log('id x A ', idxA(0))
+    console.log('id x B ', idxB(0))
+      console.log('id x C ', idxC(0))
+  function addRow(coeffs, value) {
+    rows.push(coeffs);
+    rhs.push(value);
+  }
+
+  for (let i = 0; i < n; i++) {
+    const w = width(i);
+    if (!(w > 0)) return null;
+    const row = new Array(nVars).fill(0);
+    row[idxA(i)] = w;
+    row[idxB(i)] = 0.5 * w * w;
+    row[idxC(i)] = (w * w * w) / 3;
+    addRow(row, masses[i]);
+  }
+ 
+  for (let i = 0; i < n - 1; i++) {
+    const w = width(i);
+    const row = new Array(nVars).fill(0);
+    row[idxA(i)] = 1;
+    row[idxB(i)] = w;
+    row[idxC(i)] = w * w;
+    row[idxA(i + 1)] = -1;
+    addRow(row, 0);
+  }
+
+  for (let i = 0; i < n - 1; i++) {
+    const w = width(i);
+    const row = new Array(nVars).fill(0);
+    row[idxB(i)] = 1;
+    row[idxC(i)] = 2 * w;
+    row[idxB(i + 1)] = -1;
+    addRow(row, 0);
+  }
+
+  const rowLow = new Array(nVars).fill(0);
+  rowLow[idxB(0)] = 1;
+  addRow(rowLow, 0);
+
+  const last = n - 1;
+  const wLast = width(last);
+  const rowHigh = new Array(nVars).fill(0);
+  rowHigh[idxB(last)] = 1;
+  rowHigh[idxC(last)] = 2 * wLast;
+  addRow(rowHigh, 0);
+
+  const coeffs = solveLinearSystem(rows, rhs);
+  if (!coeffs) return null;
+
+  return { edges, coeffs, masses };
+}
+
+function evaluateDensity(fit, x) {
+  if (!fit) return 0;
+  const { edges, coeffs } = fit;
+  const n = edges.length - 1;
+  if (n <= 0) return 0;
+  let idx = 0;
+  if (x <= edges[0]) {
+    idx = 0;
+  } else if (x >= edges[n]) {
+    idx = n - 1;
+    x = edges[n];
+  } else {
+    for (let i = 0; i < n; i++) {
+      if (x >= edges[i] && x <= edges[i + 1]) {
+        idx = i;
+        break;
+      }
+    }
+  }
+  const lo = edges[idx];
+  const hi = edges[idx + 1];
+  const t = Math.min(Math.max(x, lo), hi) - lo;
+  const a = coeffs[3 * idx];
+  const b = coeffs[3 * idx + 1];
+  const c = coeffs[3 * idx + 2];
+  const y = a + b * t + c * t * t;
+  return Math.max(0, y);
+}
+
+function sampleDensity(fit, stepsPerBin = 24) {
+  if (!fit) return [];
+  const { edges } = fit;
+  const n = edges.length - 1;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const lo = edges[i];
+    const hi = edges[i + 1];
+    const width = hi - lo;
+    for (let s = 0; s <= stepsPerBin; s++) {
+      const x = lo + width * (s / stepsPerBin);
+      const y = evaluateDensity(fit, x);
+      pts.push({ x, y });
+    }
+  }
+  return pts;
+}
+
+function solveLinearSystem(A, b) {
+  
+   console.log('solve linear b', b)
+  const n = A.length;
+  if (!n || A[0].length !== n || b.length !== n) return null;
+  const M = A.map(row => row.slice());
+  const rhs = b.slice();
+
+  for (let col = 0; col < n; col++) {
+    let pivot = col;
+    let pivotVal = Math.abs(M[col][col]);
+     console.log('solve linear A', pivotVal)
+    for (let row = col + 1; row < n; row++) {
+      const val = Math.abs(M[row][col]);
+      if (val > pivotVal) {
+        pivotVal = val;
+        pivot = row;
+      }
+    }
+    if (pivotVal < 1e-12 || !isFinite(pivotVal)) return null;
+    if (pivot !== col) {
+      [M[col], M[pivot]] = [M[pivot], M[col]];
+      [rhs[col], rhs[pivot]] = [rhs[pivot], rhs[col]];
+    }
+    const diag = M[col][col];
+    for (let row = col + 1; row < n; row++) {
+      const val = M[row][col];
+      if (Math.abs(val) < 1e-15) continue;
+      const factor = val / diag;
+      for (let k = col; k < n; k++) {
+        M[row][k] -= factor * M[col][k];
+      }
+      rhs[row] -= factor * rhs[col];
+    }
+  }
+
+  const solution = new Array(n).fill(0);
+  for (let row = n - 1; row >= 0; row--) {
+    let sum = rhs[row];
+    for (let col = row + 1; col < n; col++) {
+      sum -= M[row][col] * solution[col];
+    }
+    const diag = M[row][row];
+    if (Math.abs(diag) < 1e-12 || !isFinite(diag)) return null;
+    solution[row] = sum / diag;
+  }
+  return solution;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GAUSSIAN KERNEL DENSITY ESTIMATOR (employment-weighted)
+// Mirrors O'Malley JSM 2008 §3.1 — KDE from point data for
+// comparison against the PQDE from interval-censored data.
+// ══════════════════════════════════════════════════════════════════
+function computeKDE() {
+  if (!DATA) return null;
+  const occs = DATA.occupations.filter(o => o.o_group === 'detailed' && o.metrics.H_MEAN?.value != null && o.metrics.TOT_EMP?.value > 0);
+  if (occs.length < 3) return null;
+
+  // Collect employment-weighted data points
+  const points = [];
+  const weights = [];
+  let totalWeight = 0;
+  for (const o of occs) {
+    const wage = o.metrics.H_MEAN.value;
+    const emp = o.metrics.TOT_EMP.value;
+    points.push(wage);
+    weights.push(emp);
+    totalWeight += emp;
+  }
+  // Normalize weights to sum to 1
+  const w = weights.map(e => e / totalWeight);
+  const n = points.length;
+
+  // Bandwidth: Silverman's rule adapted for weighted data
+  // Weighted mean and std
+  let wMean = 0;
+  for (let i = 0; i < n; i++) wMean += w[i] * points[i];
+  let wVar = 0;
+  for (let i = 0; i < n; i++) wVar += w[i] * (points[i] - wMean) ** 2;
+  const wStd = Math.sqrt(wVar);
+
+  // Weighted IQR approximation via sorted weighted quantiles
+  const sorted = points.map((v, i) => ({ v, w: w[i] })).sort((a, b) => a.v - b.v);
+  function weightedQuantile(q) {
+    let cum = 0;
+    for (const s of sorted) {
+      cum += s.w;
+      if (cum >= q) return s.v;
+    }
+    return sorted[sorted.length - 1].v;
+  }
+  const iqr = weightedQuantile(0.75) - weightedQuantile(0.25);
+
+  // R's bw.nrd(): 0.9 * min(σ, IQR/1.34) * n_eff^(-1/5)
+  // Effective sample size for weighted data: (Σw)² / Σw² = 1/Σw²
+  const sumW2 = w.reduce((s, wi) => s + wi * wi, 0);
+  const nEff = 1 / sumW2;
+  const spread = Math.min(wStd, iqr / 1.34);
+  const bandwidth = 0.9 * spread * Math.pow(nEff, -0.2);
+  if (bandwidth <= 0 || !isFinite(bandwidth)) return null;
+
+  return { points, w, n, bandwidth, nEff, wMean, wStd, iqr };
+}
+
+function evaluateKDE(kde, x) {
+  if (!kde) return 0;
+  const { points, w, n, bandwidth } = kde;
+  const h = bandwidth;
+  let density = 0;
+  for (let i = 0; i < n; i++) {
+    const u = (x - points[i]) / h;
+    density += w[i] * Math.exp(-0.5 * u * u);
+  }
+  return density / (h * Math.sqrt(2 * Math.PI));
+}
+
+function sampleKDE(kde, xMin, xMax, steps) {
+  if (!kde) return [];
+  const pts = [];
+  const dx = (xMax - xMin) / steps;
+  for (let i = 0; i <= steps; i++) {
+    const x = xMin + i * dx;
+    pts.push({ x, y: evaluateKDE(kde, x) });
+  }
+  return pts;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATISTICAL COMPARISON — PQDE vs KDE
+// Computes mean, percentiles, and divergence measures from both
+// density estimates to validate the PQDE against point-data KDE.
+// ══════════════════════════════════════════════════════════════════
+function computeDensityStats(fit, kde, xMin, xMax) {
+  if (!fit && !kde) return null;
+  const N = 2000;
+  const dx = (xMax - xMin) / N;
+  const stats = {};
+
+  function integrate(evalFn, label) {
+    let totalArea = 0, mean = 0;
+    const cdf = [];
+    for (let i = 0; i <= N; i++) {
+      const x = xMin + i * dx;
+      const y = evalFn(x);
+      if (i > 0) {
+        const yPrev = evalFn(xMin + (i - 1) * dx);
+        const slice = 0.5 * (yPrev + y) * dx;
+        totalArea += slice;
+        mean += x * slice;
+      }
+      cdf.push({ x, cum: totalArea });
+    }
+    // Percentiles from CDF
+    const pcts = [0.10, 0.25, 0.50, 0.75, 0.90];
+    const pctVals = {};
+    for (const p of pcts) {
+      const target = p * totalArea;
+      const entry = cdf.find(c => c.cum >= target);
+      pctVals['p' + Math.round(p * 100)] = entry ? entry.x : null;
+    }
+    // Variance and std
+    const mu = mean / totalArea;
+    let variance = 0;
+    for (let i = 1; i <= N; i++) {
+      const x = xMin + i * dx;
+      const y = evalFn(x);
+      const yPrev = evalFn(xMin + (i - 1) * dx);
+      variance += ((x - mu) ** 2) * 0.5 * (yPrev + y) * dx;
+    }
+    variance /= totalArea;
+    return { label, totalArea, mean: mu, std: Math.sqrt(variance), ...pctVals };
+  }
+
+  if (fit) {
+    stats.pqde = integrate(x => evaluateDensity(fit, x), 'PQDE');
+  }
+  if (kde) {
+    stats.kde = integrate(x => evaluateKDE(kde, x), 'KDE');
+  }
+
+  // Integrated Squared Error and Hellinger distance (when both available)
+  if (stats.pqde && stats.kde) {
+    let ise = 0, hellinger = 0;
+    for (let i = 1; i <= N; i++) {
+      const x = xMin + i * dx;
+      const fp = evaluateDensity(fit, x);
+      const fk = evaluateKDE(kde, x);
+      ise += (fp - fk) ** 2 * dx;
+      hellinger += (Math.sqrt(Math.max(0, fp)) - Math.sqrt(Math.max(0, fk))) ** 2 * dx;
+    }
+    stats.ise = ise;
+    stats.hellinger = Math.sqrt(0.5 * hellinger);
+  }
+
+  return stats;
+}
+
 let histMode = 'pdf'; // 'employment' | 'count' | 'pdf'
 
 function computeHistogramData() {
@@ -1331,6 +1698,19 @@ function renderHistogram() {
   const bins = computeHistogramData();
   if (!bins.length) return;
 
+  const densityFit = (STATE.showDensity && histMode === 'pdf') ? fitPiecewiseQuadraticDensity(bins) : null;
+  const densityPoints = densityFit ? sampleDensity(densityFit, 36) : null;
+  const densityPeak = densityPoints && densityPoints.length
+    ? densityPoints.reduce((max, p) => (p.y > max.y ? p : max), densityPoints[0])
+    : null;
+
+  // KDE from employment-weighted point data (O'Malley §3.1 comparison)
+  const kdeData = (STATE.showKDE && histMode === 'pdf') ? computeKDE() : null;
+  const kdePoints = kdeData ? sampleKDE(kdeData, HIST_EDGES[0], HIST_EDGES[HIST_EDGES.length - 1], 400) : null;
+  const kdePeak = kdePoints && kdePoints.length
+    ? kdePoints.reduce((max, p) => (p.y > max.y ? p : max), kdePoints[0])
+    : null;
+
   const accessor = histMode === 'employment'
     ? b => b.pct_employment * 100
     : histMode === 'count' ? b => b.wage_count
@@ -1367,7 +1747,16 @@ function renderHistogram() {
   const xMax = HIST_EDGES[HIST_EDGES.length - 1];
   const x = d3.scaleLinear().domain([xMin, xMax]).range([0, iw]);
 
-  const yMax = d3.max(bins, accessor) * 1.15;
+  const baseMax = d3.max(bins, accessor) || 0;
+  let yMax = baseMax <= 0 ? 1 : baseMax * 1.15;
+  if (densityPoints && densityPoints.length) {
+    const densMax = d3.max(densityPoints, d => d.y) || 0;
+    if (densMax > 0) yMax = Math.max(yMax, densMax * 1.1);
+  }
+  if (kdePoints && kdePoints.length) {
+    const kdeMax = d3.max(kdePoints, d => d.y) || 0;
+    if (kdeMax > 0) yMax = Math.max(yMax, kdeMax * 1.1);
+  }
   const y = d3.scaleLinear().domain([0, yMax]).range([ih, 0]);
 
   const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
@@ -1376,6 +1765,21 @@ function renderHistogram() {
   g.append('g').selectAll('line').data(y.ticks(5)).join('line')
     .attr('x1', 0).attr('x2', iw).attr('y1', d => y(d)).attr('y2', d => y(d))
     .attr('stroke', 'rgba(255,255,255,.04)');
+
+  if (densityPoints && densityPoints.length) {
+    const densityArea = d3.area()
+      .x(d => x(d.x))
+      .y0(ih)
+      .y1(d => y(d.y))
+      .curve(d3.curveMonotoneX);
+    const areaPath = g.append('path')
+      .datum(densityPoints)
+      .attr('class', 'density-area')
+      .attr('d', densityArea)
+      .attr('fill', 'rgba(167,139,250,.16)')
+      .attr('stroke', 'none');
+    areaPath.lower();
+  }
 
   // Which bin is the selected occupation in?
   let selRange = null;
@@ -1403,11 +1807,22 @@ function renderHistogram() {
       tooltip.style.left = (event.clientX + 14) + 'px';
       tooltip.style.top = (event.clientY - 12) + 'px';
       const widthStr = d.isLast ? '$' + d.lo + '+' : '$' + d.lo.toFixed(2) + ' – $' + (d.hi - 0.01).toFixed(2);
-      tooltip.innerHTML = `<div class="tt-title">Range ${d.range} (${widthStr}/hr)</div>`
+      let html = `<div class="tt-title">Range ${d.range} (${widthStr}/hr)</div>`
         + `<div class="tt-row"><span class="tt-label">Bin width</span><span class="tt-val">$${d.binWidth.toFixed(2)}</span></div>`
         + `<div class="tt-row"><span class="tt-label">Occupations</span><span class="tt-val">${d.wage_count}</span></div>`
         + `<div class="tt-row"><span class="tt-label">Employment</span><span class="tt-val">${FMT.int(d.employment_total)}</span></div>`
         + `<div class="tt-row"><span class="tt-label">% of Total</span><span class="tt-val">${(d.pct_employment * 100).toFixed(2)}%</span></div>`;
+      if (densityFit) {
+        const center = Math.min(d.hi, d.lo + d.binWidth / 2);
+        const smoothVal = evaluateDensity(densityFit, center);
+        html += `<div class="tt-row"><span class="tt-label">PQDE f(x)</span><span class="tt-val" style="color:var(--violet)">${smoothVal.toFixed(4)}</span></div>`;
+      }
+      if (kdeData) {
+        const center = Math.min(d.hi, d.lo + d.binWidth / 2);
+        const kdeVal = evaluateKDE(kdeData, center);
+        html += `<div class="tt-row"><span class="tt-label">KDE f(x)</span><span class="tt-val" style="color:var(--orange)">${kdeVal.toFixed(4)}</span></div>`;
+      }
+      tooltip.innerHTML = html;
     })
     .on('mouseleave', () => tooltip.style.display = 'none');
 
@@ -1428,6 +1843,71 @@ function renderHistogram() {
     .attr('fill', d => (x(d.hi) - x(d.lo)) > 16 ? 'rgba(255,255,255,.25)' : 'transparent')
     .attr('font-size', '10px').attr('font-family', 'var(--mono)').attr('font-weight', '700')
     .text(d => d.range);
+
+  if (densityPoints && densityPoints.length) {
+    const densityLine = d3.line()
+      .x(d => x(d.x))
+      .y(d => y(d.y))
+      .curve(d3.curveMonotoneX);
+    g.append('path')
+      .datum(densityPoints)
+      .attr('class', 'density-line')
+      .attr('d', densityLine)
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--violet)')
+      .attr('stroke-width', 2.4)
+      .attr('stroke-linecap', 'round');
+    if (densityPeak) {
+      g.append('circle')
+        .attr('cx', x(densityPeak.x))
+        .attr('cy', y(densityPeak.y))
+        .attr('r', 4)
+        .attr('fill', 'var(--violet)')
+        .attr('stroke', 'var(--surface)')
+        .attr('stroke-width', 1.5);
+    }
+  }
+
+  // KDE curve overlay (orange)
+  if (kdePoints && kdePoints.length) {
+    // KDE shaded area
+    const kdeArea = d3.area()
+      .x(d => x(d.x))
+      .y0(ih)
+      .y1(d => y(d.y))
+      .curve(d3.curveMonotoneX);
+    const kdeAreaPath = g.append('path')
+      .datum(kdePoints)
+      .attr('class', 'kde-area')
+      .attr('d', kdeArea)
+      .attr('fill', 'rgba(251,146,60,.10)')
+      .attr('stroke', 'none');
+    kdeAreaPath.lower();
+
+    // KDE line
+    const kdeLine = d3.line()
+      .x(d => x(d.x))
+      .y(d => y(d.y))
+      .curve(d3.curveMonotoneX);
+    g.append('path')
+      .datum(kdePoints)
+      .attr('class', 'kde-line')
+      .attr('d', kdeLine)
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--orange)')
+      .attr('stroke-width', 2)
+      .attr('stroke-dasharray', '6,3')
+      .attr('stroke-linecap', 'round');
+    if (kdePeak) {
+      g.append('circle')
+        .attr('cx', x(kdePeak.x))
+        .attr('cy', y(kdePeak.y))
+        .attr('r', 4)
+        .attr('fill', 'var(--orange)')
+        .attr('stroke', 'var(--surface)')
+        .attr('stroke-width', 1.5);
+    }
+  }
 
   // X axis with tick marks at each bin edge
   const xAxis = g.append('g').attr('transform', `translate(0,${ih})`);
@@ -1488,11 +1968,75 @@ function renderHistogram() {
   const totalEmp = bins.reduce((s, b) => s + b.employment_total, 0);
   const peakBin = bins.reduce((a, b) => accessor(b) > accessor(a) ? b : a);
   const summary = document.getElementById('histSummary');
-  summary.innerHTML = `
-    <div class="hist-stat"><span class="hs-val">${totalOccs}</span><span class="hs-label">Occupations</span></div>
-    <div class="hist-stat"><span class="hs-val">${FMT.int(totalEmp)}</span><span class="hs-label">Total Employment</span></div>
-    <div class="hist-stat"><span class="hs-val">Range ${peakBin.range}</span><span class="hs-label">Peak Interval</span></div>
-  `;
+  const stats = [
+    { label: 'Occupations', value: totalOccs.toLocaleString() },
+    { label: 'Total Employment', value: FMT.int(totalEmp) },
+    { label: 'Peak Interval', value: `Range ${peakBin.range}` },
+  ];
+  if (densityFit && densityPeak) {
+    stats.push({
+      label: 'PQDE Peak',
+      value: `$${densityPeak.x.toFixed(2)}/hr · f=${densityPeak.y.toFixed(4)}`,
+    });
+  }
+  if (kdeData && kdePeak) {
+    stats.push({
+      label: 'KDE Peak',
+      value: `$${kdePeak.x.toFixed(2)}/hr · f=${kdePeak.y.toFixed(4)}`,
+    });
+    stats.push({
+      label: 'Bandwidth',
+      value: `h=$${kdeData.bandwidth.toFixed(2)} · n_eff=${Math.round(kdeData.nEff)}`,
+    });
+  }
+  summary.innerHTML = stats.map(stat => `
+    <div class="hist-stat"><span class="hs-val">${stat.value}</span><span class="hs-label">${stat.label}</span></div>
+  `).join('');
+
+  // Statistical comparison panel
+  const statsContainer = document.getElementById('histStats') || (() => {
+    const el = document.createElement('div');
+    el.id = 'histStats';
+    document.getElementById('histCard').appendChild(el);
+    return el;
+  })();
+  if (densityFit && kdeData && histMode === 'pdf') {
+    const cmpStats = computeDensityStats(densityFit, kdeData, HIST_EDGES[0], HIST_EDGES[HIST_EDGES.length - 1]);
+    if (cmpStats) {
+      const p = cmpStats.pqde;
+      const k = cmpStats.kde;
+      const fmtD = v => v != null ? '$' + v.toFixed(2) : '—';
+      let html = '<div class="stats-panel">';
+      html += '<div class="sp-title">◆ Estimator Comparison — PQDE vs KDE (O\'Malley JSM 2008 §3.1)</div>';
+      html += '<div class="stats-grid">';
+      html += `<div class="stat-cell pqde"><span class="sc-label">PQDE Mean</span><span class="sc-val">${fmtD(p.mean)}</span></div>`;
+      html += `<div class="stat-cell kde"><span class="sc-label">KDE Mean</span><span class="sc-val">${fmtD(k.mean)}</span></div>`;
+      html += `<div class="stat-cell delta"><span class="sc-label">Δ Mean</span><span class="sc-val">${fmtD(Math.abs(p.mean - k.mean))}</span></div>`;
+      html += `<div class="stat-cell pqde"><span class="sc-label">PQDE Std</span><span class="sc-val">${fmtD(p.std)}</span></div>`;
+      html += `<div class="stat-cell kde"><span class="sc-label">KDE Std</span><span class="sc-val">${fmtD(k.std)}</span></div>`;
+      html += `<div class="stat-cell delta"><span class="sc-label">Δ Std</span><span class="sc-val">${fmtD(Math.abs(p.std - k.std))}</span></div>`;
+      for (const pct of ['p10', 'p25', 'p50', 'p75', 'p90']) {
+        const label = pct.toUpperCase();
+        html += `<div class="stat-cell pqde"><span class="sc-label">PQDE ${label}</span><span class="sc-val">${fmtD(p[pct])}</span></div>`;
+        html += `<div class="stat-cell kde"><span class="sc-label">KDE ${label}</span><span class="sc-val">${fmtD(k[pct])}</span></div>`;
+        const delta = (p[pct] != null && k[pct] != null) ? Math.abs(p[pct] - k[pct]) : null;
+        html += `<div class="stat-cell delta"><span class="sc-label">Δ ${label}</span><span class="sc-val">${fmtD(delta)}</span></div>`;
+      }
+      html += `<div class="stat-cell"><span class="sc-label">ISE</span><span class="sc-val" style="color:var(--gold)">${cmpStats.ise.toExponential(3)}</span></div>`;
+      html += `<div class="stat-cell"><span class="sc-label">Hellinger Dist</span><span class="sc-val" style="color:var(--gold)">${cmpStats.hellinger.toFixed(4)}</span></div>`;
+      html += `<div class="stat-cell"><span class="sc-label">PQDE Area</span><span class="sc-val">${(p.totalArea * 100).toFixed(2)}%</span></div>`;
+      html += '</div>';
+      html += '<div class="legend-row">';
+      html += '<div class="legend-item"><div class="legend-swatch" style="background:var(--violet)"></div>PQDE (interval-censored, piecewise quadratic)</div>';
+      html += '<div class="legend-item"><div class="legend-swatch" style="background:var(--orange)"></div>KDE (employment-weighted Gaussian kernel)</div>';
+      html += '<div class="legend-item"><div class="legend-swatch" style="background:var(--accent)"></div>Histogram (empirical density)</div>';
+      html += '</div>';
+      html += '</div>';
+      statsContainer.innerHTML = html;
+    }
+  } else {
+    statsContainer.innerHTML = '';
+  }
 }
 
 // Histogram toggle handlers
@@ -1503,6 +2047,28 @@ document.getElementById('histToggle').addEventListener('click', e => {
   document.querySelectorAll('#histToggle .pill').forEach(p => p.classList.toggle('active', p.dataset.mode === histMode));
   renderHistogram();
 });
+
+const densityToggleBtn = document.getElementById('densityToggle');
+if (densityToggleBtn) {
+  densityToggleBtn.setAttribute('aria-pressed', STATE.showDensity ? 'true' : 'false');
+  densityToggleBtn.addEventListener('click', () => {
+    STATE.showDensity = !STATE.showDensity;
+    densityToggleBtn.classList.toggle('active', STATE.showDensity);
+    densityToggleBtn.setAttribute('aria-pressed', STATE.showDensity ? 'true' : 'false');
+    renderHistogram();
+  });
+}
+
+const kdeToggleBtn = document.getElementById('kdeToggle');
+if (kdeToggleBtn) {
+  kdeToggleBtn.setAttribute('aria-pressed', STATE.showKDE ? 'true' : 'false');
+  kdeToggleBtn.addEventListener('click', () => {
+    STATE.showKDE = !STATE.showKDE;
+    kdeToggleBtn.classList.toggle('active', STATE.showKDE);
+    kdeToggleBtn.setAttribute('aria-pressed', STATE.showKDE ? 'true' : 'false');
+    renderHistogram();
+  });
+}
 
 function scrollToSelected() {
   const el = document.querySelector('.occ-item.selected');
