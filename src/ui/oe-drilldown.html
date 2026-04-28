@@ -1349,6 +1349,7 @@ function fitPiecewiseQuadraticDensity(bins) {
   if (!n) return null;
   const edges = bins.map(b => b.lo);
   edges.push(bins[n - 1].hi);
+  console.log('edges ', edges)
   const massesRaw = bins.map(b => b.pct_employment);
   console.log('mass raw oct emp', massesRaw)
   const totalMass = massesRaw.reduce((sum, v) => sum + v, 0);
@@ -1359,13 +1360,19 @@ function fitPiecewiseQuadraticDensity(bins) {
   const rhs = [];
   console.log('mass total', masses)
   const width = i => edges[i + 1] - edges[i];
+  
   const idxA = i => 3 * i;
   const idxB = i => 3 * i + 1;
   const idxC = i => 3 * i + 2;
   console.log('id x A ', idxA(0))
     console.log('id x B ', idxB(0))
       console.log('id x C ', idxC(0))
+  let count = 0;
   function addRow(coeffs, value) {
+    count++
+    console.log('count ', count)
+     console.log('coeffs rows ', coeffs)
+      console.log('rhs ', value)
     rows.push(coeffs);
     rhs.push(value);
   }
@@ -1373,13 +1380,14 @@ function fitPiecewiseQuadraticDensity(bins) {
   for (let i = 0; i < n; i++) {
     const w = width(i);
     if (!(w > 0)) return null;
+     console.log('width', w)
     const row = new Array(nVars).fill(0);
     row[idxA(i)] = w;
     row[idxB(i)] = 0.5 * w * w;
     row[idxC(i)] = (w * w * w) / 3;
     addRow(row, masses[i]);
   }
- 
+ count = 0;
   for (let i = 0; i < n - 1; i++) {
     const w = width(i);
     const row = new Array(nVars).fill(0);
@@ -1389,7 +1397,7 @@ function fitPiecewiseQuadraticDensity(bins) {
     row[idxA(i + 1)] = -1;
     addRow(row, 0);
   }
-
+count = 0;
   for (let i = 0; i < n - 1; i++) {
     const w = width(i);
     const row = new Array(nVars).fill(0);
@@ -1398,11 +1406,11 @@ function fitPiecewiseQuadraticDensity(bins) {
     row[idxB(i + 1)] = -1;
     addRow(row, 0);
   }
-
+count = 0;
   const rowLow = new Array(nVars).fill(0);
   rowLow[idxB(0)] = 1;
   addRow(rowLow, 0);
-
+count = 0;
   const last = n - 1;
   const wLast = width(last);
   const rowHigh = new Array(nVars).fill(0);
@@ -1411,14 +1419,17 @@ function fitPiecewiseQuadraticDensity(bins) {
   addRow(rowHigh, 0);
 
   const coeffs = solveLinearSystem(rows, rhs);
+  console.log('FINAL COEFFS ',coeffs)
   if (!coeffs) return null;
 
   return { edges, coeffs, masses };
 }
 
 function evaluateDensity(fit, x) {
+  console.log('X  ',x)
   if (!fit) return 0;
   const { edges, coeffs } = fit;
+  console.log('COEFFS ', coeffs)
   const n = edges.length - 1;
   if (n <= 0) return 0;
   let idx = 0;
@@ -1435,19 +1446,25 @@ function evaluateDensity(fit, x) {
       }
     }
   }
+  console.log('IDX ', idx)
   const lo = edges[idx];
   const hi = edges[idx + 1];
   const t = Math.min(Math.max(x, lo), hi) - lo;
   const a = coeffs[3 * idx];
+  console.log('A ', a)
   const b = coeffs[3 * idx + 1];
+    console.log('B ', b)
   const c = coeffs[3 * idx + 2];
+    console.log('C', c)
   const y = a + b * t + c * t * t;
   return Math.max(0, y);
 }
 
 function sampleDensity(fit, stepsPerBin = 24) {
+  console.log('steps  ',stepsPerBin)
   if (!fit) return [];
   const { edges } = fit;
+  console.log('EDGES ',edges)
   const n = edges.length - 1;
   const pts = [];
   for (let i = 0; i < n; i++) {
@@ -1466,6 +1483,7 @@ function sampleDensity(fit, stepsPerBin = 24) {
 function solveLinearSystem(A, b) {
   
    console.log('solve linear b', b)
+      console.log('solve linear A', A)
   const n = A.length;
   if (!n || A[0].length !== n || b.length !== n) return null;
   const M = A.map(row => row.slice());
@@ -1474,7 +1492,7 @@ function solveLinearSystem(A, b) {
   for (let col = 0; col < n; col++) {
     let pivot = col;
     let pivotVal = Math.abs(M[col][col]);
-     console.log('solve linear A', pivotVal)
+     console.log('solve linear pivot ', pivotVal)
     for (let row = col + 1; row < n; row++) {
       const val = Math.abs(M[row][col]);
       if (val > pivotVal) {
