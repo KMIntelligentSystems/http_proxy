@@ -1,0 +1,26 @@
+[
+  {
+    "survey_code": "OE",
+    "name": "Occupational Employment and Wage Statistics",
+    "short_name": "OEWS",
+    "frequency": "Annual",
+    "length": 25,
+    "description": "Occupation x Industry x Area wages and employment."
+  },
+  {
+    "survey_code": "CE",
+    "name": "Current Employment Statistics",
+    "short_name": "CES",
+    "frequency": "Monthly",
+    "length": 13,
+    "description": "Employment, hours, and earnings by industry supersector."
+  },
+  {
+    "survey_code": "LN",
+    "name": "Labor Force Statistics (CPS)",
+    "short_name": "CPS/LN",
+    "frequency": "Monthly",
+    "length": 11,
+    "description": "Labor force, employment, unemployment by demographics."
+  }
+]

@@ -1,0 +1,54 @@
+[
+  {
+    "code": "0000",
+    "label": "Total, 16 years and over"
+  },
+  {
+    "code": "0100",
+    "label": "Men, 16 years and over"
+  },
+  {
+    "code": "0200",
+    "label": "Women, 16 years and over"
+  },
+  {
+    "code": "0300",
+    "label": "16 to 19 years"
+  },
+  {
+    "code": "0400",
+    "label": "20 years and over"
+  },
+  {
+    "code": "0500",
+    "label": "White"
+  },
+  {
+    "code": "0600",
+    "label": "Black or African American"
+  },
+  {
+    "code": "0700",
+    "label": "Asian"
+  },
+  {
+    "code": "0800",
+    "label": "Hispanic or Latino"
+  },
+  {
+    "code": "1000",
+    "label": "Less than a high school diploma"
+  },
+  {
+    "code": "1100",
+    "label": "High school graduates, no college"
+  },
+  {
+    "code": "1200",
+    "label": "Some college or associate degree"
+  },
+  {
+    "code": "1300",
+    "label": "Bachelors degree and higher"
+  }
+]

@@ -1,0 +1,134 @@
+{
+  "OE": {
+    "name": "Occupational Employment and Wage Statistics (OEWS)",
+    "length": 25,
+    "positional_layout": [
+      {"position": "1-2", "field": "survey", "type": "fixed", "example": "OE", "values": ["OE"]},
+      {"position": "3", "field": "seasonal_adjustment", "type": "fixed", "example": "U", "values": ["U"]},
+      {"position": "4", "field": "areatype", "type": "letter", "example": "N", "values": ["N", "S", "M", "B", "D"]},
+      {"position": "5-11", "field": "area_code", "type": "7-digit", "example": "0000000", "description": "National=0000000"},
+      {"position": "12-17", "field": "industry_code", "type": "6-digit", "example": "000000", "description": "Cross-industry=000000"},
+      {"position": "18-23", "field": "occupation_code", "type": "6-digit", "example": "151211", "description": "SOC code"},
+      {"position": "24-25", "field": "datatype_code", "type": "2-digit", "example": "01", "values": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15"]}
+    ],
+    "areatype_codes": {
+      "N": "National",
+      "S": "State",
+      "M": "Metropolitan Statistical Area (MSA)",
+      "B": "Metropolitan Division",
+      "D": "Department of Defense"
+    },
+    "datatype_codes": {
+      "01": "Total employment",
+      "02": "Employment RSE (relative standard error)",
+      "03": "Mean hourly wage",
+      "04": "Mean annual wage",
+      "05": "Mean wage RSE",
+      "06": "10th percentile hourly wage",
+      "07": "25th percentile hourly wage",
+      "08": "Median hourly wage",
+      "09": "75th percentile hourly wage",
+      "10": "90th percentile hourly wage",
+      "11": "10th percentile annual wage",
+      "12": "25th percentile annual wage",
+      "13": "Median annual wage",
+      "14": "75th percentile annual wage",
+      "15": "90th percentile annual wage"
+    },
+    "example": "OEUN000000000000015121101",
+    "example_breakdown": {
+      "OE": "Survey",
+      "U": "Unadjusted",
+      "N": "National",
+      "0000000": "National area code",
+      "000000": "Cross-industry",
+      "151211": "Software Developers",
+      "01": "Total employment"
+    },
+    "notes": "OEWS data always has seasonal adjustment code 'U' (not seasonally adjusted)"
+  },
+  "CE": {
+    "name": "Current Employment Statistics (CES)",
+    "length": 20,
+    "positional_layout": [
+      {"position": "1-2", "field": "survey", "type": "fixed", "example": "CE", "values": ["CE"]},
+      {"position": "3", "field": "seasonal_adjustment", "type": "letter", "example": "S", "values": ["S", "U"]},
+      {"position": "4-8", "field": "state_fips", "type": "5-digit", "example": "00000", "description": "00000=US national"},
+      {"position": "9-14", "field": "area_code", "type": "6-digit", "example": "000000", "description": "000000=state level"},
+      {"position": "15-16", "field": "supersector", "type": "2-digit", "example": "05", "values": ["00", "05", "06", "07", "08", "09", "10", "11", "12", "13"]},
+      {"position": "17-18", "field": "industry_detail", "type": "2-digit", "example": "00"},
+      {"position": "19-20", "field": "datatype_code", "type": "2-digit", "example": "01", "values": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10"]}
+    ],
+    "seasonal_adjustment_codes": {
+      "S": "Seasonally adjusted",
+      "U": "Not seasonally adjusted"
+    },
+    "supersector_codes": {
+      "00": "Total nonfarm payroll",
+      "05": "Construction",
+      "06": "Manufacturing",
+      "07": "Trade, Transportation, and Utilities",
+      "08": "Information",
+      "09": "Financial Activities",
+      "10": "Professional and Business Services",
+      "11": "Education and Health Services",
+      "12": "Leisure and Hospitality",
+      "13": "Other Services",
+      "20": "Private sector total"
+    },
+    "datatype_codes": {
+      "01": "All employees (in thousands)",
+      "02": "Average weekly hours (private, non-supervisory)",
+      "03": "Average hourly earnings (private, non-supervisory)",
+      "04": "Average weekly earnings (private, non-supervisory)",
+      "05": "Production and nonsupervisory employees (legacy)",
+      "06": "Net birth/death employment adjustment",
+      "07": "Diffusion index - employment change",
+      "08": "Diffusion index - employment level",
+      "09": "Private production and nonsupervisory employees (in thousands)",
+      "10": "Diffusion index, 6-month span"
+    },
+    "examples": ["CES0000000001", "CES0500000001", "CEU0600000003"],
+    "notes": "CES data typically available in both seasonally adjusted (S) and not seasonally adjusted (U) forms"
+  },
+  "LN": {
+    "name": "Labor Force Statistics from the Current Population Survey (CPS)",
+    "length": 12,
+    "positional_layout": [
+      {"position": "1-2", "field": "survey", "type": "fixed", "example": "LN", "values": ["LN"]},
+      {"position": "3", "field": "seasonal_adjustment", "type": "letter", "example": "U", "values": ["S", "U"]},
+      {"position": "4-6", "field": "series_code", "type": "3-digit", "example": "020", "values": ["001", "020", "030", "040", "050", "060"]},
+      {"position": "7-10", "field": "demographic_code", "type": "4-digit", "example": "0000", "description": "Age, sex, race, education breakdowns"},
+      {"position": "11-12", "field": "reserved", "type": "fixed", "example": "00", "values": ["00"]}
+    ],
+    "seasonal_adjustment_codes": {
+      "S": "Seasonally adjusted",
+      "U": "Not seasonally adjusted"
+    },
+    "series_codes": {
+      "001": "Labor force level",
+      "020": "Unemployment rate (percent)",
+      "030": "Employment level (civilian)",
+      "040": "Not in labor force",
+      "050": "Employment-population ratio",
+      "060": "Labor force participation rate"
+    },
+    "demographic_codes": {
+      "0000": "Total, 16+ years",
+      "0100": "Men, 16+ years",
+      "0200": "Women, 16+ years",
+      "0300": "16-19 years",
+      "0400": "20+ years",
+      "0500": "White",
+      "0600": "Black or African American",
+      "0700": "Asian",
+      "0800": "Hispanic or Latino ethnicity",
+      "1000": "Less than high school diploma",
+      "1100": "High school graduates, no college",
+      "1200": "Some college or associate's degree",
+      "1300": "Bachelor's degree and higher"
+    },
+    "examples": ["LNU02000000", "LNS14000000", "LNU02200002"],
+    "notes": "CPS labor force data is monthly; most series available in both seasonally adjusted and not seasonally adjusted versions"
+  }
+}

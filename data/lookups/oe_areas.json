@@ -1,0 +1,277 @@
+[
+  {
+    "area_type": "N",
+    "area_code": "0000000",
+    "area_name": "National"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0100000",
+    "area_name": "Alabama"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0200000",
+    "area_name": "Alaska"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0400000",
+    "area_name": "Arizona"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0500000",
+    "area_name": "Arkansas"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0600000",
+    "area_name": "California"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0800000",
+    "area_name": "Colorado"
+  },
+  {
+    "area_type": "S",
+    "area_code": "0900000",
+    "area_name": "Connecticut"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1000000",
+    "area_name": "Delaware"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1100000",
+    "area_name": "District of Columbia"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1200000",
+    "area_name": "Florida"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1300000",
+    "area_name": "Georgia"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1500000",
+    "area_name": "Hawaii"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1600000",
+    "area_name": "Idaho"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1700000",
+    "area_name": "Illinois"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1800000",
+    "area_name": "Indiana"
+  },
+  {
+    "area_type": "S",
+    "area_code": "1900000",
+    "area_name": "Iowa"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2000000",
+    "area_name": "Kansas"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2100000",
+    "area_name": "Kentucky"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2200000",
+    "area_name": "Louisiana"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2300000",
+    "area_name": "Maine"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2400000",
+    "area_name": "Maryland"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2500000",
+    "area_name": "Massachusetts"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2600000",
+    "area_name": "Michigan"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2700000",
+    "area_name": "Minnesota"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2800000",
+    "area_name": "Mississippi"
+  },
+  {
+    "area_type": "S",
+    "area_code": "2900000",
+    "area_name": "Missouri"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3000000",
+    "area_name": "Montana"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3100000",
+    "area_name": "Nebraska"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3200000",
+    "area_name": "Nevada"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3300000",
+    "area_name": "New Hampshire"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3400000",
+    "area_name": "New Jersey"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3500000",
+    "area_name": "New Mexico"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3600000",
+    "area_name": "New York"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3700000",
+    "area_name": "North Carolina"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3800000",
+    "area_name": "North Dakota"
+  },
+  {
+    "area_type": "S",
+    "area_code": "3900000",
+    "area_name": "Ohio"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4000000",
+    "area_name": "Oklahoma"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4100000",
+    "area_name": "Oregon"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4200000",
+    "area_name": "Pennsylvania"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4400000",
+    "area_name": "Rhode Island"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4500000",
+    "area_name": "South Carolina"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4600000",
+    "area_name": "South Dakota"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4700000",
+    "area_name": "Tennessee"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4800000",
+    "area_name": "Texas"
+  },
+  {
+    "area_type": "S",
+    "area_code": "4900000",
+    "area_name": "Utah"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5000000",
+    "area_name": "Vermont"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5100000",
+    "area_name": "Virginia"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5300000",
+    "area_name": "Washington"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5400000",
+    "area_name": "West Virginia"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5500000",
+    "area_name": "Wisconsin"
+  },
+  {
+    "area_type": "S",
+    "area_code": "5600000",
+    "area_name": "Wyoming"
+  },
+  {
+    "area_type": "S",
+    "area_code": "6600000",
+    "area_name": "Guam"
+  },
+  {
+    "area_type": "S",
+    "area_code": "7200000",
+    "area_name": "Puerto Rico"
+  },
+  {
+    "area_type": "S",
+    "area_code": "7800000",
+    "area_name": "Virgin Islands"
+  }
+]

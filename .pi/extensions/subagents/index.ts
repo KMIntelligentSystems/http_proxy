@@ -78,6 +78,10 @@ interface RunResult {
  * custom TUI wrapper (e.g. dist/cli.js) that starts MCP servers, proxy/host
  * sub-processes, and enters InteractiveMode. Re-running that as a child
  * would hang on port conflicts and interactive input.
+ * 
+ * pi-mono/packages/coding-agent/examples/extensions/subagent/index.ts
+ * function getPiInvocation(args: string[]): { command: string; args: string[] } {
+	const currentScript = process.argv[1];
  */
 function getPiCommand(cwd: string): { command: string; args: string[] } {
   const localCli = path.join(
@@ -106,7 +110,7 @@ function getPiCommand(cwd: string): { command: string; args: string[] } {
 
   return { command: "pi", args: [] };
 }
-
+//The child pi process starts as a headless, single-turn agent:
 async function runAgent(
   cwd: string,
   config: AgentConfig,
@@ -143,6 +147,7 @@ async function runAgent(
   args.push(`Task: ${task}`);
 
   return new Promise<RunResult>((resolve, reject) => {
+    //node cli.js --mode json -p --no-session --no-extensions --no-skills --no-prompt-templates --no-themes --model claude-haiku-4-5 --tools read,bash,grep,find,ls --append-system-prompt /tmp/pi-sub-XXXX/prompt.md "Task: Say    hello..."
     const proc = spawn(piCmd.command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
@@ -222,7 +227,9 @@ async function runAgent(
 }
 
 // ── Extension Entry Point ────────────────────────────────────────
-
+//An extension exports a default factory function that receives `ExtensionAPI`. The factory can be synchronous or asynchronous:
+//Extensions are loaded via [jiti](https://github.com/unjs/jiti), so TypeScript works without compilation.
+//Stale process ids of tui need to be stopped so JITI works properly
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "delegate",

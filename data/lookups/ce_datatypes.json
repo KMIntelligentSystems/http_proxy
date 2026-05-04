@@ -1,0 +1,42 @@
+[
+  {
+    "code": "01",
+    "label": "All employees, thousands"
+  },
+  {
+    "code": "02",
+    "label": "Average weekly hours, all employees"
+  },
+  {
+    "code": "03",
+    "label": "Average hourly earnings, all employees"
+  },
+  {
+    "code": "04",
+    "label": "Average weekly earnings, all employees"
+  },
+  {
+    "code": "06",
+    "label": "Production and nonsupervisory employees, thousands"
+  },
+  {
+    "code": "08",
+    "label": "Average weekly hours, prod/nonsup"
+  },
+  {
+    "code": "09",
+    "label": "Average hourly earnings, prod/nonsup"
+  },
+  {
+    "code": "10",
+    "label": "Average weekly earnings, prod/nonsup"
+  },
+  {
+    "code": "11",
+    "label": "Average weekly overtime hours, all employees"
+  },
+  {
+    "code": "26",
+    "label": "Indexes of diffusion, 1-month span"
+  }
+]

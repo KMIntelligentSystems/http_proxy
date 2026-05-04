@@ -1,0 +1,62 @@
+[
+  {
+    "code": "01",
+    "label": "Total employment"
+  },
+  {
+    "code": "02",
+    "label": "Employment RSE"
+  },
+  {
+    "code": "03",
+    "label": "Mean hourly wage"
+  },
+  {
+    "code": "04",
+    "label": "Mean annual wage"
+  },
+  {
+    "code": "05",
+    "label": "Mean wage RSE"
+  },
+  {
+    "code": "06",
+    "label": "10th percentile hourly wage"
+  },
+  {
+    "code": "07",
+    "label": "25th percentile hourly wage"
+  },
+  {
+    "code": "08",
+    "label": "Median hourly wage"
+  },
+  {
+    "code": "09",
+    "label": "75th percentile hourly wage"
+  },
+  {
+    "code": "10",
+    "label": "90th percentile hourly wage"
+  },
+  {
+    "code": "11",
+    "label": "10th percentile annual wage"
+  },
+  {
+    "code": "12",
+    "label": "25th percentile annual wage"
+  },
+  {
+    "code": "13",
+    "label": "Median annual wage"
+  },
+  {
+    "code": "14",
+    "label": "75th percentile annual wage"
+  },
+  {
+    "code": "15",
+    "label": "90th percentile annual wage"
+  }
+]

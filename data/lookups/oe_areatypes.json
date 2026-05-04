@@ -1,0 +1,22 @@
+[
+  {
+    "code": "N",
+    "label": "National"
+  },
+  {
+    "code": "S",
+    "label": "State"
+  },
+  {
+    "code": "M",
+    "label": "Metropolitan Statistical Area"
+  },
+  {
+    "code": "B",
+    "label": "Metropolitan Division"
+  },
+  {
+    "code": "D",
+    "label": "Department of Defense"
+  }
+]

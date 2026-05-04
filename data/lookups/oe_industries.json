@@ -1,0 +1,102 @@
+[
+  {
+    "industry_code": "000000",
+    "industry_name": "Cross-industry, all industries"
+  },
+  {
+    "industry_code": "110000",
+    "industry_name": "Agriculture, Forestry, Fishing, and Hunting"
+  },
+  {
+    "industry_code": "210000",
+    "industry_name": "Mining, Quarrying, and Oil and Gas Extraction"
+  },
+  {
+    "industry_code": "220000",
+    "industry_name": "Utilities"
+  },
+  {
+    "industry_code": "230000",
+    "industry_name": "Construction"
+  },
+  {
+    "industry_code": "310000",
+    "industry_name": "Manufacturing"
+  },
+  {
+    "industry_code": "420000",
+    "industry_name": "Wholesale Trade"
+  },
+  {
+    "industry_code": "440000",
+    "industry_name": "Retail Trade"
+  },
+  {
+    "industry_code": "480000",
+    "industry_name": "Transportation and Warehousing"
+  },
+  {
+    "industry_code": "510000",
+    "industry_name": "Information"
+  },
+  {
+    "industry_code": "520000",
+    "industry_name": "Finance and Insurance"
+  },
+  {
+    "industry_code": "530000",
+    "industry_name": "Real Estate and Rental and Leasing"
+  },
+  {
+    "industry_code": "540000",
+    "industry_name": "Professional, Scientific, and Technical Services"
+  },
+  {
+    "industry_code": "550000",
+    "industry_name": "Management of Companies and Enterprises"
+  },
+  {
+    "industry_code": "560000",
+    "industry_name": "Administrative and Support Services"
+  },
+  {
+    "industry_code": "610000",
+    "industry_name": "Educational Services"
+  },
+  {
+    "industry_code": "620000",
+    "industry_name": "Health Care and Social Assistance"
+  },
+  {
+    "industry_code": "710000",
+    "industry_name": "Arts, Entertainment, and Recreation"
+  },
+  {
+    "industry_code": "720000",
+    "industry_name": "Accommodation and Food Services"
+  },
+  {
+    "industry_code": "810000",
+    "industry_name": "Other Services (except Public Administration)"
+  },
+  {
+    "industry_code": "920000",
+    "industry_name": "Public Administration"
+  },
+  {
+    "industry_code": "999000",
+    "industry_name": "Federal, State, and Local Government"
+  },
+  {
+    "industry_code": "999100",
+    "industry_name": "Federal Government"
+  },
+  {
+    "industry_code": "999200",
+    "industry_name": "State Government"
+  },
+  {
+    "industry_code": "999300",
+    "industry_name": "Local Government"
+  }
+]

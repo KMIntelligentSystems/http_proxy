@@ -1050,7 +1050,7 @@ console.log('series ID ', seriesId)
     const resp = await fetch('/ui/api/bls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ seriesid: seriesIds, startyear: '2019', endyear: '2020/ui' })
+      body: JSON.stringify({ seriesid: seriesIds, startyear: '2024', endyear: '2024' })
     });
     const json = await resp.json();
     console.log('JSON', json)
@@ -1353,6 +1353,7 @@ function fitPiecewiseQuadraticDensity(bins) {
   const massesRaw = bins.map(b => b.pct_employment);
   console.log('mass raw oct emp', massesRaw)
   const totalMass = massesRaw.reduce((sum, v) => sum + v, 0);
+  console.log('TOTAL MASS ', totalMass)
   if (totalMass <= 0 || !isFinite(totalMass)) return null;
   const masses = massesRaw.map(v => v / totalMass);
   const nVars = n * 3;
@@ -1364,9 +1365,9 @@ function fitPiecewiseQuadraticDensity(bins) {
   const idxA = i => 3 * i;
   const idxB = i => 3 * i + 1;
   const idxC = i => 3 * i + 2;
-  console.log('id x A ', idxA(0))
+ /* console.log('id x A ', idxA(0))
     console.log('id x B ', idxB(0))
-      console.log('id x C ', idxC(0))
+      console.log('id x C ', idxC(0))*/
   let count = 0;
   function addRow(coeffs, value) {
     count++
@@ -1397,8 +1398,7 @@ function fitPiecewiseQuadraticDensity(bins) {
     row[idxA(i + 1)] = -1;
     addRow(row, 0);
   }
-count = 0;
-  for (let i = 0; i < n - 1; i++) {
+count = 0;  for (let i = 0; i < n - 1; i++) {
     const w = width(i);
     const row = new Array(nVars).fill(0);
     row[idxB(i)] = 1;
@@ -1429,7 +1429,7 @@ function evaluateDensity(fit, x) {
   console.log('X  ',x)
   if (!fit) return 0;
   const { edges, coeffs } = fit;
-  console.log('COEFFS ', coeffs)
+ // console.log('COEFFS ', coeffs)
   const n = edges.length - 1;
   if (n <= 0) return 0;
   let idx = 0;
@@ -1446,7 +1446,7 @@ function evaluateDensity(fit, x) {
       }
     }
   }
-  console.log('IDX ', idx)
+  //console.log('IDX ', idx)
   const lo = edges[idx];
   const hi = edges[idx + 1];
   const t = Math.min(Math.max(x, lo), hi) - lo;
@@ -1483,10 +1483,11 @@ function sampleDensity(fit, stepsPerBin = 24) {
 function solveLinearSystem(A, b) {
   
    console.log('solve linear b', b)
-      console.log('solve linear A', A)
+      console.log('solve linear A', A[0])
   const n = A.length;
   if (!n || A[0].length !== n || b.length !== n) return null;
   const M = A.map(row => row.slice());
+  console.log('MMM',M)
   const rhs = b.slice();
 
   for (let col = 0; col < n; col++) {
@@ -1495,6 +1496,8 @@ function solveLinearSystem(A, b) {
      console.log('solve linear pivot ', pivotVal)
     for (let row = col + 1; row < n; row++) {
       const val = Math.abs(M[row][col]);
+      if(pivotVal == 9.25)
+      console.log('VAL', val)
       if (val > pivotVal) {
         pivotVal = val;
         pivot = row;
@@ -1502,7 +1505,7 @@ function solveLinearSystem(A, b) {
     }
     if (pivotVal < 1e-12 || !isFinite(pivotVal)) return null;
     if (pivot !== col) {
-      [M[col], M[pivot]] = [M[pivot], M[col]];
+      [M[col], M[pivot]] = [M[pivot], M[col]];  
       [rhs[col], rhs[pivot]] = [rhs[pivot], rhs[col]];
     }
     const diag = M[col][col];
@@ -1695,6 +1698,7 @@ function computeHistogramData() {
       return v >= lo && (isLast ? true : v < hi);
     });
     const empTotal = matches.reduce((s, o) => s + (o.metrics.TOT_EMP?.value || 0), 0);
+    console.log('EMPE TOTAL ', empTotal)
     const pctEmp = empTotal / totalEmp;
     const width = hi - lo; // bin width in dollars
     return { ...iv, lo, hi, isLast, binWidth: width, wage_count: matches.length, employment_total: empTotal, pct_employment: pctEmp };

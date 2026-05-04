@@ -1,0 +1,112 @@
+[
+  {
+    "supersector": "00",
+    "industry_code": "000000",
+    "label": "Total nonfarm"
+  },
+  {
+    "supersector": "05",
+    "industry_code": "000000",
+    "label": "Total private"
+  },
+  {
+    "supersector": "06",
+    "industry_code": "000000",
+    "label": "Goods-producing"
+  },
+  {
+    "supersector": "07",
+    "industry_code": "000000",
+    "label": "Service-providing"
+  },
+  {
+    "supersector": "08",
+    "industry_code": "000000",
+    "label": "Private service-providing"
+  },
+  {
+    "supersector": "10",
+    "industry_code": "000000",
+    "label": "Mining and logging"
+  },
+  {
+    "supersector": "20",
+    "industry_code": "000000",
+    "label": "Construction"
+  },
+  {
+    "supersector": "30",
+    "industry_code": "000000",
+    "label": "Manufacturing"
+  },
+  {
+    "supersector": "31",
+    "industry_code": "000000",
+    "label": "Durable goods"
+  },
+  {
+    "supersector": "32",
+    "industry_code": "000000",
+    "label": "Non-durable goods"
+  },
+  {
+    "supersector": "40",
+    "industry_code": "000000",
+    "label": "Trade, transportation, and utilities"
+  },
+  {
+    "supersector": "41",
+    "industry_code": "000000",
+    "label": "Wholesale trade"
+  },
+  {
+    "supersector": "42",
+    "industry_code": "000000",
+    "label": "Retail trade"
+  },
+  {
+    "supersector": "43",
+    "industry_code": "000000",
+    "label": "Transportation and warehousing"
+  },
+  {
+    "supersector": "44",
+    "industry_code": "000000",
+    "label": "Utilities"
+  },
+  {
+    "supersector": "50",
+    "industry_code": "000000",
+    "label": "Information"
+  },
+  {
+    "supersector": "55",
+    "industry_code": "000000",
+    "label": "Financial activities"
+  },
+  {
+    "supersector": "60",
+    "industry_code": "000000",
+    "label": "Professional and business services"
+  },
+  {
+    "supersector": "65",
+    "industry_code": "000000",
+    "label": "Education and health services"
+  },
+  {
+    "supersector": "70",
+    "industry_code": "000000",
+    "label": "Leisure and hospitality"
+  },
+  {
+    "supersector": "80",
+    "industry_code": "000000",
+    "label": "Other services"
+  },
+  {
+    "supersector": "90",
+    "industry_code": "000000",
+    "label": "Government"
+  }
+]

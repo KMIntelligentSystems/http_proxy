@@ -1,0 +1,145 @@
+================================================================================
+BLS SERIES ID FORMAT RESEARCH - COMPREHENSIVE REPORT
+================================================================================
+Research Date: May 3, 2026
+Research Specialist: BLS Data Research Agent
+Status: Complete - Ready for UI Implementation
+================================================================================
+
+## DELIVERABLES
+
+### 1. Structured Data
+File: data/bls_series_schema.json
+  - Complete positional breakdowns for OE, CE, LN
+  - All datatype codes with descriptions
+  - All demographic/industry/area codes
+  - Example Series IDs with field breakdowns
+  - JSON format ready for UI consumption
+
+### 2. Documentation
+File: memory/2026-05-03-series-id-research.md
+  - Detailed analysis of each survey format
+  - Code lookup resources
+  - API integration guide
+  - Validation checklist
+
+## QUICK REFERENCE
+
+### OE — OCCUPATIONAL EMPLOYMENT AND WAGE STATISTICS
+Format: 25 characters
+Layout: OE[U][N/S/M/B/D][7-digit area][6-digit industry][6-digit occupation][2-digit datatype]
+Example: OEUN000000000000015121101 (National Software Developers employment)
+Always Unadjusted: OEWS never publishes seasonally adjusted data
+
+Datatype Codes (24-25):
+  01-02: Employment (count + RSE)
+  03-05: Wages (mean hourly, annual + RSE)
+  06-10: Hourly percentiles (10th, 25th, 50th, 75th, 90th)
+  11-15: Annual percentiles (10th, 25th, 50th, 75th, 90th)
+
+Area Types (Position 4):
+  N = National | S = State | M = MSA | B = Metro Division | D = DoD
+
+### CE — CURRENT EMPLOYMENT STATISTICS
+Format: 20 characters
+Layout: CE[S/U][5-digit state FIPS][6-digit area][2-digit supersector][2-digit detail][2-digit datatype]
+Example: CES0000000001 (Total nonfarm, all employees, seasonally adjusted)
+Example: CEU0600000003 (Manufacturing average hourly earnings, NSA)
+
+Seasonal Adjustment:
+  S = Seasonally adjusted (most data)
+  U = Not seasonally adjusted (most data)
+
+Datatype Codes (19-20):
+  01: All employees (thousands)
+  02: Average weekly hours
+  03: Average hourly earnings
+  04: Average weekly earnings
+  09: Private production/non-supervisory employees
+
+Supersectors (15-16):
+  00=Total nonfarm, 05=Construction, 06=Manufacturing, 07=Trade/Trans/Utilities
+  08=Information, 09=Financial, 10=Professional Services, 11=Education/Health
+  12=Leisure/Hospitality, 13=Other Services, 20=Private sector
+
+### LN — LABOR FORCE STATISTICS (Current Population Survey)
+Format: 12 characters
+Layout: LN[S/U][3-digit series][4-digit demographic][00]
+Example: LNU02000000 (Unemployment rate, not seasonally adjusted)
+Example: LNS14000000 (Civilian employment, seasonally adjusted)
+
+Series Codes (4-6):
+  001=Labor force, 020=Unemployment rate, 030=Employment
+  040=Not in labor force, 050=Employment-population ratio, 060=Labor force participation
+
+Demographics (7-10):
+  0000=Total, 0100=Men, 0200=Women, 0300=16-19y, 0400=20+y
+  0500=White, 0600=Black, 0700=Asian, 0800=Hispanic
+  1000=<High school, 1100=High school, 1200=Some college, 1300=Bachelor's+
+
+## API INFORMATION
+
+BLS Public Data API
+  Endpoint: https://api.bls.gov/publicAPI/v2/timeseries/data/
+  Registration: https://data.bls.gov/registrationEngine/
+  Rate Limit: 500/day (without key), 120/minute (with key)
+  Max Series/Request: 50
+
+Metadata Downloads (BLS Download Center)
+  OE: https://download.bls.gov/pub/time.series/oe/
+  CE: https://download.bls.gov/pub/time.series/ce/
+  LN: https://download.bls.gov/pub/time.series/ln/
+  
+  Each includes:
+  - .series = all valid series IDs for that survey
+  - .datatype = code → description mappings
+  - .area / .state = geographic code tables
+  - Industry/demographic lookups
+
+## VALIDATION
+
+Test with these known-valid Series IDs:
+
+OE:  OEUN000000000000015121101  (National Software Developers employment)
+CE:  CES0000000001             (Total nonfarm all employees, SA)
+LN:  LNU02000000               (Unemployment rate, NSA)
+
+All should return data when queried via BLS API with valid API key.
+
+## FOR UI IMPLEMENTATION
+
+Use the JSON schema at data/bls_series_schema.json to:
+1. Build dropdown menus for each positional field
+2. Validate user selections against allowed codes
+3. Construct Series IDs on the fly
+4. Display series ID in real-time as user selects values
+5. Show example series IDs matching their selections
+6. Provide copy-to-clipboard functionality
+
+## KNOWN LIMITATIONS
+
+1. Direct downloads from BLS (oe.txt, ce.txt, ln.txt) are rate-limited
+   → Cache locally or fetch via BLS API
+2. Some occupational and geographic combinations may be suppressed/unavailable
+   → API will return 0 observations if series has no data
+3. OEWS data is annual (May), CES is monthly, LN is monthly
+   → Plan frequency accordingly in visualization
+
+## SOURCES
+
+Project Memory:
+  - memory/2026-04-15.md (OEWS Series ID validation)
+  - memory/2026-04-17.md (ETL preprocessing)
+  - memory/2026-04-20.md (Data contracts)
+
+Project Code:
+  - src/ui/oe-drilldown.html:656-658 (Series ID construction)
+
+BLS Official:
+  - https://www.bls.gov/oes/ (OEWS)
+  - https://www.bls.gov/ces/ (CES)
+  - https://www.bls.gov/cps/ (CPS)
+
+================================================================================
+RESEARCH COMPLETE - Ready for parent agent to proceed with UI implementation
+================================================================================

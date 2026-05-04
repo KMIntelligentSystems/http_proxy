@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BLS Series Explorer</title>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: rgba(22, 27, 34, 0.84);
+      --panel-strong: #161b22;
+      --ink: #d8e0ea;
+      --muted: #7d8590;
+      --line: #30363d;
+      --line-bright: #46515e;
+      --blue: #58a6ff;
+      --green: #3fb950;
+      --orange: #f78166;
+      --violet: #d2a8ff;
+      --yellow: #f2cc60;
+      --shadow: 0 24px 80px rgba(0,0,0,.44);
+      --radius: 22px;
+      --mono: "SFMono-Regular","Cascadia Mono",Consolas,monospace;
+      --serif: Georgia,"Iowan Old Style",serif;
+      --sans: "Segoe UI",ui-sans-serif,system-ui,sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin:0; min-height:100vh; color:var(--ink);
+      background:
+        radial-gradient(circle at 16% 18%, rgba(88,166,255,.20), transparent 34%),
+        radial-gradient(circle at 84% 8%, rgba(210,168,255,.18), transparent 28%),
+        radial-gradient(circle at 76% 80%, rgba(63,185,80,.12), transparent 34%),
+        linear-gradient(135deg, #070a0f 0%, #0b1118 52%, #05070a 100%);
+      font-family: var(--sans);
+      overflow-x: hidden;
+    }
+    body::before {
+      content:""; position:fixed; inset:0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 38px 38px;
+      mask-image: radial-gradient(circle at center, black, transparent 76%);
+      pointer-events:none;
+    }
+    .shell { width:min(1440px,calc(100vw - 40px)); margin:0 auto; padding:30px 0 44px; position:relative; }
+
+    /* ── Hero ────────────────────────────── */
+    .hero { display:grid; grid-template-columns:1.1fr .9fr; gap:22px; align-items:stretch; margin-bottom:22px; }
+    .hero-card, .panel {
+      border:1px solid rgba(139,148,158,.24);
+      background:linear-gradient(180deg, rgba(22,27,34,.90), rgba(13,17,23,.78));
+      border-radius:var(--radius); box-shadow:var(--shadow); backdrop-filter:blur(18px);
+    }
+    .hero-card { padding:30px; position:relative; overflow:hidden; }
+    .hero-card::after {
+      content:"OE · CE · LN"; position:absolute; right:20px; bottom:-15px;
+      font:800 80px/1 var(--mono); color:rgba(88,166,255,.055); letter-spacing:-6px;
+    }
+    .eyebrow { color:var(--green); font:700 12px/1 var(--mono); letter-spacing:.18em; text-transform:uppercase; }
+    h1 { margin:12px 0 10px; font-family:var(--serif); font-size:clamp(42px,6vw,78px); line-height:.9; letter-spacing:-0.055em; }
+    .subhead { color:#a9b4c1; max-width:840px; font-size:17px; line-height:1.55; }
+    .stat-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-top:22px; }
+    .stat { border:1px solid rgba(139,148,158,.18); border-radius:16px; padding:14px; background:rgba(255,255,255,.035); }
+    .stat b { display:block; font:800 24px/1 var(--mono); color:white; }
+    .stat span { display:block; margin-top:6px; color:var(--muted); font-size:12px; }
+    .blueprint { padding:22px; display:flex; flex-direction:column; gap:12px; }
+    .flow-row { display:flex; align-items:center; gap:10px; }
+    .node { flex:1; min-height:70px; border-radius:18px; border:1px solid rgba(139,148,158,.24); background:rgba(13,17,23,.78); padding:14px; }
+    .node strong { display:block; font-size:14px; }
+    .node small { color:var(--muted); display:block; margin-top:5px; }
+    .arrow { color:var(--blue); font:900 22px var(--mono); }
+
+    /* ── App grid ────────────────────────── */
+    .app-grid { display:grid; grid-template-columns:430px minmax(0,1fr); gap:22px; align-items:start; }
+    .panel { padding:20px; }
+
+    /* ── Tabs ─────────────────────────────── */
+    .tabs { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px; }
+    .tab {
+      position:relative; border:1px solid var(--line); background:rgba(13,17,23,.8);
+      color:#aeb8c5; border-radius:16px; padding:13px 10px; cursor:pointer;
+      text-align:left; transition:transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .tab:hover { transform:translateY(-2px); border-color:var(--line-bright); }
+    .tab.active { border-color:rgba(88,166,255,.72); background:linear-gradient(135deg,rgba(88,166,255,.16),rgba(210,168,255,.08)); color:white; }
+    .tab b { display:block; font:850 18px/1 var(--mono); }
+    .tab span { display:block; margin-top:5px; font-size:11px; color:var(--muted); }
+
+    /* ── Builder fields ──────────────────── */
+    .panel-title { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:4px 0 16px; }
+    .panel-title h2 { margin:0; font-size:18px; letter-spacing:-.02em; }
+    .panel-title code { color:var(--muted); font-size:12px; }
+    .field { margin-bottom:14px; }
+    label { display:flex; justify-content:space-between; gap:10px; color:#b6c1cd; font-size:12px; font-weight:700; margin-bottom:7px; text-transform:uppercase; letter-spacing:.08em; }
+    label em { color:var(--muted); font-style:normal; font-weight:500; text-transform:none; letter-spacing:0; }
+    select, input[type="text"], input[type="number"] {
+      width:100%; background:#0d1117; color:#eef5ff; border:1px solid var(--line);
+      border-radius:13px; padding:11px 12px; outline:none; font:14px var(--sans);
+    }
+    select:focus, input:focus { border-color:var(--blue); box-shadow:0 0 0 3px rgba(88,166,255,.12); }
+    .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .filter-wrap { position:relative; }
+    .filter-wrap input { padding-right:30px; margin-bottom:6px; }
+    .filter-count { position:absolute; right:10px; top:12px; color:var(--muted); font:11px var(--mono); pointer-events:none; }
+    select[size] { height:160px; border-radius:13px; }
+    select[size] option { padding:4px 8px; }
+
+    /* ── ID card ──────────────────────────── */
+    .id-card { border:1px solid rgba(88,166,255,.34); background:rgba(88,166,255,.075); border-radius:18px; padding:16px; margin-top:16px; }
+    .series-id { font:800 clamp(18px,3vw,26px)/1.15 var(--mono); letter-spacing:-.04em; color:white; overflow-wrap:anywhere; }
+    .desc { color:#aab5c2; font-size:13px; line-height:1.45; margin-top:8px; }
+    .segments { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+    .seg { border:1px solid rgba(139,148,158,.20); border-radius:999px; padding:5px 8px; font:11px var(--mono); color:#b8c2cf; background:rgba(0,0,0,.20); }
+    .actions { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:14px; }
+    button {
+      border:1px solid rgba(139,148,158,.26); background:rgba(255,255,255,.05);
+      color:var(--ink); border-radius:13px; padding:11px 12px; font-weight:800;
+      cursor:pointer; transition:transform .18s ease, background .18s ease, border-color .18s ease;
+    }
+    button:hover { transform:translateY(-2px); border-color:rgba(88,166,255,.65); background:rgba(88,166,255,.12); }
+    button.primary { background:linear-gradient(135deg,rgba(88,166,255,.92),rgba(210,168,255,.78)); color:#07111d; border:0; }
+    button.green { background:linear-gradient(135deg,rgba(63,185,80,.94),rgba(242,204,96,.75)); color:#07110b; border:0; }
+    button:disabled { opacity:.45; cursor:not-allowed; transform:none; }
+    .note { border-left:3px solid var(--yellow); color:#aeb8c5; padding:10px 12px; background:rgba(242,204,96,.06); border-radius:10px; font-size:13px; line-height:1.45; margin-top:16px; }
+
+    /* ── Chart ─────────────────────────────── */
+    .chart-panel { min-height:700px; }
+    .toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:10px 0 18px; }
+    .toolbar .spacer { flex:1; }
+    .years { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:12px; }
+    .years input { width:82px; padding:9px 10px; }
+    .status { min-height:24px; color:var(--muted); font-size:13px; }
+    .status.error { color:var(--orange); }
+    .status.ok { color:var(--green); }
+    #chart { width:100%; height:430px; border:1px solid rgba(139,148,158,.20); border-radius:20px; background:linear-gradient(180deg,rgba(13,17,23,.72),rgba(13,17,23,.44)); overflow:hidden; }
+    .legend { display:flex; gap:16px; flex-wrap:wrap; color:var(--muted); font-size:13px; margin:12px 0 0; }
+    .legend i { display:inline-block; width:28px; height:0; border-top:3px solid var(--blue); vertical-align:middle; margin-right:6px; }
+    .legend i.dash { border-top-style:dashed; border-color:var(--orange); }
+    .saved-list { display:grid; gap:8px; margin-top:12px; max-height:220px; overflow:auto; }
+    .saved-item { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; border:1px solid rgba(139,148,158,.18); border-radius:14px; padding:10px; background:rgba(255,255,255,.035); }
+    .saved-item code { font-family:var(--mono); color:#f0f6fc; }
+    .saved-item small { display:block; color:var(--muted); margin-top:3px; }
+    .saved-item button { padding:7px 9px; font-size:12px; }
+    .source { color:var(--muted); font-size:12px; margin-top:12px; }
+
+    /* ── Tooltip ───────────────────────────── */
+    .tooltip { position:fixed; pointer-events:none; background:#0d1117; border:1px solid var(--line-bright); border-radius:12px; padding:10px; color:var(--ink); font:12px var(--sans); box-shadow:0 12px 40px rgba(0,0,0,.35); opacity:0; transform:translate(-50%,-120%); z-index:20; }
+    .axis text { fill:#9aa6b2; font-size:11px; }
+    .axis path, .axis line { stroke:#30363d; }
+    .grid line { stroke:#30363d; stroke-opacity:.65; shape-rendering:crispEdges; }
+    .grid path { display:none; }
+
+    @media (max-width:1050px) { .hero, .app-grid { grid-template-columns:1fr; } }
+    @media (max-width:620px) { .shell { width:min(100vw - 20px,1440px); padding-top:14px; } .row2, .actions, .stat-strip { grid-template-columns:1fr; } .hero-card { padding:22px; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <!-- ── Hero ──────────────────────────── -->
+    <section class="hero">
+      <div class="hero-card">
+        <div class="eyebrow">BLS multi-survey series constructor</div>
+        <h1>Series IDs<br/>without guesswork.</h1>
+        <p class="subhead">Build API-ready BLS identifiers across OEWS, CES, and CPS/LN; save combinations; fetch observations; and overlay seasonally adjusted against raw not-seasonally-adjusted series.</p>
+        <div class="stat-strip">
+          <div class="stat"><b>OE</b><span>Annual occupation wages · 25 chars</span></div>
+          <div class="stat"><b>CE</b><span>Monthly payroll series · 13 chars</span></div>
+          <div class="stat"><b>LN</b><span>Monthly labor force · 11 chars</span></div>
+        </div>
+      </div>
+      <div class="hero-card blueprint">
+        <div class="eyebrow">Phase 1 architecture</div>
+        <div class="flow-row"><div class="node"><strong>Static JSON lookups</strong><small>data/lookups/*.json — 1,400+ occupations, 55 areas, 25 industries</small></div><div class="arrow">&#8594;</div></div>
+        <div class="flow-row"><div class="node"><strong>Vanilla JS + D3.js</strong><small>Single page, dynamic dropdowns, localStorage saves</small></div><div class="arrow">&#8594;</div></div>
+        <div class="flow-row"><div class="node"><strong>BLS API overlay</strong><small>SA / NSA comparison with tooltips and multi-series charting</small></div></div>
+      </div>
+    </section>
+
+    <!-- ── App ───────────────────────────── -->
+    <main class="app-grid">
+      <section class="panel">
+        <div class="tabs" id="tabs"></div>
+        <div class="panel-title"><h2 id="builderTitle">Series builder</h2><code id="surveyMeta"></code></div>
+        <div id="builder"></div>
+        <div class="id-card">
+          <div class="series-id" id="seriesId">&mdash;</div>
+          <div class="desc" id="seriesDesc">Choose fields to construct a BLS series ID.</div>
+          <div class="segments" id="segments"></div>
+          <div class="actions">
+            <button id="copyBtn">Copy ID</button>
+            <button id="saveBtn">Save series</button>
+            <button class="primary" id="fetchBtn">Fetch chart</button>
+            <button class="green" id="compareBtn">SA / NSA overlay</button>
+          </div>
+        </div>
+        <div class="note" id="methodNote">Phase 1 uses static lookup JSON plus the existing BLS API proxy at <code>/ui/api/bls</code>.</div>
+      </section>
+
+      <section class="panel chart-panel">
+        <div class="panel-title"><h2>Observation chart</h2><code id="chartCode">D3.js v7</code></div>
+        <div class="toolbar">
+          <button id="sampleUnemp">Sample: unemployment SA/NSA</button>
+          <button id="samplePayroll">Sample: payroll SA/NSA</button>
+          <div class="spacer"></div>
+          <div class="years">Start <input id="startYear" type="number" min="1990" max="2026" value="2019" /> End <input id="endYear" type="number" min="1990" max="2026" value="2025" /></div>
+        </div>
+        <div class="status" id="status">Ready. Build a series or load a sample.</div>
+        <svg id="chart" viewBox="0 0 920 430" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="legend" id="legend"></div>
+        <div class="source">Source: U.S. Bureau of Labor Statistics Public Data API v2. Saved series stored locally in this browser.</div>
+        <div class="panel-title" style="margin-top:24px"><h2>Saved series</h2><code>localStorage</code></div>
+        <div class="saved-list" id="savedList"></div>
+      </section>
+    </main>
+  </div>
+  <div class="tooltip" id="tooltip"></div>
+
+<script>
+/* ================================================================
+   BLS Series Explorer — Phase 1
+   Static JSON lookups + BLS API + D3.js charting
+   ================================================================ */
+
+/* ── Helpers ─────────────────────────────────────────────────── */
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function opt(value, label, selected) { return '<option value="' + esc(value) + '"' + (selected ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+function $(id) { return document.getElementById(id); }
+
+/* ── State ───────────────────────────────────────────────────── */
+const state = {
+  survey: 'LN',
+  lookups: null,
+  selections: {
+    OE: { areaType: 'N', area: '0000000', industry: '000000', occupation: '000000', datatype: '01', occFilter: '' },
+    CE: { seasonal: 'S', supersector: '00', industry: '000000', datatype: '01' },
+    LN: { concept: 'unemployment_rate' }
+  },
+  saved: JSON.parse(localStorage.getItem('bls_explorer_saved_v2') || '[]'),
+  currentSeries: null
+};
+
+/* ── Lookup loading ──────────────────────────────────────────── */
+const LOOKUP_FILES = [
+  'surveys', 'oe_areatypes', 'oe_areas', 'oe_industries', 'oe_occupations',
+  'oe_datatypes', 'ce_industries', 'ce_datatypes', 'ln_concepts', 'ln_demographics'
+];
+
+async function loadLookups() {
+  const prefixes = ['/ui/data/lookups/', './data/lookups/'];
+  const loaded = {};
+  await Promise.all(LOOKUP_FILES.map(async function (name) {
+    for (var i = 0; i < prefixes.length; i++) {
+      try {
+        var res = await fetch(prefixes[i] + name + '.json', { cache: 'no-store' });
+        if (res.ok) { loaded[name] = await res.json(); return; }
+      } catch (_) { /* try next */ }
+    }
+  }));
+  state.lookups = loaded;
+}
+
+/* ── Tab rendering ───────────────────────────────────────────── */
+function initTabs() {
+  var surveys = state.lookups.surveys || [];
+  $('tabs').innerHTML = surveys.map(function (s) {
+    return '<button class="tab' + (s.survey_code === state.survey ? ' active' : '') +
+      '" data-survey="' + s.survey_code + '"><b>' + s.survey_code +
+      '</b><span>' + esc(s.short_name) + ' &middot; ' + esc(s.frequency) + '</span></button>';
+  }).join('');
+  $('tabs').querySelectorAll('.tab').forEach(function (t) {
+    t.addEventListener('click', function () { state.survey = t.dataset.survey; render(); });
+  });
+}
+
+function render() {
+  initTabs();
+  var surveys = state.lookups.surveys || [];
+  var survey = surveys.find(function (s) { return s.survey_code === state.survey; }) || surveys[0];
+  $('builderTitle').textContent = (survey ? survey.short_name : state.survey) + ' series builder';
+  $('surveyMeta').textContent = (survey ? survey.frequency : '') + ' \u00b7 ' + (survey ? survey.length : '?') + ' chars';
+  if (state.survey === 'OE') renderOE();
+  else if (state.survey === 'CE') renderCE();
+  else renderLN();
+  updateSeriesCard();
+  renderSaved();
+}
+
+/* ── OE Builder ──────────────────────────────────────────────── */
+function renderOE() {
+  var s = state.selections.OE;
+  var areaTypes = state.lookups.oe_areatypes || [];
+  var allAreas = state.lookups.oe_areas || [];
+  var industries = state.lookups.oe_industries || [];
+  var allOccs = state.lookups.oe_occupations || [];
+  var datatypes = state.lookups.oe_datatypes || [];
+
+  // Filter areas by selected type
+  var areas = allAreas.filter(function (a) { return a.area_type === s.areaType; });
+  if (!areas.some(function (a) { return a.area_code === s.area; })) s.area = areas.length ? areas[0].area_code : '0000000';
+
+  // Filter occupations by search
+  var filter = (s.occFilter || '').toLowerCase();
+  var occs = filter ? allOccs.filter(function (o) {
+    return o.occ_title.toLowerCase().indexOf(filter) >= 0 || o.occ_code.indexOf(filter) >= 0;
+  }) : allOccs;
+  if (!occs.some(function (o) { return o.soc_6digit === s.occupation; }) && occs.length) {
+    s.occupation = occs[0].soc_6digit;
+  }
+
+  $('builder').innerHTML =
+    '<div class="row2">' +
+      '<div class="field"><label>Seasonal <em>OEWS always U</em></label><select data-k="seasonal" disabled>' + opt('U', 'U \u2014 Not seasonally adjusted', true) + '</select></div>' +
+      '<div class="field"><label>Area type</label><select data-k="areaType">' + areaTypes.map(function (x) { return opt(x.code, x.code + ' \u2014 ' + x.label, x.code === s.areaType); }).join('') + '</select></div>' +
+    '</div>' +
+    '<div class="field"><label>Area</label><select data-k="area">' + areas.map(function (x) { return opt(x.area_code, x.area_code + ' \u2014 ' + x.area_name, x.area_code === s.area); }).join('') + '</select></div>' +
+    '<div class="field"><label>Industry</label><select data-k="industry">' + industries.map(function (x) { return opt(x.industry_code, x.industry_code + ' \u2014 ' + x.industry_name, x.industry_code === s.industry); }).join('') + '</select></div>' +
+    '<div class="field"><label>Occupation <em>' + occs.length + ' of ' + allOccs.length + '</em></label>' +
+      '<div class="filter-wrap"><input type="text" data-k="occFilter" placeholder="Search occupations\u2026" value="' + esc(s.occFilter) + '" /><span class="filter-count">' + occs.length + '</span></div>' +
+      '<select data-k="occupation" size="6">' + occs.map(function (x) { return opt(x.soc_6digit, x.occ_code + ' ' + x.occ_title, x.soc_6digit === s.occupation); }).join('') + '</select></div>' +
+    '<div class="field"><label>Data type</label><select data-k="datatype">' + datatypes.map(function (x) { return opt(x.code, x.code + ' \u2014 ' + x.label, x.code === s.datatype); }).join('') + '</select></div>';
+  bindSelects('OE');
+}
+
+/* ── CE Builder ──────────────────────────────────────────────── */
+function renderCE() {
+  var s = state.selections.CE;
+  var industries = state.lookups.ce_industries || [];
+  var datatypes = state.lookups.ce_datatypes || [];
+
+  $('builder').innerHTML =
+    '<div class="field"><label>Seasonal adjustment</label><select data-k="seasonal">' +
+      opt('S', 'S \u2014 Seasonally adjusted', s.seasonal === 'S') +
+      opt('U', 'U \u2014 Not seasonally adjusted', s.seasonal === 'U') +
+    '</select></div>' +
+    '<div class="field"><label>Supersector <em>national CES</em></label><select data-k="supersector">' +
+      industries.map(function (x) { return opt(x.supersector, x.supersector + ' \u2014 ' + x.label, x.supersector === s.supersector); }).join('') +
+    '</select></div>' +
+    '<div class="field"><label>Data type</label><select data-k="datatype">' +
+      datatypes.map(function (x) { return opt(x.code, x.code + ' \u2014 ' + x.label, x.code === s.datatype); }).join('') +
+    '</select></div>';
+  bindSelects('CE');
+}
+
+/* ── LN Builder ──────────────────────────────────────────────── */
+function renderLN() {
+  var s = state.selections.LN;
+  var concepts = state.lookups.ln_concepts || [];
+
+  $('builder').innerHTML =
+    '<div class="field"><label>Concept <em>known SA/NSA pairs</em></label><select data-k="concept">' +
+      concepts.map(function (x) { return opt(x.code, x.label + ' (' + x.unit + ')', x.code === s.concept); }).join('') +
+    '</select></div>' +
+    '<div class="note">CPS/LN uses pre-validated headline series IDs. Select a concept; the SA and NSA variant IDs are generated automatically.</div>';
+  bindSelects('LN');
+}
+
+/* ── Bind select changes ─────────────────────────────────────── */
+function bindSelects(survey) {
+  var builder = $('builder');
+  builder.querySelectorAll('select').forEach(function (sel) {
+    sel.addEventListener('change', function (e) {
+      state.selections[survey][e.target.dataset.k] = e.target.value;
+      if (survey === 'OE' && e.target.dataset.k === 'areaType') {
+        state.selections.OE.area = '0000000';
+      }
+      render();
+    });
+  });
+  // Occupation search
+  var filterInput = builder.querySelector('input[data-k="occFilter"]');
+  if (filterInput) {
+    filterInput.addEventListener('input', function (e) {
+      state.selections.OE.occFilter = e.target.value;
+      renderOE();
+      updateSeriesCard();
+      // re-focus the filter input and restore cursor
+      var inp = $('builder').querySelector('input[data-k="occFilter"]');
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    });
+  }
+}
+
+/* ── Series ID construction ──────────────────────────────────── */
+function buildSeries(surveyOverride, seasonalOverride) {
+  var survey = surveyOverride || state.survey;
+
+  if (survey === 'OE') {
+    var s = state.selections.OE;
+    var id = 'OE' + 'U' + s.areaType + s.area + s.industry + s.occupation + s.datatype;
+    var allOccs = state.lookups.oe_occupations || [];
+    var allInds = state.lookups.oe_industries || [];
+    var allDt = state.lookups.oe_datatypes || [];
+    var occ = allOccs.find(function (x) { return x.soc_6digit === s.occupation; }) || { occ_title: s.occupation };
+    var ind = allInds.find(function (x) { return x.industry_code === s.industry; }) || { industry_name: s.industry };
+    var dt = allDt.find(function (x) { return x.code === s.datatype; }) || { label: s.datatype };
+    return {
+      id: id, survey: 'OE', label: occ.occ_title + ' \u2014 ' + dt.label,
+      desc: ind.industry_name + '; ' + dt.label + '.',
+      segments: ['OE', 'U', s.areaType, s.area, s.industry, s.occupation, s.datatype],
+      pair: null  // OE is always unadjusted, no SA/NSA pair
+    };
+  }
+
+  if (survey === 'CE') {
+    var sc = state.selections.CE;
+    var seasonal = seasonalOverride || sc.seasonal;
+    var ceId = 'CE' + seasonal + sc.supersector + sc.industry + sc.datatype;
+    var ceInds = state.lookups.ce_industries || [];
+    var ceDts = state.lookups.ce_datatypes || [];
+    var ceInd = ceInds.find(function (x) { return x.supersector === sc.supersector; }) || { label: sc.supersector };
+    var ceDt = ceDts.find(function (x) { return x.code === sc.datatype; }) || { label: sc.datatype };
+    var saId = 'CES' + sc.supersector + sc.industry + sc.datatype;
+    var nsaId = 'CEU' + sc.supersector + sc.industry + sc.datatype;
+    return {
+      id: ceId, survey: 'CE', label: ceInd.label + ' \u2014 ' + ceDt.label,
+      desc: 'National CES ' + (seasonal === 'S' ? 'seasonally adjusted' : 'not seasonally adjusted') + '; ' + ceDt.label + '.',
+      segments: ['CE', seasonal, sc.supersector, sc.industry, sc.datatype],
+      pair: [saId, nsaId]
+    };
+  }
+
+  // LN
+  var sl = state.selections.LN;
+  var concepts = state.lookups.ln_concepts || [];
+  var concept = concepts.find(function (x) { return x.code === sl.concept; }) || concepts[0];
+  if (!concept) return { id: '?', survey: 'LN', label: '?', desc: '?', segments: [], pair: null };
+  var lnSeasonal = seasonalOverride || 'S';
+  var lnId = lnSeasonal === 'S' ? concept.sa : concept.nsa;
+  return {
+    id: lnId, survey: 'LN', label: concept.label,
+    desc: 'CPS/LN ' + concept.label + '; ' + concept.unit + '.',
+    segments: ['LN', lnSeasonal, lnId.slice(3)],
+    pair: [concept.sa, concept.nsa]
+  };
+}
+
+function updateSeriesCard() {
+  var series = buildSeries();
+  state.currentSeries = series;
+  $('seriesId').textContent = series.id;
+  $('seriesDesc').textContent = series.desc;
+  $('segments').innerHTML = series.segments.map(function (x) { return '<span class="seg">' + esc(x) + '</span>'; }).join('');
+  $('compareBtn').disabled = !series.pair;
+  if (state.survey === 'OE') {
+    $('methodNote').innerHTML = 'OEWS is annual and always unadjusted. Some area/industry/occupation combinations may be suppressed by BLS.';
+  } else {
+    $('methodNote').innerHTML = 'Use <b>SA / NSA overlay</b> to fetch both adjusted and raw series and chart them on the same axis.';
+  }
+}
+
+/* ── BLS API ─────────────────────────────────────────────────── */
+async function fetchBLS(seriesIds) {
+  var startyear = $('startYear').value;
+  var endyear = $('endYear').value;
+  setStatus('Fetching ' + seriesIds.join(', ') + ' (' + startyear + '\u2013' + endyear + ')\u2026');
+  var body = { seriesid: seriesIds, startyear: startyear, endyear: endyear };
+  var res = await fetch('/ui/api/bls', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  var text = await res.text();
+  var json;
+  try { json = JSON.parse(text); } catch (e) { throw new Error(text.slice(0, 160) || 'BLS API returned non-JSON'); }
+  if (json.status !== 'REQUEST_SUCCEEDED') throw new Error((json.message || []).join('; ') || json.status || 'BLS request failed');
+  if (json.message && json.message.length) setStatus(json.message.join('; '), 'ok');
+  else setStatus('Data loaded.', 'ok');
+  return json.Results.series || [];
+}
+
+function parseObservations(apiSeries) {
+  return apiSeries.map(function (series, i) {
+    var meta = series.seriesID;
+    var points = (series.data || []).filter(function (d) { return d.period !== 'M13'; }).map(function (d) {
+      var month = d.period && d.period.startsWith('M') ? Number(d.period.slice(1)) - 1 : 6;
+      return { date: new Date(Number(d.year), month, 1), value: Number(String(d.value).replace(/,/g, '')), raw: d };
+    }).filter(function (d) { return Number.isFinite(d.value); }).sort(function (a, b) { return a.date - b.date; });
+    return { id: meta, index: i, points: points, label: labelForSeries(meta) };
+  }).filter(function (s) { return s.points.length; });
+}
+
+function labelForSeries(id) {
+  if (state.currentSeries && state.currentSeries.pair && state.currentSeries.pair.indexOf(id) >= 0) {
+    return id === state.currentSeries.pair[0] ? state.currentSeries.label + ' (SA)' : state.currentSeries.label + ' (NSA)';
+  }
+  return state.currentSeries && state.currentSeries.id === id ? state.currentSeries.label : id;
+}
+
+/* ── D3.js Chart ─────────────────────────────────────────────── */
+function drawChart(seriesData) {
+  var svg = d3.select('#chart');
+  svg.selectAll('*').remove();
+  var W = 920, H = 430, margin = { top: 38, right: 28, bottom: 52, left: 72 };
+  var innerW = W - margin.left - margin.right;
+  var innerH = H - margin.top - margin.bottom;
+  var allPoints = seriesData.flatMap(function (s) { return s.points; });
+  if (!allPoints.length) { setStatus('No observations returned.', 'error'); return; }
+
+  var x = d3.scaleTime().domain(d3.extent(allPoints, function (d) { return d.date; })).range([0, innerW]);
+  var yExtent = d3.extent(allPoints, function (d) { return d.value; });
+  var yPad = (yExtent[1] - yExtent[0]) * 0.08 || 1;
+  var y = d3.scaleLinear().domain([yExtent[0] - yPad, yExtent[1] + yPad]).nice().range([innerH, 0]);
+
+  var g = svg.append('g').attr('transform', 'translate(' + margin.left + ',' + margin.top + ')');
+  g.append('g').attr('class', 'grid').call(d3.axisLeft(y).ticks(6).tickSize(-innerW).tickFormat(''));
+  g.append('g').attr('class', 'axis').attr('transform', 'translate(0,' + innerH + ')').call(d3.axisBottom(x).ticks(7));
+  g.append('g').attr('class', 'axis').call(d3.axisLeft(y).ticks(6));
+
+  // Title
+  svg.append('text').attr('x', margin.left).attr('y', 24)
+    .attr('fill', '#f0f6fc').attr('font-size', 18).attr('font-weight', 800).text(chartTitle(seriesData));
+  // Source
+  svg.append('text').attr('x', margin.left).attr('y', H - 10)
+    .attr('fill', '#7d8590').attr('font-size', 11).text('Source: BLS Public Data API v2');
+
+  var line = d3.line().x(function (d) { return x(d.date); }).y(function (d) { return y(d.value); }).curve(d3.curveMonotoneX);
+  var colors = ['#58a6ff', '#f78166', '#3fb950', '#d2a8ff'];
+
+  seriesData.forEach(function (s, i) {
+    // Shaded area between SA and NSA
+    if (seriesData.length === 2 && i === 0 && state.currentSeries && state.currentSeries.pair) {
+      var other = seriesData[1];
+      if (other && other.points.length === s.points.length) {
+        var area = d3.area()
+          .x(function (d, idx) { return x(d.date); })
+          .y0(function (d, idx) { return y(other.points[idx] ? other.points[idx].value : d.value); })
+          .y1(function (d) { return y(d.value); })
+          .curve(d3.curveMonotoneX);
+        g.append('path').datum(s.points).attr('fill', 'rgba(88,166,255,.08)').attr('d', area);
+      }
+    }
+    g.append('path').datum(s.points).attr('fill', 'none')
+      .attr('stroke', colors[i % colors.length]).attr('stroke-width', 2.5)
+      .attr('stroke-dasharray', i === 1 ? '7 5' : null).attr('d', line);
+    g.selectAll('.dot-' + i).data(s.points).enter().append('circle')
+      .attr('cx', function (d) { return x(d.date); }).attr('cy', function (d) { return y(d.value); })
+      .attr('r', 2).attr('fill', colors[i % colors.length]).attr('opacity', 0.7);
+  });
+
+  // Tooltip
+  var tooltip = d3.select('#tooltip');
+  var bisect = d3.bisector(function (d) { return d.date; }).center;
+  g.append('rect').attr('width', innerW).attr('height', innerH).attr('fill', 'transparent')
+    .on('mousemove', function (event) {
+      var mx = d3.pointer(event)[0];
+      var date = x.invert(mx);
+      var rows = seriesData.map(function (s) {
+        var idx = bisect(s.points, date);
+        var p = s.points[idx];
+        return p ? '<div style="color:' + colors[s.index % colors.length] + '"><b>' + esc(s.label) + '</b> ' +
+          esc(p.raw.periodName || '') + ' ' + p.raw.year + ': ' + d3.format(',.1f')(p.value) + '</div>' : '';
+      }).join('');
+      tooltip.style('opacity', 1).style('left', event.clientX + 'px').style('top', event.clientY + 'px').html(rows);
+    }).on('mouseleave', function () { tooltip.style('opacity', 0); });
+
+  // Legend
+  $('legend').innerHTML = seriesData.map(function (s, i) {
+    return '<span><i class="' + (i === 1 ? 'dash' : '') + '"></i>' + esc(s.label) + ' <code>' + s.id + '</code></span>';
+  }).join('');
+}
+
+function chartTitle(seriesData) {
+  if (seriesData.length === 2 && state.currentSeries && state.currentSeries.pair) {
+    return state.currentSeries.label + ' \u2014 SA vs NSA';
+  }
+  return (seriesData[0] ? seriesData[0].label : 'BLS series') + ' \u2014 observations';
+}
+
+function setStatus(msg, kind) { var el = $('status'); el.textContent = msg; el.className = 'status ' + (kind || ''); }
+
+/* ── Saved Series ────────────────────────────────────────────── */
+function renderSaved() {
+  var list = $('savedList');
+  if (!state.saved.length) { list.innerHTML = '<div class="desc">No saved series yet. Build one and click Save.</div>'; return; }
+  list.innerHTML = state.saved.map(function (s, i) {
+    return '<div class="saved-item"><div><code>' + esc(s.id) + '</code><small>' + esc(s.label) + ' \u00b7 ' + esc(s.survey) + '</small></div>' +
+      '<div><button data-load="' + i + '">Load</button> <button data-del="' + i + '">\u00d7</button></div></div>';
+  }).join('');
+  list.querySelectorAll('[data-load]').forEach(function (b) {
+    b.addEventListener('click', async function (e) {
+      var item = state.saved[+e.target.dataset.load];
+      state.currentSeries = item;
+      try { drawChart(parseObservations(await fetchBLS([item.id]))); } catch (err) { setStatus(err.message, 'error'); }
+    });
+  });
+  list.querySelectorAll('[data-del]').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      state.saved.splice(+e.target.dataset.del, 1);
+      persistSaved(); renderSaved();
+    });
+  });
+}
+
+function persistSaved() { localStorage.setItem('bls_explorer_saved_v2', JSON.stringify(state.saved)); }
+
+/* ── Button wiring ───────────────────────────────────────────── */
+$('copyBtn').addEventListener('click', async function () {
+  if (navigator.clipboard) await navigator.clipboard.writeText(state.currentSeries.id);
+  setStatus('Copied ' + state.currentSeries.id, 'ok');
+});
+
+$('saveBtn').addEventListener('click', function () {
+  var item = Object.assign({}, state.currentSeries, { savedAt: new Date().toISOString() });
+  if (!state.saved.some(function (s) { return s.id === item.id; })) state.saved.unshift(item);
+  persistSaved(); renderSaved();
+  setStatus('Saved ' + item.id, 'ok');
+});
+
+$('fetchBtn').addEventListener('click', async function () {
+  try { drawChart(parseObservations(await fetchBLS([state.currentSeries.id]))); }
+  catch (e) { setStatus(e.message, 'error'); }
+});
+
+$('compareBtn').addEventListener('click', async function () {
+  if (!state.currentSeries.pair) return;
+  try { drawChart(parseObservations(await fetchBLS(state.currentSeries.pair))); }
+  catch (e) { setStatus(e.message, 'error'); }
+});
+
+$('sampleUnemp').addEventListener('click', async function () {
+  state.survey = 'LN';
+  state.selections.LN = { concept: 'unemployment_rate' };
+  render();
+  try { drawChart(parseObservations(await fetchBLS(state.currentSeries.pair))); }
+  catch (e) { setStatus(e.message, 'error'); }
+});
+
+$('samplePayroll').addEventListener('click', async function () {
+  state.survey = 'CE';
+  state.selections.CE = { seasonal: 'S', supersector: '00', industry: '000000', datatype: '01' };
+  render();
+  try { drawChart(parseObservations(await fetchBLS(state.currentSeries.pair))); }
+  catch (e) { setStatus(e.message, 'error'); }
+});
+
+/* ── Boot ─────────────────────────────────────────────────────── */
+loadLookups().then(function () {
+  if (!state.lookups || !state.lookups.surveys) {
+    setStatus('Failed to load lookup files. Ensure /ui/data/lookups/*.json is served.', 'error');
+    return;
+  }
+  render();
+});
+</script>
+</body>
+</html>

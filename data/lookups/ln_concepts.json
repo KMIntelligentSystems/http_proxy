@@ -1,0 +1,51 @@
+[
+  {
+    "code": "unemployment_rate",
+    "label": "Unemployment rate",
+    "sa": "LNS14000000",
+    "nsa": "LNU14000000",
+    "unit": "Percent"
+  },
+  {
+    "code": "unemployment_level",
+    "label": "Unemployment level",
+    "sa": "LNS13000000",
+    "nsa": "LNU13000000",
+    "unit": "Thousands"
+  },
+  {
+    "code": "employment_level",
+    "label": "Employment level",
+    "sa": "LNS12000000",
+    "nsa": "LNU12000000",
+    "unit": "Thousands"
+  },
+  {
+    "code": "civilian_labor_force",
+    "label": "Civilian labor force level",
+    "sa": "LNS11000000",
+    "nsa": "LNU11000000",
+    "unit": "Thousands"
+  },
+  {
+    "code": "participation_rate",
+    "label": "Labor force participation rate",
+    "sa": "LNS11300000",
+    "nsa": "LNU11300000",
+    "unit": "Percent"
+  },
+  {
+    "code": "emp_pop_ratio",
+    "label": "Employment-population ratio",
+    "sa": "LNS12300000",
+    "nsa": "LNU12300000",
+    "unit": "Percent"
+  },
+  {
+    "code": "not_in_labor_force",
+    "label": "Not in labor force",
+    "sa": "LNS15000000",
+    "nsa": "LNU15000000",
+    "unit": "Thousands"
+  }
+]
