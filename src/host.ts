@@ -39,7 +39,188 @@ export type SvgMessage =
   | { type: "replace"; id: string; svg: string }
   | { type: "remove"; id: string };
 
-// ─── HTML shell served at /ui ────────────────────────────────────────────────
+// ─── UI paths and helpers ───────────────────────────────────────────────────
+
+const PROJECT_ROOT = path.resolve(import.meta.dirname ?? ".", "..");
+const UI_DIR = path.resolve(PROJECT_ROOT, "src", "ui");
+const DIST_DIR = path.resolve(PROJECT_ROOT, "dist");
+
+function isInside(baseDir: string, candidatePath: string): boolean {
+  const relative = path.relative(baseDir, candidatePath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (ch) => {
+    switch (ch) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case "'": return "&#39;";
+      case '"': return "&quot;";
+      default: return ch;
+    }
+  });
+}
+
+type UiApp = {
+  name: string;
+  title: string;
+  description: string;
+  modifiedAt: string;
+};
+
+function getContentType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".json") return "application/json; charset=utf-8";
+  if (ext === ".csv") return "text/csv; charset=utf-8";
+  if (ext === ".js") return "text/javascript; charset=utf-8";
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+function discoverUiApps(): UiApp[] {
+  try {
+    return fs.readdirSync(UI_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".html"))
+      .map((entry) => {
+        const name = entry.name.slice(0, -".html".length);
+        if (!/^[a-z0-9-]+$/.test(name)) return undefined;
+
+        const filePath = path.resolve(UI_DIR, entry.name);
+        if (!isInside(UI_DIR, filePath)) return undefined;
+
+        const html = fs.readFileSync(filePath, "utf-8");
+        const stat = fs.statSync(filePath);
+        const title = html.match(/<title>(.*?)<\/title>/is)?.[1]?.trim() || name;
+        const description = html.match(/<meta\s+name=["']description["']\s+content=["']([^"']*)["']/i)?.[1]?.trim()
+          || html.match(/<meta\s+content=["']([^"']*)["']\s+name=["']description["']/i)?.[1]?.trim()
+          || "HTML application served through the Pi proxy.";
+
+        return {
+          name,
+          title,
+          description,
+          modifiedAt: stat.mtime.toISOString(),
+        };
+      })
+      .filter((app): app is UiApp => Boolean(app))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch (err) {
+    console.warn(`[host] Could not discover UI apps: ${(err as Error).message}`);
+    return [];
+  }
+}
+
+function renderPortalHtml(): string {
+  const apps = discoverUiApps();
+  const appCards = apps.map((app) => /* html */ `
+    <a class="card app-card" href="/ui/app/${encodeURIComponent(app.name)}">
+      <span class="kicker">HTML app</span>
+      <strong>${escapeHtml(app.title)}</strong>
+      <p>${escapeHtml(app.description)}</p>
+      <code>/ui/app/${escapeHtml(app.name)}</code>
+      <small>Modified ${escapeHtml(new Date(app.modifiedAt).toLocaleString())}</small>
+    </a>
+  `).join("\n");
+
+  return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Visualization Agent Portal</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0d1117; --panel:#161b22; --panel2:#0f1620; --line:#30363d; --text:#c9d1d9; --muted:#8b949e; --blue:#58a6ff; --green:#3fb950; --orange:#f78166; --violet:#d2a8ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; font-family:"Segoe UI", system-ui, sans-serif; color:var(--text); background:radial-gradient(circle at 15% 10%, rgba(88,166,255,.16), transparent 30%), radial-gradient(circle at 85% 0%, rgba(210,168,255,.14), transparent 26%), linear-gradient(135deg,#080b10,#0d1117 55%,#07090d); }
+    .shell { width:min(1180px, calc(100vw - 40px)); margin:0 auto; padding:36px 0 48px; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:24px; }
+    h1 { margin:0 0 10px; font-size:clamp(34px, 5vw, 60px); line-height:.95; letter-spacing:-.045em; }
+    .lede { margin:0; max-width:760px; color:#aab6c4; font-size:17px; line-height:1.55; }
+    .pill { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(63,185,80,.35); color:#aff5b4; background:rgba(63,185,80,.09); border-radius:999px; padding:8px 12px; font:700 12px/1 ui-monospace, SFMono-Regular, Consolas, monospace; white-space:nowrap; }
+    .grid { display:grid; grid-template-columns:minmax(0, 1.55fr) minmax(320px, .95fr); gap:18px; align-items:start; }
+    section, .card { border:1px solid rgba(139,148,158,.22); background:linear-gradient(180deg, rgba(22,27,34,.9), rgba(13,17,23,.82)); border-radius:18px; box-shadow:0 18px 60px rgba(0,0,0,.30); }
+    section { padding:18px; }
+    h2 { margin:0 0 14px; font-size:18px; letter-spacing:-.01em; }
+    .apps { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
+    .card { display:flex; flex-direction:column; min-height:190px; padding:16px; color:inherit; text-decoration:none; transition:transform .16s ease, border-color .16s ease, background .16s ease; }
+    .card:hover { transform:translateY(-2px); border-color:rgba(88,166,255,.55); background:linear-gradient(180deg, rgba(30,41,56,.95), rgba(13,17,23,.9)); }
+    .card strong { display:block; margin:8px 0; color:white; font-size:20px; line-height:1.18; }
+    .card p { flex:1; margin:0 0 14px; color:var(--muted); line-height:1.45; }
+    .card code { color:var(--blue); font:600 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap:anywhere; }
+    .card small { margin-top:8px; color:#6e7681; }
+    .kicker { color:var(--green); font:800 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing:.13em; text-transform:uppercase; }
+    .status-list { display:grid; gap:10px; margin:0; padding:0; list-style:none; }
+    .status-list li { display:flex; justify-content:space-between; gap:14px; padding:12px; border:1px solid rgba(139,148,158,.15); border-radius:12px; background:rgba(255,255,255,.03); }
+    .status-list b { color:#f0f6fc; }
+    .ok { color:var(--green); } .warn { color:var(--orange); }
+    .prompt { margin-top:18px; }
+    .prompt p { margin:0 0 14px; color:var(--muted); line-height:1.5; }
+    .button-row { display:flex; flex-wrap:wrap; gap:10px; }
+    .button { display:inline-flex; align-items:center; border:1px solid rgba(88,166,255,.38); background:rgba(88,166,255,.10); color:#cfe8ff; text-decoration:none; border-radius:12px; padding:10px 12px; font-weight:700; }
+    .empty { color:var(--muted); border:1px dashed rgba(139,148,158,.28); border-radius:14px; padding:18px; }
+    footer { margin-top:20px; color:#6e7681; font-size:12px; }
+    @media (max-width: 850px) { header, .grid { grid-template-columns:1fr; display:grid; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Data Visualization Agent Portal</h1>
+        <p class="lede">Launch generated HTML applications through the authenticated proxy path, inspect system status, and keep the legacy SVG canvas available for pushed visualizations.</p>
+      </div>
+      <span class="pill">proxy route /ui online</span>
+    </header>
+
+    <div class="grid">
+      <section>
+        <h2>Apps</h2>
+        <div class="apps">
+          ${appCards || `<div class="empty">No valid <code>src/ui/*.html</code> apps found. Use lowercase kebab-case file names.</div>`}
+          <a class="card" href="/ui/canvas">
+            <span class="kicker">Legacy</span>
+            <strong>SVG Push Canvas</strong>
+            <p>Open the WebSocket-backed canvas used by the <code>push_svg</code> tool.</p>
+            <code>/ui/canvas</code>
+            <small>${browserClients.size} connected WebSocket client${browserClients.size === 1 ? "" : "s"}</small>
+          </a>
+        </div>
+      </section>
+
+      <aside>
+        <section>
+          <h2>Details / Status</h2>
+          <ul class="status-list">
+            <li><span>Host</span><b class="ok">online :${HOST_PORT}</b></li>
+            <li><span>Proxy entry</span><b class="ok">${escapeHtml(PROXY_URL)}</b></li>
+            <li><span>BLS API key</span><b class="${BLS_API_KEY ? "ok" : "warn"}">${BLS_API_KEY ? "present" : "missing"}</b></li>
+            <li><span>Discovered apps</span><b>${apps.length}</b></li>
+            <li><span>WS canvas clients</span><b>${browserClients.size}</b></li>
+          </ul>
+        </section>
+
+        <section class="prompt">
+          <h2>Prompt</h2>
+          <p>Source prompt viewing is planned for Phase 2C. Prompt changes will require <code>/reload</code> or a new session before they affect the running agent.</p>
+          <div class="button-row">
+            <a class="button" href="/ui/app/bls-explorer">Open BLS Explorer</a>
+            <a class="button" href="/ui/canvas">Open SVG Canvas</a>
+          </div>
+        </section>
+      </aside>
+    </div>
+
+    <footer>Apps are served from <code>src/ui/*.html</code>; route names must match <code>^[a-z0-9-]+$</code>.</footer>
+  </main>
+</body>
+</html>`;
+}
+
+// ─── Legacy SVG canvas shell served at /ui/canvas ───────────────────────────
 
 const UI_HTML = /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -91,47 +272,75 @@ const server = http.createServer((req, res) => {
 
   // Requests tagged x-loopback arrived via proxy — serve real content
   if (req.headers["x-loopback"] === "1") {
-    // OEWS drilldown UI
-    if (req.url === "/ui" || req.url === "/ui/") {
-      const uiPath = path.resolve(import.meta.dirname ?? ".", "..", "src", "ui", "oe-drilldown.html");
+    const requestUrl = new URL(req.url ?? "/", "http://host.local");
+    const pathname = requestUrl.pathname;
+
+    // Portal dashboard at /ui
+    if (pathname === "/ui" || pathname === "/ui/") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+      res.end(renderPortalHtml());
+      return;
+    }
+
+    // Auto-discovered HTML apps: src/ui/*.html -> /ui/app/:name
+    const appMatch = pathname.match(/^\/ui\/app\/([a-z0-9-]+)$/);
+    if (appMatch) {
+      const appName = appMatch[1];
+      const appPath = path.resolve(UI_DIR, `${appName}.html`);
+      if (!isInside(UI_DIR, appPath) || path.extname(appPath) !== ".html") {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Invalid app path");
+        return;
+      }
       try {
-        const html = fs.readFileSync(uiPath, "utf-8");
-        res.writeHead(200, { "Content-Type": "text/html" });
+        const html = fs.readFileSync(appPath, "utf-8");
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
         res.end(html);
       } catch {
-        // Fallback to SVG canvas
-        res.writeHead(200, { "Content-Type": "text/html" });
-        res.end(UI_HTML);
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("UI app not found");
       }
       return;
     }
 
-    // Serve data files under /ui/data/*
-    if (req.url?.startsWith("/ui/data/")) {
-      const fileName = req.url.replace("/ui/data/", "");
-      const filePath = path.resolve(import.meta.dirname ?? ".", "..", "dist", fileName);
+    // Reject malformed app names explicitly rather than falling through silently.
+    if (pathname.startsWith("/ui/app/")) {
+      res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Invalid app name. Use lowercase kebab-case: ^[a-z0-9-]+$");
+      return;
+    }
+
+    // Serve data files under /ui/data/* from dist/ with traversal protection.
+    if (pathname.startsWith("/ui/data/")) {
+      const relativeName = decodeURIComponent(pathname.slice("/ui/data/".length));
+      const filePath = path.resolve(DIST_DIR, relativeName);
+      if (!relativeName || path.isAbsolute(relativeName) || !isInside(DIST_DIR, filePath)) {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Invalid data path");
+        return;
+      }
       try {
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) throw new Error("not a file");
         const data = fs.readFileSync(filePath);
-        const ext = path.extname(fileName);
-        const ct = ext === ".json" ? "application/json" : ext === ".csv" ? "text/csv" : "application/octet-stream";
-        res.writeHead(200, { "Content-Type": ct, "Cache-Control": "public, max-age=3600" });
+        res.writeHead(200, { "Content-Type": getContentType(filePath), "Cache-Control": "public, max-age=3600" });
         res.end(data);
       } catch {
-        res.writeHead(404);
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
         res.end("Data file not found");
       }
       return;
     }
 
     // Legacy SVG canvas at /ui/canvas
-    if (req.url === "/ui/canvas") {
-      res.writeHead(200, { "Content-Type": "text/html" });
+    if (pathname === "/ui/canvas") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(UI_HTML);
       return;
     }
 
     // POST /ui/api/bls — proxy BLS API requests to avoid CORS
-    if (req.url === "/ui/api/bls" && req.method === "POST") {
+    if (pathname === "/ui/api/bls" && req.method === "POST") {
       const body: Buffer[] = [];
       req.on("data", (chunk) => body.push(chunk));
       req.on("end", () => {
@@ -177,7 +386,7 @@ const server = http.createServer((req, res) => {
     }
 
     // POST /ui/svg — TUI or any local process can push SVG messages here
-    if (req.url === "/ui/svg" && req.method === "POST") {
+    if (pathname === "/ui/svg" && req.method === "POST") {
       const body: Buffer[] = [];
       req.on("data", (chunk) => body.push(chunk));
       req.on("end", () => {
@@ -278,6 +487,7 @@ wss.on("connection", (clientSocket, req) => {
 
 server.listen(HOST_PORT, "127.0.0.1", () => {
   console.log(`Host listening on http://127.0.0.1:${HOST_PORT}`);
-  console.log(`SVG canvas at  http://127.0.0.1:8080/ui`);
-  console.log(`SVG push API   POST http://127.0.0.1:8080/ui/svg`);
+  console.log(`UI portal at   ${PROXY_URL}/ui`);
+  console.log(`SVG canvas at  ${PROXY_URL}/ui/canvas`);
+  console.log(`SVG push API   POST ${PROXY_URL}/ui/svg`);
 });
