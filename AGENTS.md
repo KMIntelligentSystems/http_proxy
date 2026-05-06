@@ -33,7 +33,7 @@ Only AFTER completing the above, respond to whatever the user said.
 ## Architecture
 
 ```
-Browser ──► proxy (:8080) ──► host (:3000)
+Browser ──► proxy (:8080) ──► host (:3100)
                  ▲                  │  ├── /ui          HTML + D3.js canvas
                  └── loopback ──────┘  ├── /ui/ws       WebSocket push
                                        └── /ui/svg      POST endpoint for SVG messages
@@ -42,10 +42,10 @@ Browser ──► proxy (:8080) ──► host (:3000)
 | Component | Port | Role |
 |-----------|------|------|
 | **proxy** | 8080 | Reverse proxy, auth, WS upgrade |
-| **host** | 3000 | UI shell, WebSocket broadcast, push API |
+| **host** | 3100 | UI shell, WebSocket broadcast, push API |
 | **cli** | — | Pi TUI: spawns proxy+host, registers tools, runs agent |
 
-> **Routing note:** `push_svg` posts directly to host `:3000` with `x-loopback: 1`
+> **Routing note:** `push_svg` posts directly to the active host port (`HOST_PORT`, default `3100`) with `x-loopback: 1`
 > (bypasses the proxy). The browser always connects via the proxy at `:8080`.
 
 ## Data Sources
@@ -147,7 +147,7 @@ You may spawn or delegate to other agents when it makes sense:
 |------|---------|
 | MCP tools (codegen) | Code execution (Python, etc.) for data work |
 | `playwright_navigate`, `playwright_screenshot` | Browser automation and validation |
-| `push_svg` | Push SVG to the browser canvas (posts to host `:3000` directly) |
+| `push_svg` | Push SVG to the browser canvas (posts to active `HOST_PORT`, default `3100`, directly) |
 | `read` / `write` / `edit` / `bash` | File and shell operations |
 
 ## Guidelines

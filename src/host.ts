@@ -2,9 +2,11 @@ import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
+import type { AgentSession } from "@mariozechner/pi-coding-agent";
 
-const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3000", 10);
+const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
 
 // Load BLS API key from data/.env
@@ -20,8 +22,11 @@ try {
   console.warn(`[host] Could not read data/.env for BLS key`);
 }
 
-// Browser WS clients connected to /ui/ws — receives SVG push messages
+// Browser WS clients connected to /ui/ws — receive SVG push messages.
 const browserClients = new Set<WebSocket>();
+
+// Browser WS clients connected to /ui/ws/agent — receive server-side runtime events.
+const agentClients = new Set<WebSocket>();
 
 // Broadcast an SVG command to all browser clients
 export function broadcastSvg(msg: SvgMessage) {
@@ -39,11 +44,64 @@ export type SvgMessage =
   | { type: "replace"; id: string; svg: string }
   | { type: "remove"; id: string };
 
+type AgentWsMessage = {
+  type: string;
+  receivedAt?: string;
+  [key: string]: unknown;
+};
+
+function toJsonable(value: unknown, seen = new WeakSet<object>()): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+  if (typeof value === "bigint") return value.toString();
+  if (typeof value === "function" || typeof value === "symbol") return undefined;
+  if (value instanceof Error) {
+    return { name: value.name, message: value.message, stack: value.stack };
+  }
+  if (Array.isArray(value)) return value.map((entry) => toJsonable(entry, seen));
+  if (typeof value === "object") {
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      const jsonable = toJsonable(entry, seen);
+      if (jsonable !== undefined) out[key] = jsonable;
+    }
+    seen.delete(value);
+    return out;
+  }
+  return String(value);
+}
+
+function sendAgentWsMessage(client: WebSocket, msg: AgentWsMessage) {
+  if (client.readyState !== WebSocket.OPEN) return;
+  try {
+    client.send(JSON.stringify(toJsonable(msg)));
+  } catch (err) {
+    console.warn(`[host] Failed to send agent WS message: ${err instanceof Error ? err.message : String(err)}`);
+    try { client.close(); } catch {}
+  }
+}
+
+function broadcastAgentWsMessage(msg: AgentWsMessage) {
+  for (const client of agentClients) {
+    sendAgentWsMessage(client, msg);
+  }
+}
+
+function closeWsPeer(peer: WebSocket, code?: number, reason?: Buffer) {
+  if (peer.readyState !== WebSocket.OPEN && peer.readyState !== WebSocket.CONNECTING) return;
+  const validCode = typeof code === "number" && code >= 1000 && code < 5000 && ![1005, 1006, 1015].includes(code);
+  if (validCode) peer.close(code, reason?.toString());
+  else peer.close();
+}
+
 // ─── UI paths and helpers ───────────────────────────────────────────────────
 
 const PROJECT_ROOT = path.resolve(import.meta.dirname ?? ".", "..");
 const UI_DIR = path.resolve(PROJECT_ROOT, "src", "ui");
 const DIST_DIR = path.resolve(PROJECT_ROOT, "dist");
+const WEB_DIST_DIR = path.resolve(DIST_DIR, "web");
 
 function isInside(baseDir: string, candidatePath: string): boolean {
   const relative = path.relative(baseDir, candidatePath);
@@ -265,8 +323,153 @@ const UI_HTML = /* html */ `<!DOCTYPE html>
 </body>
 </html>`;
 
+// ─── Host runtime API helpers ───────────────────────────────────────────────
+
+export type HostContext = {
+  runtime?: any;
+};
+
+export type HostServer = {
+  server: http.Server;
+  wss: WebSocketServer;
+  close: () => Promise<void>;
+};
+
+function sendJson(res: http.ServerResponse, status: number, data: unknown) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(JSON.stringify(data));
+}
+
+function readRequestText(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    req.on("error", reject);
+  });
+}
+
+async function readJsonBody(req: http.IncomingMessage): Promise<any> {
+  const text = await readRequestText(req);
+  if (!text.trim()) return {};
+  return JSON.parse(text);
+}
+
+function getAgentState(ctx: HostContext) {
+  const session = ctx.runtime?.session;
+  const agent = session?.agent;
+  const state = agent?.state;
+  if (!session || !agent || !state) return null;
+
+  let tools: string[] = [];
+  try {
+    const allTools = typeof session.getAllTools === "function" ? session.getAllTools() : state.tools;
+    tools = (allTools ?? []).map((tool: any) => tool?.name ?? tool?.label ?? String(tool));
+  } catch {
+    tools = [];
+  }
+
+  return {
+    sessionId: session.sessionId ?? null,
+    sessionFile: session.sessionFile ?? null,
+    sessionName: session.sessionName ?? null,
+    cwd: ctx.runtime?.cwd ?? process.cwd(),
+    model: session.model ?? state.model ?? null,
+    thinkingLevel: session.thinkingLevel ?? state.thinkingLevel ?? null,
+    messages: session.messages ?? state.messages ?? [],
+    isStreaming: Boolean(session.isStreaming ?? state.isStreaming),
+    tools,
+    systemPrompt: state.systemPrompt ?? "",
+  };
+}
+
+function attachAgentEventBridge(ctx: HostContext): () => void {
+  let activeSession: AgentSession | undefined;
+  let unsubscribe: (() => void) | undefined;
+
+  function detachSession() {
+    unsubscribe?.();
+    unsubscribe = undefined;
+    activeSession = undefined;
+  }
+
+  function attachSession(session: AgentSession) {
+    if (session === activeSession) return;
+
+    unsubscribe?.();
+    activeSession = session;
+    unsubscribe = session.subscribe((event) => {
+      broadcastAgentWsMessage({
+        type: "agent_event",
+        sessionId: session.sessionId ?? null,
+        event: toJsonable(event),
+        receivedAt: new Date().toISOString(),
+      });
+    });
+
+    broadcastAgentWsMessage({
+      type: "agent_bridge_status",
+      status: "attached",
+      sessionId: session.sessionId ?? null,
+      sessionFile: session.sessionFile ?? null,
+      receivedAt: new Date().toISOString(),
+    });
+
+    const state = getAgentState(ctx);
+    if (state) {
+      broadcastAgentWsMessage({
+        type: "agent_state",
+        state,
+        receivedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  function attachCurrentSession() {
+    const session = ctx.runtime?.session;
+    if (!session || typeof session.subscribe !== "function") {
+      detachSession();
+      broadcastAgentWsMessage({
+        type: "agent_bridge_status",
+        status: "no_runtime",
+        receivedAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    attachSession(session as AgentSession);
+  }
+
+  attachCurrentSession();
+
+  const runtime = ctx.runtime;
+  if (runtime && !runtime.__hostAgentBridgeWrapped) {
+    for (const methodName of ["newSession", "switchSession", "fork", "importFromJsonl"] as const) {
+      const original = runtime[methodName];
+      if (typeof original !== "function") continue;
+      runtime[methodName] = async (...args: unknown[]) => {
+        const result = await original.apply(runtime, args);
+        if (!result || result.cancelled !== true) attachCurrentSession();
+        return result;
+      };
+    }
+    Object.defineProperty(runtime, "__hostAgentBridgeWrapped", { value: true, enumerable: false });
+  }
+
+  return detachSession;
+}
+
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(entry);
+}
+
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 
+export function startHost(ctx: HostContext = {}): HostServer {
+let promptInFlight = false;
+const detachAgentEventBridge = attachAgentEventBridge(ctx);
 const server = http.createServer((req, res) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
 
@@ -275,10 +478,47 @@ const server = http.createServer((req, res) => {
     const requestUrl = new URL(req.url ?? "/", "http://host.local");
     const pathname = requestUrl.pathname;
 
-    // Portal dashboard at /ui
+    // Phase W2 web shell at /ui. If dist/web is not built yet, fall back to
+    // the legacy portal so standalone dev:host remains useful.
     if (pathname === "/ui" || pathname === "/ui/") {
+      const webIndexPath = path.resolve(WEB_DIST_DIR, "index.html");
+      try {
+        const html = fs.readFileSync(webIndexPath, "utf-8");
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(html);
+      } catch {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+        res.end(renderPortalHtml());
+      }
+      return;
+    }
+
+    // Legacy portal remains available alongside the pi-web-ui shell.
+    if (pathname === "/ui/portal") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(renderPortalHtml());
+      return;
+    }
+
+    // Vite-built web assets: dist/web/assets/* -> /ui/assets/*
+    if (pathname.startsWith("/ui/assets/")) {
+      const relativeName = decodeURIComponent(pathname.slice("/ui/".length));
+      const filePath = path.resolve(WEB_DIST_DIR, relativeName);
+      if (!relativeName || path.isAbsolute(relativeName) || !isInside(WEB_DIST_DIR, filePath)) {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Invalid web asset path");
+        return;
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) throw new Error("not a file");
+        const data = fs.readFileSync(filePath);
+        res.writeHead(200, { "Content-Type": getContentType(filePath), "Cache-Control": "public, max-age=31536000, immutable" });
+        res.end(data);
+      } catch {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Web asset not found");
+      }
       return;
     }
 
@@ -336,6 +576,98 @@ const server = http.createServer((req, res) => {
     if (pathname === "/ui/canvas") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(UI_HTML);
+      return;
+    }
+
+    // GET /ui/api/agent/state — expose current server-side agent state
+    if (pathname === "/ui/api/agent/state" && req.method === "GET") {
+      const state = getAgentState(ctx);
+      if (!state) {
+        sendJson(res, 503, { error: "Agent runtime is not available in this host process" });
+        return;
+      }
+      sendJson(res, 200, state);
+      return;
+    }
+
+    // GET /ui/api/system-prompt/effective — exact prompt from active runtime state
+    if (pathname === "/ui/api/system-prompt/effective" && req.method === "GET") {
+      const state = getAgentState(ctx);
+      if (!state) {
+        sendJson(res, 503, { error: "Agent runtime is not available in this host process" });
+        return;
+      }
+      sendJson(res, 200, {
+        generatedAt: new Date().toISOString(),
+        cwd: state.cwd,
+        systemPrompt: state.systemPrompt,
+        tools: state.tools,
+      });
+      return;
+    }
+
+    // POST /ui/api/agent/prompt — send a user prompt into the active runtime
+    if (pathname === "/ui/api/agent/prompt" && req.method === "POST") {
+      if (!ctx.runtime?.session?.prompt) {
+        sendJson(res, 503, { error: "Agent runtime is not available in this host process" });
+        return;
+      }
+      readJsonBody(req)
+        .then(async (body) => {
+          const input = typeof body?.input === "string" ? body.input : typeof body?.prompt === "string" ? body.prompt : "";
+          if (!input.trim()) {
+            sendJson(res, 400, { error: "Missing non-empty input" });
+            return;
+          }
+          if (promptInFlight || ctx.runtime.session.isStreaming) {
+            sendJson(res, 409, { error: "Agent is already processing a prompt" });
+            return;
+          }
+
+          const session = ctx.runtime.session;
+          promptInFlight = true;
+          void Promise.resolve()
+            .then(() => session.prompt(input))
+            .then(() => {
+              broadcastAgentWsMessage({
+                type: "agent_prompt_complete",
+                sessionId: session.sessionId ?? null,
+                state: getAgentState(ctx),
+                receivedAt: new Date().toISOString(),
+              });
+            })
+            .catch((err: unknown) => {
+              console.error(`[agent prompt error] ${err instanceof Error ? err.message : String(err)}`);
+              broadcastAgentWsMessage({
+                type: "agent_prompt_error",
+                sessionId: session.sessionId ?? null,
+                error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+                receivedAt: new Date().toISOString(),
+              });
+            })
+            .finally(() => {
+              promptInFlight = false;
+            });
+
+          sendJson(res, 202, { ok: true, accepted: true, sessionId: session.sessionId ?? null });
+        })
+        .catch((err) => {
+          console.error(`[agent prompt request error] ${err instanceof Error ? err.message : String(err)}`);
+          sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+        });
+      return;
+    }
+
+    // POST /ui/api/agent/abort — abort the active agent turn if supported
+    if (pathname === "/ui/api/agent/abort" && req.method === "POST") {
+      const abort = ctx.runtime?.session?.abort;
+      if (typeof abort !== "function") {
+        sendJson(res, 503, { error: "Agent abort is not available" });
+        return;
+      }
+      Promise.resolve(abort.call(ctx.runtime.session))
+        .then(() => sendJson(res, 200, { ok: true }))
+        .catch((err) => sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) }));
       return;
     }
 
@@ -448,12 +780,40 @@ const wss = new WebSocketServer({ server });
 
 wss.on("connection", (clientSocket, req) => {
   const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
+  const wsPathname = new URL(req.url ?? "/", "http://host.local").pathname;
   console.log(`[${new Date().toISOString()}] WS ${clientId} ${req.url}`);
 
   // /ui/ws — browser SVG canvas client
-  if (req.url === "/ui/ws") {
+  if (wsPathname === "/ui/ws") {
     browserClients.add(clientSocket);
     clientSocket.on("close", () => browserClients.delete(clientSocket));
+    return;
+  }
+
+  // /ui/ws/agent — browser runtime event stream. Only serve the loopback-tagged
+  // second hop that has passed through the proxy.
+  if (wsPathname === "/ui/ws/agent" && req.headers["x-loopback"] === "1") {
+    agentClients.add(clientSocket);
+    clientSocket.on("close", () => agentClients.delete(clientSocket));
+    sendAgentWsMessage(clientSocket, {
+      type: "agent_bridge_ready",
+      clientCount: agentClients.size,
+      receivedAt: new Date().toISOString(),
+    });
+    const state = getAgentState(ctx);
+    if (state) {
+      sendAgentWsMessage(clientSocket, {
+        type: "agent_state",
+        state,
+        receivedAt: new Date().toISOString(),
+      });
+    } else {
+      sendAgentWsMessage(clientSocket, {
+        type: "agent_bridge_status",
+        status: "no_runtime",
+        receivedAt: new Date().toISOString(),
+      });
+    }
     return;
   }
 
@@ -476,13 +836,22 @@ wss.on("connection", (clientSocket, req) => {
     if (clientSocket.readyState === WebSocket.OPEN) clientSocket.send(data, { binary: isBinary });
   });
 
-  clientSocket.on("close", (code, reason) => loopSocket.close(code, reason));
-  loopSocket.on("close", (code, reason) => clientSocket.close(code, reason));
+  clientSocket.on("close", (code, reason) => closeWsPeer(loopSocket, code, reason));
+  loopSocket.on("close", (code, reason) => closeWsPeer(clientSocket, code, reason));
 
   loopSocket.on("error", (err) => {
     console.error(`[${clientId}] loopback WS error: ${err.message}`);
     clientSocket.close(1011, "Loopback error");
   });
+});
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[host] FATAL: 127.0.0.1:${HOST_PORT} is already in use. Set HOST_PORT to another value.`);
+  } else {
+    console.error(`[host] FATAL: ${err.message}`);
+  }
+  process.exit(1);
 });
 
 server.listen(HOST_PORT, "127.0.0.1", () => {
@@ -491,3 +860,27 @@ server.listen(HOST_PORT, "127.0.0.1", () => {
   console.log(`SVG canvas at  ${PROXY_URL}/ui/canvas`);
   console.log(`SVG push API   POST ${PROXY_URL}/ui/svg`);
 });
+
+return {
+  server,
+  wss,
+  close: () => new Promise<void>((resolve, reject) => {
+    detachAgentEventBridge();
+    for (const client of [...browserClients, ...agentClients]) client.close();
+    wss.close((wsErr) => {
+      if (wsErr) {
+        reject(wsErr);
+        return;
+      }
+      server.close((serverErr) => {
+        if (serverErr) reject(serverErr);
+        else resolve();
+      });
+    });
+  }),
+};
+}
+
+if (isMainModule()) {
+  startHost();
+}

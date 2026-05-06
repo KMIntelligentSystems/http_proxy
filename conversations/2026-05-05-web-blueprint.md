@@ -1054,3 +1054,196 @@
  ```
 
  That gives you the browser UX you want without throwing away the existing Pi agent architecture.
+---
+
+## Implementation Update — 2026-05-05: Web-main Tasks 1–3
+
+Implemented the first three incremental migration tasks:
+
+1. **Refactor host startup**
+   - `src/host.ts` now exports `startHost(ctx?: HostContext)`.
+   - Standalone host behavior is preserved via main-module detection, so `npm run dev:host` still works.
+   - Existing routes remain intact: `/ui`, `/ui/app/:name`, `/ui/canvas`, `/ui/data/*`, `/ui/api/bls`, `/ui/svg`.
+
+2. **Add web-main entrypoint**
+   - Added `src/web-main.ts`.
+   - `web-main` creates the Pi `AgentSessionRuntime`, starts host in-process with runtime access, and starts only the proxy as a child process.
+   - It does **not** start `InteractiveMode`, so no TUI is launched.
+   - Added package scripts: `dev:web` and `start:web`.
+
+3. **Add initial Host Agent API**
+   - Added `GET /ui/api/agent/state`.
+   - Added `POST /ui/api/agent/prompt`.
+   - Added `POST /ui/api/agent/abort`.
+   - Added `GET /ui/api/system-prompt/effective`.
+   - Standalone `dev:host` returns `503` for agent APIs because no runtime is present.
+   - `dev:web` returns live runtime state and effective system prompt.
+
+Additional support:
+
+- Added `src/env.ts` with `loadProjectEnv()` to load `.env` and `data/.env` before runtime/model registry creation.
+- `src/cli.ts` now also calls `loadProjectEnv()` so current TUI startup can see keys such as `OPENROUTER_API_KEY`.
+
+Validation:
+
+- `npm run build` passes.
+- Standalone host/proxy tested on alternate ports:
+  - `/ui` returned portal HTML.
+  - `/ui/app/bls-explorer` returned app HTML.
+  - `/ui/api/agent/state` returned `503`, as expected without runtime.
+- `web-main` tested on alternate ports:
+  - `/ui/api/agent/state` returned live runtime JSON.
+  - `/ui/api/system-prompt/effective` returned the assembled runtime prompt.
+  - empty prompt POST returned `400` without invoking a model.
+
+Next planned step: Phase 4, Streaming Event Bridge via `/ui/ws/agent`.
+
+---
+
+## Implementation Update — 2026-05-06: Phase 4 Streaming Event Bridge
+
+Implemented the initial runtime event bridge in `src/host.ts`:
+
+- Added `WS /ui/ws/agent` for browser-side runtime event streaming.
+- The host subscribes to `runtime.session.subscribe(...)` and broadcasts events as JSON messages:
+  - `type: "agent_event"`
+  - includes `sessionId`, `event`, and `receivedAt`.
+- New WebSocket clients receive:
+  - `agent_bridge_ready`
+  - `agent_state` when a runtime is available, or `agent_bridge_status` with `status: "no_runtime"` in standalone `dev:host`.
+- Added JSON-safe event normalization for errors, bigint values, functions, symbols, and circular references.
+- Added reattachment handling for runtime session replacement APIs:
+  - `newSession`
+  - `switchSession`
+  - `fork`
+  - `importFromJsonl`
+- Preserved the existing legacy SVG canvas socket at `WS /ui/ws`.
+
+Related fixes/verification:
+
+- Restored the host default port to `3000` to match `src/proxy.ts` and the documented architecture.
+- Updated `src/web-main.ts` so the spawned proxy targets the active `HOST_PORT`.
+- Updated the web-main `push_svg` tool to post to the active `HOST_PORT` instead of a hardcoded stale port.
+- Fixed WebSocket proxy close handling so reserved/invalid close codes such as `1005` are not forwarded to `ws.close()`.
+
+Validation:
+
+- `npm run build` passes.
+- `package.json` parses successfully and contains `dev:web` / `start:web`.
+- Standalone host/proxy on alternate ports:
+  - `GET /ui/api/agent/state` returned `503`, expected with no runtime.
+  - `WS /ui/ws/agent` returned `agent_bridge_ready` and `agent_bridge_status: no_runtime`.
+- `web-main` on alternate ports:
+  - `GET /ui/api/agent/state` returned `200` with a live session id, tools, and system prompt.
+  - `WS /ui/ws/agent` returned `agent_bridge_ready` and `agent_state`.
+
+Notes:
+
+- Git diff stats do not include untracked files such as `src/web-main.ts`, `src/env.ts`, and `conversations/2026-05-05-blueprint.md`; mention those explicitly in summaries.
+- `POST /ui/api/agent/prompt` still awaits `runtime.session.prompt(input)`, so the HTTP response blocks until the model turn finishes. Streaming events are available concurrently over `WS /ui/ws/agent`.
+- Validation still avoids sending a non-empty prompt to prevent unnecessary real model invocations.
+- If `npm run dev:web` fails because old host/proxy processes already occupy the configured ports, stop those processes first or run on alternate `HOST_PORT` / `PORT` values.
+
+---
+
+## Implementation Update — 2026-05-06: Phase 4 Hardening / Port Realignment
+
+Follow-up hardening after review:
+
+- Changed the project host default from `3000` to `3100` because port `3000` is used by a local MCP server.
+  - `src/host.ts` default `HOST_PORT`: `3100`
+  - `src/proxy.ts` default `TARGET`: `http://127.0.0.1:3100`
+  - `src/web-main.ts` default spawned proxy target host port: `3100`
+  - `src/cli.ts` `push_svg` now uses active `HOST_PORT` instead of hardcoded `3000`
+  - `AGENTS.md` architecture notes now document host `:3100`
+- Refactored the runtime event bridge toward the SDK-documented shape:
+  - explicit `attachSession(session: AgentSession)`
+  - explicit `detachSession()`
+  - `attachCurrentSession()` for runtime replacement handling
+  - still reattaches after `newSession`, `switchSession`, `fork`, and `importFromJsonl`
+- Added defensive WebSocket send handling for agent event broadcasts.
+- Made the proxy inject `x-loopback: 1` for HTTP and WebSocket upstream requests, removing the normal double-hop through the host fallback path.
+- Added clearer host/proxy `EADDRINUSE` startup errors.
+- Updated `POST /ui/api/agent/prompt` to return `202 Accepted` immediately for non-empty prompts and stream completion/error over `WS /ui/ws/agent`.
+  - Empty prompts still return `400`.
+  - Concurrent prompts return `409`.
+- Added web-main extension binding/rebinding:
+  - calls `runtime.session.bindExtensions({})` at startup
+  - rebinds after `newSession`, `switchSession`, `fork`, and `importFromJsonl`
+
+Validation:
+
+- `npm run build` passes.
+- Standalone host/proxy on alternate ports:
+  - `HOST_PORT=3197`, `PORT=8197`
+  - `GET /ui/api/agent/state` returned `503`, expected without runtime.
+  - `WS /ui/ws/agent` returned `agent_bridge_ready` and `agent_bridge_status: no_runtime`.
+  - Proxy header injection removed duplicate host/proxy logs for normal requests.
+- `web-main` on alternate ports:
+  - `HOST_PORT=3196`, `PORT=8196`
+  - `GET /ui/api/agent/state` returned `200` with live session id, tools, and system prompt.
+  - `WS /ui/ws/agent` returned `agent_bridge_ready` and `agent_state`.
+  - Empty prompt POST returned `400` without invoking a model.
+
+Package alignment note:
+
+- Current npm registry versions show the Pi packages aligned at `0.73.0`:
+  - `@mariozechner/pi-coding-agent@0.73.0`
+  - `@mariozechner/pi-agent-core@0.73.0`
+  - `@mariozechner/pi-tui@0.73.0`
+  - `@mariozechner/pi-web-ui@0.73.0`
+- Best next dependency step is to pin all Pi packages to the same exact version, preferably `0.73.0`, then rebuild and adapt any API changes before adding the Vite/pi-web-ui shell.
+
+---
+
+## Implementation Update — 2026-05-06: Phase W2 Finalized
+
+Completed Phase W2, serving the `pi-web-ui` browser shell at `/ui` with a client-side `RemoteAgent` adapter connected to the host-owned backend runtime.
+
+Implemented/verified:
+
+- Added Vite web app under `src/web/`:
+  - `src/web/index.html`
+  - `src/web/vite.config.ts`
+  - `src/web/src/main.ts`
+  - `src/web/src/app.css`
+  - `src/web/src/remote-agent.ts`
+- Host now serves the built app from `dist/web` at:
+  - `GET /ui`
+  - `GET /ui/assets/*`
+- Legacy portal remains available at:
+  - `GET /ui/portal`
+- `RemoteAgent` now:
+  - Loads initial server state from `GET /ui/api/agent/state`.
+  - Sends prompts via `POST /ui/api/agent/prompt`.
+  - Connects to `WS /ui/ws/agent`.
+  - Applies runtime events to `pi-web-ui` state.
+  - Normalizes assistant/tool messages with string content into pi-web-ui content-part arrays so streamed/final assistant messages render correctly.
+  - Preserves the local `artifacts` tool while refreshing server-side tool placeholders.
+- `src/web/src/main.ts` creates a `ChatPanel`, disables browser-side attachments/model/thinking controls for this server-owned runtime preview, and installs the remote agent.
+- Package scripts/dependencies are aligned for the web build:
+  - `npm run build:web`
+  - `npm run dev:web`
+  - `npm run start:web`
+  - Pi packages pinned to `0.73.0`.
+
+Validation:
+
+- `npm run build` passes.
+- `npm run build:web` passes. Vite emits non-fatal KaTeX font resolution warnings from upstream CSS and large chunk warnings.
+- Browser smoke test with a fake backend runtime through host/proxy on alternate ports passed:
+  - Opened `http://localhost:8291/ui`.
+  - Loaded the pi-web-ui `ChatPanel`.
+  - Sent a prompt from the browser.
+  - Host accepted `POST /ui/api/agent/prompt`.
+  - `WS /ui/ws/agent` delivered streamed message updates.
+  - Browser rendered both the user message and final assistant response: `Hello from the W2 streaming backend.`
+  - Screenshot saved at `artifacts/w2-smoke.png`.
+
+W2 acceptance is satisfied:
+
+- User can send a prompt from browser.
+- Backend agent/runtime receives the prompt.
+- Streaming/final response appears in browser.
+
+Next phase: W3 should deepen tool execution rendering and delegate/subagent lifecycle visibility, including richer progress/result cards for `delegate` calls.

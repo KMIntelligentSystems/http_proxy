@@ -16,6 +16,9 @@ import { fileURLToPath } from "node:url";
 import fs from "node:fs";
 
 import { createMcpTools } from "./mcp-tools.js";
+import { loadProjectEnv } from "./env.js";
+
+loadProjectEnv(process.cwd());
 
 // ─── MCP tool bridge ──────────────────────────────────────────────────────────
 
@@ -97,7 +100,7 @@ const helloTool = defineTool({
 const pushSvgTool = defineTool({
   name: "push_svg",
   label: "Push SVG",
-  description: "Push an SVG fragment to the browser canvas at http://localhost:8080/ui. Supports actions: clear, append, replace, remove.",
+  description: "Push an SVG fragment to the browser canvas at http://localhost:8080/ui/canvas. Supports actions: clear, append, replace, remove.",
   parameters: Type.Object({
     action: Type.Union([
       Type.Literal("clear"),
@@ -114,7 +117,8 @@ const pushSvgTool = defineTool({
       if (params.svg) body.svg = params.svg;
       if (params.id) body.id = params.id;
 
-      const res = await fetch("http://localhost:3000/ui/svg", {
+      const hostPort = process.env["HOST_PORT"] ?? "3100";
+      const res = await fetch(`http://localhost:${hostPort}/ui/svg`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-loopback": "1" },
         body: JSON.stringify(body),

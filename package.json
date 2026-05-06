@@ -7,17 +7,24 @@
 		"dev:proxy": "tsc && node dist/proxy.js",
 		"dev:host": "tsc && node dist/host.js",
 		"dev:tui": "tsc && node dist/cli.js",
-		"start:tui": "node dist/cli.js"
+		"start:tui": "node dist/cli.js",
+		"build:web": "vite build --config src/web/vite.config.ts",
+		"dev:web": "tsc && vite build --config src/web/vite.config.ts && node dist/web-main.js",
+		"start:web": "node dist/web-main.js"
 	},
 	"dependencies": {
-		"@mariozechner/pi-agent-core": "^0.66.1",
-		"@mariozechner/pi-coding-agent": "^0.65.2",
-		"@mariozechner/pi-tui": "^0.65.2",
+		"@mariozechner/mini-lit": "^0.2.0",
+		"@mariozechner/pi-agent-core": "0.73.0",
+		"@mariozechner/pi-coding-agent": "0.73.0",
+		"@mariozechner/pi-tui": "0.73.0",
+		"@mariozechner/pi-web-ui": "0.73.0",
 		"@sinclair/typebox": "^0.34.49",
 		"chalk": "^5.4.1",
 		"http-proxy": "^1.18.1",
+		"lit": "^3.3.1",
 		"mcporter": "^0.8.1",
 		"pdf-parse": "^2.4.5",
+		"vite": "^7",
 		"ws": "^8.20.0",
 		"xlsx": "^0.18.5"
 	},

@@ -1,7 +1,7 @@
 import http, { Server as HttpServer } from "node:http";
 import httpProxy from "http-proxy";
 
-const TARGET = process.env["TARGET"] ?? "http://127.0.0.1:3000";
+const TARGET = process.env["TARGET"] ?? "http://127.0.0.1:3100";
 const PORT = parseInt(process.env["PORT"] ?? "8080", 10);
 const BIND = process.env["BIND"] ?? "127.0.0.1";
 const AUTH_TOKEN = process.env["AUTH_TOKEN"];
@@ -47,7 +47,7 @@ const server: HttpServer = http.createServer((req, res) => {
     return;
   }
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  proxy.web(req, res);
+  proxy.web(req, res, { headers: { "x-loopback": "1" } });
 });
 
 server.on("upgrade", (req, socket, head) => {
@@ -57,7 +57,16 @@ server.on("upgrade", (req, socket, head) => {
     return;
   }
   console.log(`[${new Date().toISOString()}] WS UPGRADE ${req.url}`);
-  proxy.ws(req, socket, head);
+  proxy.ws(req, socket, head, { headers: { "x-loopback": "1" } });
+});
+
+server.on("error", (err: NodeJS.ErrnoException) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`[proxy] FATAL: ${BIND}:${PORT} is already in use. Set PORT or BIND to another value.`);
+  } else {
+    console.error(`[proxy] FATAL: ${err.message}`);
+  }
+  process.exit(1);
 });
 
 server.listen(PORT, BIND, () => {
