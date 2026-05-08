@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
+import { createArtifactStore, type ArtifactStore } from "./artifacts.js";
 
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
@@ -327,6 +328,7 @@ const UI_HTML = /* html */ `<!DOCTYPE html>
 
 export type HostContext = {
   runtime?: any;
+  artifactStore?: ArtifactStore;
 };
 
 export type HostServer = {
@@ -469,6 +471,16 @@ function isMainModule(): boolean {
 
 export function startHost(ctx: HostContext = {}): HostServer {
 let promptInFlight = false;
+const artifactStore = ctx.artifactStore ?? createArtifactStore(path.resolve(PROJECT_ROOT, "data", "artifacts"));
+ctx.artifactStore = artifactStore;
+const detachArtifactEvents = artifactStore.onCreated((artifact) => {
+  broadcastAgentWsMessage({
+    type: "artifact_created",
+    sessionId: ctx.runtime?.session?.sessionId ?? artifact.sessionId ?? null,
+    artifact,
+    receivedAt: new Date().toISOString(),
+  });
+});
 const detachAgentEventBridge = attachAgentEventBridge(ctx);
 const server = http.createServer((req, res) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -576,6 +588,42 @@ const server = http.createServer((req, res) => {
     if (pathname === "/ui/canvas") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
       res.end(UI_HTML);
+      return;
+    }
+
+    // Artifact listing/content for Phase W4. Artifacts are created by backend
+    // tools and served through the authenticated /ui route.
+    if (pathname === "/ui/api/artifacts" && req.method === "GET") {
+      const state = getAgentState(ctx);
+      const includeAll = requestUrl.searchParams.get("all") === "1";
+      const sessionId = includeAll ? undefined : state?.sessionId ?? undefined;
+      sendJson(res, 200, { artifacts: artifactStore.list(sessionId) });
+      return;
+    }
+
+    const artifactMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)(?:\/metadata)?$/);
+    if (artifactMatch && req.method === "GET") {
+      const id = decodeURIComponent(artifactMatch[1]);
+      const hit = artifactStore.get(id);
+      if (!hit) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+        res.end("Artifact not found");
+        return;
+      }
+      if (pathname.endsWith("/metadata")) {
+        sendJson(res, 200, hit.record);
+        return;
+      }
+      const data = fs.readFileSync(hit.filePath);
+      res.writeHead(200, {
+        "Content-Type": hit.record.mimeType.includes("text") || hit.record.mimeType === "application/json"
+          ? `${hit.record.mimeType}; charset=utf-8`
+          : hit.record.mimeType,
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": `inline; filename="${hit.record.filename.replace(/["\\]/g, "_")}"`,
+      });
+      res.end(data);
       return;
     }
 
@@ -866,6 +914,7 @@ return {
   wss,
   close: () => new Promise<void>((resolve, reject) => {
     detachAgentEventBridge();
+    detachArtifactEvents();
     for (const client of [...browserClients, ...agentClients]) client.close();
     wss.close((wsErr) => {
       if (wsErr) {

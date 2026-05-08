@@ -1,0 +1,2132 @@
+{
+  "source": "BLS Public Data API, Current Employment Statistics (CES), accessed 2026-05-07",
+  "units": "Thousands of jobs",
+  "series": [
+    {
+      "id": "CES0000000001",
+      "label": "Total nonfarm payroll employment — seasonally adjusted",
+      "seasonal": "Seasonally adjusted",
+      "data": [
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 1,
+          "date": "2014-01-01",
+          "value": 137561,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 2,
+          "date": "2014-02-01",
+          "value": 137712,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 3,
+          "date": "2014-03-01",
+          "value": 137985,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 4,
+          "date": "2014-04-01",
+          "value": 138298,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 5,
+          "date": "2014-05-01",
+          "value": 138513,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 6,
+          "date": "2014-06-01",
+          "value": 138849,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 7,
+          "date": "2014-07-01",
+          "value": 139072,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 8,
+          "date": "2014-08-01",
+          "value": 139269,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 9,
+          "date": "2014-09-01",
+          "value": 139563,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 10,
+          "date": "2014-10-01",
+          "value": 139798,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 11,
+          "date": "2014-11-01",
+          "value": 140089,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2014,
+          "month": 12,
+          "date": "2014-12-01",
+          "value": 140364,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 1,
+          "date": "2015-01-01",
+          "value": 140568,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 2,
+          "date": "2015-02-01",
+          "value": 140827,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 3,
+          "date": "2015-03-01",
+          "value": 140923,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 4,
+          "date": "2015-04-01",
+          "value": 141196,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 5,
+          "date": "2015-05-01",
+          "value": 141538,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 6,
+          "date": "2015-06-01",
+          "value": 141709,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 7,
+          "date": "2015-07-01",
+          "value": 141991,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 8,
+          "date": "2015-08-01",
+          "value": 142125,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 9,
+          "date": "2015-09-01",
+          "value": 142275,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 10,
+          "date": "2015-10-01",
+          "value": 142579,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 11,
+          "date": "2015-11-01",
+          "value": 142808,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2015,
+          "month": 12,
+          "date": "2015-12-01",
+          "value": 143077,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 1,
+          "date": "2016-01-01",
+          "value": 143210,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 2,
+          "date": "2016-02-01",
+          "value": 143406,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 3,
+          "date": "2016-03-01",
+          "value": 143662,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 4,
+          "date": "2016-04-01",
+          "value": 143854,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 5,
+          "date": "2016-05-01",
+          "value": 143900,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 6,
+          "date": "2016-06-01",
+          "value": 144147,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 7,
+          "date": "2016-07-01",
+          "value": 144520,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 8,
+          "date": "2016-08-01",
+          "value": 144661,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 9,
+          "date": "2016-09-01",
+          "value": 144967,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 10,
+          "date": "2016-10-01",
+          "value": 145065,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 11,
+          "date": "2016-11-01",
+          "value": 145183,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2016,
+          "month": 12,
+          "date": "2016-12-01",
+          "value": 145408,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 1,
+          "date": "2017-01-01",
+          "value": 145628,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 2,
+          "date": "2017-02-01",
+          "value": 145846,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 3,
+          "date": "2017-03-01",
+          "value": 145970,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 4,
+          "date": "2017-04-01",
+          "value": 146175,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 5,
+          "date": "2017-05-01",
+          "value": 146380,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 6,
+          "date": "2017-06-01",
+          "value": 146583,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 7,
+          "date": "2017-07-01",
+          "value": 146772,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 8,
+          "date": "2017-08-01",
+          "value": 146919,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 9,
+          "date": "2017-09-01",
+          "value": 147008,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 10,
+          "date": "2017-10-01",
+          "value": 147149,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 11,
+          "date": "2017-11-01",
+          "value": 147372,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2017,
+          "month": 12,
+          "date": "2017-12-01",
+          "value": 147523,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 1,
+          "date": "2018-01-01",
+          "value": 147660,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 2,
+          "date": "2018-02-01",
+          "value": 148054,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 3,
+          "date": "2018-03-01",
+          "value": 148280,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 4,
+          "date": "2018-04-01",
+          "value": 148420,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 5,
+          "date": "2018-05-01",
+          "value": 148742,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 6,
+          "date": "2018-06-01",
+          "value": 148960,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 7,
+          "date": "2018-07-01",
+          "value": 149020,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 8,
+          "date": "2018-08-01",
+          "value": 149277,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 9,
+          "date": "2018-09-01",
+          "value": 149358,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 10,
+          "date": "2018-10-01",
+          "value": 149527,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 11,
+          "date": "2018-11-01",
+          "value": 149617,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2018,
+          "month": 12,
+          "date": "2018-12-01",
+          "value": 149809,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 1,
+          "date": "2019-01-01",
+          "value": 150060,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 2,
+          "date": "2019-02-01",
+          "value": 150067,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 3,
+          "date": "2019-03-01",
+          "value": 150295,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 4,
+          "date": "2019-04-01",
+          "value": 150591,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 5,
+          "date": "2019-05-01",
+          "value": 150618,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 6,
+          "date": "2019-06-01",
+          "value": 150838,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 7,
+          "date": "2019-07-01",
+          "value": 150937,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 8,
+          "date": "2019-08-01",
+          "value": 151169,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 9,
+          "date": "2019-09-01",
+          "value": 151365,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 10,
+          "date": "2019-10-01",
+          "value": 151460,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 11,
+          "date": "2019-11-01",
+          "value": 151667,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2019,
+          "month": 12,
+          "date": "2019-12-01",
+          "value": 151794,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 1,
+          "date": "2020-01-01",
+          "value": 152031,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 2,
+          "date": "2020-02-01",
+          "value": 152293,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 3,
+          "date": "2020-03-01",
+          "value": 150895,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 4,
+          "date": "2020-04-01",
+          "value": 130426,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 5,
+          "date": "2020-05-01",
+          "value": 133040,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 6,
+          "date": "2020-06-01",
+          "value": 137671,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 7,
+          "date": "2020-07-01",
+          "value": 139255,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 8,
+          "date": "2020-08-01",
+          "value": 140821,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 9,
+          "date": "2020-09-01",
+          "value": 141770,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 10,
+          "date": "2020-10-01",
+          "value": 142460,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 11,
+          "date": "2020-11-01",
+          "value": 142733,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2020,
+          "month": 12,
+          "date": "2020-12-01",
+          "value": 142548,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 1,
+          "date": "2021-01-01",
+          "value": 142863,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 2,
+          "date": "2021-02-01",
+          "value": 143380,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 3,
+          "date": "2021-03-01",
+          "value": 144232,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 4,
+          "date": "2021-04-01",
+          "value": 144587,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 5,
+          "date": "2021-05-01",
+          "value": 145065,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 6,
+          "date": "2021-06-01",
+          "value": 145820,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 7,
+          "date": "2021-07-01",
+          "value": 146762,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 8,
+          "date": "2021-08-01",
+          "value": 147314,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 9,
+          "date": "2021-09-01",
+          "value": 147771,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 10,
+          "date": "2021-10-01",
+          "value": 148572,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 11,
+          "date": "2021-11-01",
+          "value": 149230,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2021,
+          "month": 12,
+          "date": "2021-12-01",
+          "value": 149816,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 1,
+          "date": "2022-01-01",
+          "value": 150006,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 2,
+          "date": "2022-02-01",
+          "value": 150825,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 3,
+          "date": "2022-03-01",
+          "value": 151315,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 4,
+          "date": "2022-04-01",
+          "value": 151623,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 5,
+          "date": "2022-05-01",
+          "value": 151924,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 6,
+          "date": "2022-06-01",
+          "value": 152358,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 7,
+          "date": "2022-07-01",
+          "value": 153072,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 8,
+          "date": "2022-08-01",
+          "value": 153362,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 9,
+          "date": "2022-09-01",
+          "value": 153582,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 10,
+          "date": "2022-10-01",
+          "value": 153939,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 11,
+          "date": "2022-11-01",
+          "value": 154242,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2022,
+          "month": 12,
+          "date": "2022-12-01",
+          "value": 154342,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 1,
+          "date": "2023-01-01",
+          "value": 154776,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 2,
+          "date": "2023-02-01",
+          "value": 155066,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 3,
+          "date": "2023-03-01",
+          "value": 155134,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 4,
+          "date": "2023-04-01",
+          "value": 155375,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 5,
+          "date": "2023-05-01",
+          "value": 155655,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 6,
+          "date": "2023-06-01",
+          "value": 155880,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 7,
+          "date": "2023-07-01",
+          "value": 156043,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 8,
+          "date": "2023-08-01",
+          "value": 156261,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 9,
+          "date": "2023-09-01",
+          "value": 156417,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 10,
+          "date": "2023-10-01",
+          "value": 156576,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 11,
+          "date": "2023-11-01",
+          "value": 156703,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2023,
+          "month": 12,
+          "date": "2023-12-01",
+          "value": 156857,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 1,
+          "date": "2024-01-01",
+          "value": 157032,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 2,
+          "date": "2024-02-01",
+          "value": 157238,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 3,
+          "date": "2024-03-01",
+          "value": 157466,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 4,
+          "date": "2024-04-01",
+          "value": 157530,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 5,
+          "date": "2024-05-01",
+          "value": 157608,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 6,
+          "date": "2024-06-01",
+          "value": 157695,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 7,
+          "date": "2024-07-01",
+          "value": 157748,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 8,
+          "date": "2024-08-01",
+          "value": 157757,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 9,
+          "date": "2024-09-01",
+          "value": 157912,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 10,
+          "date": "2024-10-01",
+          "value": 157945,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 11,
+          "date": "2024-11-01",
+          "value": 158079,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CES0000000001",
+          "year": 2024,
+          "month": 12,
+          "date": "2024-12-01",
+          "value": 158316,
+          "periodName": "December"
+        }
+      ]
+    },
+    {
+      "id": "CEU0000000001",
+      "label": "Total nonfarm payroll employment — not seasonally adjusted",
+      "seasonal": "Not seasonally adjusted",
+      "data": [
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 1,
+          "date": "2014-01-01",
+          "value": 135471,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 2,
+          "date": "2014-02-01",
+          "value": 136212,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 3,
+          "date": "2014-03-01",
+          "value": 137169,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 4,
+          "date": "2014-04-01",
+          "value": 138308,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 5,
+          "date": "2014-05-01",
+          "value": 139217,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 6,
+          "date": "2014-06-01",
+          "value": 139804,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 7,
+          "date": "2014-07-01",
+          "value": 138727,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 8,
+          "date": "2014-08-01",
+          "value": 139105,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 9,
+          "date": "2014-09-01",
+          "value": 139793,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 10,
+          "date": "2014-10-01",
+          "value": 140848,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 11,
+          "date": "2014-11-01",
+          "value": 141314,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2014,
+          "month": 12,
+          "date": "2014-12-01",
+          "value": 141306,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 1,
+          "date": "2015-01-01",
+          "value": 138491,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 2,
+          "date": "2015-02-01",
+          "value": 139324,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 3,
+          "date": "2015-03-01",
+          "value": 140080,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 4,
+          "date": "2015-04-01",
+          "value": 141264,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 5,
+          "date": "2015-05-01",
+          "value": 142205,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 6,
+          "date": "2015-06-01",
+          "value": 142681,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 7,
+          "date": "2015-07-01",
+          "value": 141731,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 8,
+          "date": "2015-08-01",
+          "value": 141921,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 9,
+          "date": "2015-09-01",
+          "value": 142478,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 10,
+          "date": "2015-10-01",
+          "value": 143627,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 11,
+          "date": "2015-11-01",
+          "value": 144048,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2015,
+          "month": 12,
+          "date": "2015-12-01",
+          "value": 144045,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 1,
+          "date": "2016-01-01",
+          "value": 141073,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 2,
+          "date": "2016-02-01",
+          "value": 141900,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 3,
+          "date": "2016-03-01",
+          "value": 142797,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 4,
+          "date": "2016-04-01",
+          "value": 143892,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 5,
+          "date": "2016-05-01",
+          "value": 144541,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 6,
+          "date": "2016-06-01",
+          "value": 145205,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 7,
+          "date": "2016-07-01",
+          "value": 144232,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 8,
+          "date": "2016-08-01",
+          "value": 144484,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 9,
+          "date": "2016-09-01",
+          "value": 145149,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 10,
+          "date": "2016-10-01",
+          "value": 146031,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 11,
+          "date": "2016-11-01",
+          "value": 146465,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2016,
+          "month": 12,
+          "date": "2016-12-01",
+          "value": 146252,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 1,
+          "date": "2017-01-01",
+          "value": 143374,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 2,
+          "date": "2017-02-01",
+          "value": 144405,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 3,
+          "date": "2017-03-01",
+          "value": 145061,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 4,
+          "date": "2017-04-01",
+          "value": 146085,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 5,
+          "date": "2017-05-01",
+          "value": 146924,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 6,
+          "date": "2017-06-01",
+          "value": 147565,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 7,
+          "date": "2017-07-01",
+          "value": 146464,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 8,
+          "date": "2017-08-01",
+          "value": 146781,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 9,
+          "date": "2017-09-01",
+          "value": 147169,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 10,
+          "date": "2017-10-01",
+          "value": 148182,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 11,
+          "date": "2017-11-01",
+          "value": 148758,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2017,
+          "month": 12,
+          "date": "2017-12-01",
+          "value": 148509,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 1,
+          "date": "2018-01-01",
+          "value": 145413,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 2,
+          "date": "2018-02-01",
+          "value": 146648,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 3,
+          "date": "2018-03-01",
+          "value": 147353,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 4,
+          "date": "2018-04-01",
+          "value": 148329,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 5,
+          "date": "2018-05-01",
+          "value": 149264,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 6,
+          "date": "2018-06-01",
+          "value": 149930,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 7,
+          "date": "2018-07-01",
+          "value": 148767,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 8,
+          "date": "2018-08-01",
+          "value": 149236,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 9,
+          "date": "2018-09-01",
+          "value": 149547,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 10,
+          "date": "2018-10-01",
+          "value": 150555,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 11,
+          "date": "2018-11-01",
+          "value": 151032,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2018,
+          "month": 12,
+          "date": "2018-12-01",
+          "value": 150831,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 1,
+          "date": "2019-01-01",
+          "value": 147879,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 2,
+          "date": "2019-02-01",
+          "value": 148684,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 3,
+          "date": "2019-03-01",
+          "value": 149360,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 4,
+          "date": "2019-04-01",
+          "value": 150422,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 5,
+          "date": "2019-05-01",
+          "value": 151096,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 6,
+          "date": "2019-06-01",
+          "value": 151713,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 7,
+          "date": "2019-07-01",
+          "value": 150658,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 8,
+          "date": "2019-08-01",
+          "value": 151094,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 9,
+          "date": "2019-09-01",
+          "value": 151509,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 10,
+          "date": "2019-10-01",
+          "value": 152501,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 11,
+          "date": "2019-11-01",
+          "value": 153094,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2019,
+          "month": 12,
+          "date": "2019-12-01",
+          "value": 152846,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 1,
+          "date": "2020-01-01",
+          "value": 150057,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 2,
+          "date": "2020-02-01",
+          "value": 150966,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 3,
+          "date": "2020-03-01",
+          "value": 149952,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 4,
+          "date": "2020-04-01",
+          "value": 130252,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 5,
+          "date": "2020-05-01",
+          "value": 133421,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 6,
+          "date": "2020-06-01",
+          "value": 138507,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 7,
+          "date": "2020-07-01",
+          "value": 139105,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 8,
+          "date": "2020-08-01",
+          "value": 140728,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 9,
+          "date": "2020-09-01",
+          "value": 141957,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 10,
+          "date": "2020-10-01",
+          "value": 143565,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 11,
+          "date": "2020-11-01",
+          "value": 144117,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2020,
+          "month": 12,
+          "date": "2020-12-01",
+          "value": 143604,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 1,
+          "date": "2021-01-01",
+          "value": 140975,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 2,
+          "date": "2021-02-01",
+          "value": 142129,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 3,
+          "date": "2021-03-01",
+          "value": 143308,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 4,
+          "date": "2021-04-01",
+          "value": 144403,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 5,
+          "date": "2021-05-01",
+          "value": 145391,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 6,
+          "date": "2021-06-01",
+          "value": 146627,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 7,
+          "date": "2021-07-01",
+          "value": 146619,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 8,
+          "date": "2021-08-01",
+          "value": 147159,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 9,
+          "date": "2021-09-01",
+          "value": 147918,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 10,
+          "date": "2021-10-01",
+          "value": 149606,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 11,
+          "date": "2021-11-01",
+          "value": 150543,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2021,
+          "month": 12,
+          "date": "2021-12-01",
+          "value": 150740,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 1,
+          "date": "2022-01-01",
+          "value": 147932,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 2,
+          "date": "2022-02-01",
+          "value": 149606,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 3,
+          "date": "2022-03-01",
+          "value": 150413,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 4,
+          "date": "2022-04-01",
+          "value": 151434,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 5,
+          "date": "2022-05-01",
+          "value": 152265,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 6,
+          "date": "2022-06-01",
+          "value": 153176,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 7,
+          "date": "2022-07-01",
+          "value": 152813,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 8,
+          "date": "2022-08-01",
+          "value": 153209,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 9,
+          "date": "2022-09-01",
+          "value": 153730,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 10,
+          "date": "2022-10-01",
+          "value": 154936,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 11,
+          "date": "2022-11-01",
+          "value": 155519,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2022,
+          "month": 12,
+          "date": "2022-12-01",
+          "value": 155210,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 1,
+          "date": "2023-01-01",
+          "value": 152688,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 2,
+          "date": "2023-02-01",
+          "value": 153818,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 3,
+          "date": "2023-03-01",
+          "value": 154253,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 4,
+          "date": "2023-04-01",
+          "value": 155155,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 5,
+          "date": "2023-05-01",
+          "value": 156038,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 6,
+          "date": "2023-06-01",
+          "value": 156701,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 7,
+          "date": "2023-07-01",
+          "value": 155779,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 8,
+          "date": "2023-08-01",
+          "value": 156107,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 9,
+          "date": "2023-09-01",
+          "value": 156563,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 10,
+          "date": "2023-10-01",
+          "value": 157531,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 11,
+          "date": "2023-11-01",
+          "value": 157950,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2023,
+          "month": 12,
+          "date": "2023-12-01",
+          "value": 157828,
+          "periodName": "December"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 1,
+          "date": "2024-01-01",
+          "value": 154942,
+          "periodName": "January"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 2,
+          "date": "2024-02-01",
+          "value": 156007,
+          "periodName": "February"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 3,
+          "date": "2024-03-01",
+          "value": 156612,
+          "periodName": "March"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 4,
+          "date": "2024-04-01",
+          "value": 157370,
+          "periodName": "April"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 5,
+          "date": "2024-05-01",
+          "value": 158117,
+          "periodName": "May"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 6,
+          "date": "2024-06-01",
+          "value": 158513,
+          "periodName": "June"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 7,
+          "date": "2024-07-01",
+          "value": 157485,
+          "periodName": "July"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 8,
+          "date": "2024-08-01",
+          "value": 157712,
+          "periodName": "August"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 9,
+          "date": "2024-09-01",
+          "value": 158111,
+          "periodName": "September"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 10,
+          "date": "2024-10-01",
+          "value": 158853,
+          "periodName": "October"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 11,
+          "date": "2024-11-01",
+          "value": 159307,
+          "periodName": "November"
+        },
+        {
+          "seriesID": "CEU0000000001",
+          "year": 2024,
+          "month": 12,
+          "date": "2024-12-01",
+          "value": 159289,
+          "periodName": "December"
+        }
+      ]
+    }
+  ]
+}

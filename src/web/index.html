@@ -7,6 +7,16 @@
   </head>
   <body>
     <div id="app"></div>
+    <script>
+      window.__piBootErrors = [];
+      window.addEventListener("error", (event) => {
+        window.__piBootErrors.push({ type: "error", message: event.message, filename: event.filename, lineno: event.lineno, colno: event.colno });
+      });
+      window.addEventListener("unhandledrejection", (event) => {
+        const reason = event.reason;
+        window.__piBootErrors.push({ type: "unhandledrejection", message: reason && (reason.stack || reason.message) ? (reason.stack || reason.message) : String(reason) });
+      });
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

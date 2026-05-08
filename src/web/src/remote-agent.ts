@@ -2,6 +2,21 @@ import type { Agent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "
 
 type RemoteListener = (event: any, signal: AbortSignal) => void | Promise<void>;
 
+export type ArtifactRecord = {
+  id: string;
+  sessionId?: string;
+  title: string;
+  filename: string;
+  mimeType: string;
+  createdAt?: string;
+  updatedAt?: string;
+  size?: number;
+  url: string;
+  description?: string;
+};
+
+export const artifactEvents = new EventTarget();
+
 type ServerAgentState = {
   sessionId?: string | null;
   cwd?: string;
@@ -112,6 +127,69 @@ function upsertAssistantMessage(messages: AgentMessage[], message: AgentMessage)
   const last = messages[messages.length - 1] as any;
   if (sameAssistantMessage(last, normalized)) return [...messages.slice(0, -1), normalized];
   return [...messages, normalized];
+}
+
+function toolCallIds(message: any): string[] {
+  if (!message || message.role !== "assistant" || !Array.isArray(message.content)) return [];
+  return message.content
+    .filter((part: any) => part?.type === "toolCall" && typeof part.id === "string")
+    .map((part: any) => part.id);
+}
+
+function messageHasToolCall(message: any, toolCallId: string): boolean {
+  return toolCallIds(message).includes(toolCallId);
+}
+
+function messagesHaveToolCall(messages: AgentMessage[], toolCallId: string): boolean {
+  return messages.some((message) => messageHasToolCall(message, toolCallId));
+}
+
+function upsertToolResultMessage(messages: AgentMessage[], result: AgentMessage): AgentMessage[] {
+  const next = normalizeAgentMessage(result) as any;
+  if (next.role !== "toolResult" || !next.toolCallId) return messages;
+  const existingIndex = messages.findIndex((message: any) => message.role === "toolResult" && message.toolCallId === next.toolCallId);
+  if (existingIndex === -1) return [...messages, next as AgentMessage];
+  return messages.map((message, index) => index === existingIndex ? (next as AgentMessage) : message);
+}
+
+function removeSyntheticToolCallMessages(messages: AgentMessage[], realAssistantMessage: any): AgentMessage[] {
+  const realIds = new Set(toolCallIds(realAssistantMessage));
+  if (!realIds.size) return messages;
+  return messages.filter((message: any) => {
+    if (!message.__remoteSyntheticToolCall) return true;
+    return !toolCallIds(message).some((id) => realIds.has(id));
+  });
+}
+
+function createSyntheticToolCallMessage(event: any, state: MutableAgentState): AgentMessage {
+  return {
+    role: "assistant",
+    content: [{
+      type: "toolCall",
+      id: event.toolCallId,
+      name: event.toolName,
+      arguments: event.args ?? {},
+    }],
+    api: (state.model as any)?.api ?? "remote",
+    provider: (state.model as any)?.provider ?? "remote",
+    model: (state.model as any)?.id ?? (state.model as any)?.name ?? "remote",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "toolUse",
+    timestamp: Date.now(),
+    __remoteSyntheticToolCall: true,
+  } as any;
+}
+
+function createToolResultMessage(event: any, result: any, isError: boolean): AgentMessage {
+  return {
+    role: "toolResult",
+    toolCallId: event.toolCallId,
+    toolName: event.toolName,
+    content: Array.isArray(result?.content) ? result.content : [],
+    details: result?.details,
+    isError,
+    timestamp: Date.now(),
+  } as AgentMessage;
 }
 
 export class RemoteAgent implements Agent {
@@ -281,6 +359,12 @@ export class RemoteAgent implements Agent {
       return;
     }
 
+    if (message.type === "artifact_created" && message.artifact) {
+      artifactEvents.dispatchEvent(new CustomEvent<ArtifactRecord>("artifact_created", { detail: message.artifact }));
+      await this.emit({ type: "agent_state_changed" });
+      return;
+    }
+
     if (message.type !== "agent_event" || !message.event) return;
     const event = message.event;
 
@@ -302,32 +386,69 @@ export class RemoteAgent implements Agent {
         // messages. Only assistant messages belong in the stable list here:
         // user messages are added optimistically on prompt submission and final
         // authoritative state arrives via agent_prompt_complete; tool results are
-        // handled by tool_execution_end for W2/W3 tool-card rendering.
+        // handled by tool_execution_* for W3 tool-card rendering.
         if (event.message?.role === "assistant") {
-          this.state.messages = upsertAssistantMessage(this.state.messages, normalizeAgentMessage(event.message));
+          const normalized = normalizeAgentMessage(event.message);
+          this.state.messages = removeSyntheticToolCallMessages(this.state.messages, normalized);
+          this.state.messages = upsertAssistantMessage(this.state.messages, normalized);
         }
         this.state.streamingMessage = undefined;
         break;
       case "tool_execution_start":
-        if (event.toolCallId) this.state.pendingToolCalls.add(event.toolCallId);
+        if (event.toolCallId) {
+          this.state.pendingToolCalls.add(event.toolCallId);
+          if (!messagesHaveToolCall(this.state.messages, event.toolCallId) && !messageHasToolCall(this.state.streamingMessage, event.toolCallId)) {
+            this.state.streamingMessage = createSyntheticToolCallMessage(event, this.state);
+          }
+        }
+        break;
+      case "tool_execution_update":
+        if (event.toolCallId && event.toolName && event.partialResult) {
+          this.state.pendingToolCalls.add(event.toolCallId);
+          if (!messagesHaveToolCall(this.state.messages, event.toolCallId) && !messageHasToolCall(this.state.streamingMessage, event.toolCallId)) {
+            this.state.streamingMessage = createSyntheticToolCallMessage(event, this.state);
+          }
+          this.state.messages = upsertToolResultMessage(
+            this.state.messages,
+            createToolResultMessage(event, event.partialResult, false),
+          );
+        }
         break;
       case "tool_execution_end":
         if (event.toolCallId) this.state.pendingToolCalls.delete(event.toolCallId);
+        if (event.toolCallId && !messagesHaveToolCall(this.state.messages, event.toolCallId)) {
+          const synthetic = messageHasToolCall(this.state.streamingMessage, event.toolCallId)
+            ? this.state.streamingMessage
+            : createSyntheticToolCallMessage(event, this.state);
+          this.state.messages = [...this.state.messages, synthetic];
+        }
         if (event.toolCallId && event.toolName && event.result) {
-          this.state.messages = [...this.state.messages, normalizeAgentMessage({
-            role: "toolResult",
-            toolCallId: event.toolCallId,
-            toolName: event.toolName,
-            content: event.result.content ?? [],
-            details: event.result.details,
-            isError: Boolean(event.isError),
-            timestamp: Date.now(),
-          })];
+          this.state.messages = upsertToolResultMessage(
+            this.state.messages,
+            createToolResultMessage(event, event.result, Boolean(event.isError)),
+          );
         }
         break;
     }
 
     await this.emit(event);
+
+    // pi-web-ui's AgentInterface only schedules UI refreshes for message_* and
+    // agent_* events. Tool execution events mutate pendingToolCalls/tool results,
+    // so emit a lightweight companion message_update to repaint the active
+    // streaming tool card with progress/result details.
+    if (typeof event.type === "string" && event.type.startsWith("tool_execution")) {
+      const stableMessage = this.state.messages.find((message: any) => event.toolCallId && messageHasToolCall(message, event.toolCallId));
+      if (stableMessage) {
+        // Stable message-list can now render the paired tool result. Avoid also
+        // pushing it into the streaming container, which would duplicate cards.
+        await this.emit({ type: "agent_start" });
+      } else if (this.state.streamingMessage) {
+        await this.emit({ type: "message_update", message: this.state.streamingMessage });
+      } else {
+        await this.emit({ type: "agent_start" });
+      }
+    }
   }
 
   private emitSync(event: any): void {

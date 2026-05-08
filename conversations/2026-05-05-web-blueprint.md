@@ -1247,3 +1247,144 @@ W2 acceptance is satisfied:
 - Streaming/final response appears in browser.
 
 Next phase: W3 should deepen tool execution rendering and delegate/subagent lifecycle visibility, including richer progress/result cards for `delegate` calls.
+
+---
+
+## Implementation Update — 2026-05-06: Phase W3 Runtime Event Bridge
+
+Implemented Phase W3 browser-side runtime/tool event handling for the `pi-web-ui` shell.
+
+Implemented:
+
+- Added `src/web/src/delegate-renderer.ts`:
+  - Registers as the renderer for the server-side `delegate` tool.
+  - Shows subagent name, task, running/completed/failed status, latest output/final output, id, turn count, and exit code.
+  - Uses `pi-web-ui`'s `ToolRenderer` API directly; no custom element lifecycle or extension event bridge is required.
+- Updated `src/web/src/main.ts`:
+  - Registers `DelegateRenderer` with `registerToolRenderer("delegate", ...)` before constructing `ChatPanel`.
+- Updated `src/web/src/remote-agent.ts`:
+  - Handles `tool_execution_update` in addition to start/end.
+  - Tracks pending tool calls and upserts partial/final `toolResult` messages by `toolCallId` so tool cards receive live progress and final results.
+  - Emits companion UI-refresh events for tool execution events because `pi-web-ui`'s `AgentInterface` schedules repainting for `message_*`/`agent_*` events, not raw `tool_execution_*` events.
+  - Creates a synthetic assistant tool-call message only when a tool execution arrives without a corresponding streamed assistant `toolCall`, so delegate/tool results still have an anchor for rendering.
+  - Replaces synthetic tool-call anchors when an authoritative assistant message arrives.
+
+Validation:
+
+- `npm run build` passes.
+- `npm run build:web` passes.
+  - Existing upstream KaTeX font-resolution warnings and large chunk warnings remain non-fatal.
+- Browser smoke validation used a local mock backend on `http://127.0.0.1:8294/ui` that served the production `dist/web` bundle and emitted a synthetic delegate stream over `WS /ui/ws/agent`:
+  - `message_update` / `message_end` with a `delegate` tool call.
+  - `tool_execution_start`.
+  - `tool_execution_update` with partial subagent output.
+  - `tool_execution_end` with final result/details.
+  - `agent_prompt_complete` with final state.
+- The browser rendered one delegate tool card with:
+  - `Subagent completed`
+  - `delegate → research`
+  - task text
+  - final output `Research subagent result: W3 delegate rendering works.`
+  - id/turn/exit metadata.
+- Screenshot saved at `artifacts/w3-delegate-smoke.png`.
+
+W3 acceptance is satisfied for the runtime event bridge path:
+
+- A browser prompt can trigger a delegate tool call.
+- Runtime tool execution start/update/end events are streamed over `/ui/ws/agent`.
+- The browser shows delegate execution/progress/result as an inline tool card.
+
+
+---
+
+## Implementation Update — 2026-05-06: Phase W4 Artifact / Visualization Pipeline
+
+Implemented Phase W4, making artifacts the primary visualization path in the `/ui` web shell.
+
+Implemented:
+
+- Added `src/artifacts.ts`:
+  - `ArtifactStore` creates validated artifact IDs.
+  - Saves content under `data/artifacts/<session-id>/<artifact-id>/`.
+  - Writes `metadata.json` alongside the artifact content.
+  - Enforces simple filenames, artifact-root containment, MIME allowlist, and an 8 MB content limit.
+  - Supports listing and lookup by artifact ID.
+- Updated `src/host.ts`:
+  - Creates/receives an `ArtifactStore` in `HostContext`.
+  - Broadcasts top-level websocket messages when artifacts are created:
+    - `type: "artifact_created"`
+    - `artifact: { id, title, filename, mimeType, url, ... }`
+  - Added artifact API routes:
+    - `GET /ui/api/artifacts`
+    - `GET /ui/api/artifacts/:artifactId`
+    - `GET /ui/api/artifacts/:artifactId/metadata`
+- Added `src/visualization-tools.ts`:
+  - `create_artifact`: durable HTML/SVG/Markdown/text/JSON artifact creation.
+  - `create_chart_svg`: convenience wrapper for SVG chart artifacts.
+  - `create_bls_sa_nsa_chart`: fetches BLS SA/NSA pairs using `data/lookups/*.json` and creates a self-contained D3 HTML artifact.
+    - LN uses `data/lookups/ln_concepts.json`.
+    - CE builds CES/CEU pairs from `supersector`, `industry`, and `datatype` lookup-driven IDs.
+- Updated `src/web-main.ts`:
+  - Creates one shared artifact store.
+  - Registers the visualization tools with the server-owned runtime.
+  - Passes the artifact store into `startHost` so tool-created artifacts are broadcast and served.
+- Added `src/web/src/artifact-panel.ts`:
+  - Browser-side artifact list + preview panel.
+  - Displays SVG/HTML/text/Markdown/JSON artifacts in an iframe.
+  - Reacts live to `artifact_created` events over `/ui/ws/agent`.
+- Updated `src/web/src/remote-agent.ts`:
+  - Handles top-level `artifact_created` websocket messages.
+  - Exposes an in-browser artifact event target for the artifact panel.
+- Updated `src/web/src/main.ts` and `src/web/src/app.css`:
+  - `/ui` now renders a two-pane shell: chat on the left, artifacts on the right.
+  - Artifact panel is responsive and collapses below chat on narrower screens.
+- Updated `src/web/index.html`:
+  - Adds lightweight boot error capture in `window.__piBootErrors` for diagnosing module-load failures in browser validation.
+- Updated `AGENTS.md`:
+  - Makes artifact tools the primary rendering path.
+  - Keeps `push_svg` documented as legacy/debug.
+
+Validation:
+
+- `npm run build` passes.
+- `npm run build:web` passes.
+  - Existing upstream KaTeX font warnings and large chunk warnings remain non-fatal.
+- Tool smoke test directly invoked `create_artifact` and `create_chart_svg`; both created artifact metadata and files successfully.
+- Browser smoke test with real `startHost` + proxy on alternate ports validated artifact API/listing/preview:
+  - Served production `dist/web` at `/ui`.
+  - Browser loaded `pi-chat-panel` and `artifact-panel` without boot errors.
+  - Artifact list showed a server-created SVG artifact.
+  - Artifact iframe loaded `/ui/api/artifacts/<artifactId>` with `image/svg+xml` content.
+  - Screenshot: `artifacts/w4-artifact-panel-smoke.png`.
+- Live websocket smoke test validated creation after browser connection:
+  - Browser connected to `/ui/ws/agent`.
+  - Server created an artifact after connection.
+  - Host broadcast `artifact_created`.
+  - Browser panel inserted and selected the new artifact without refresh.
+  - Screenshot: `artifacts/w4-live-artifact-event.png`.
+
+W4 acceptance is satisfied:
+
+- Agent/runtime now has artifact creation tools.
+- Browser artifact panel displays SVG/HTML artifact outputs in the same `/ui` shell.
+- `push_svg` remains available but artifact tools are the primary visualization path.
+- BLS SA/NSA D3 chart generation is available via `create_bls_sa_nsa_chart`, using the existing lookup JSON instead of SQLite for this phase.
+
+Design note for post-W4 data persistence:
+
+SQLite remains a good repository for researched, normalized, queryable datasets. Additional complementary options to consider before W5:
+
+1. **Artifact-first provenance manifests** — every chart artifact stores a compact JSON manifest beside the visual output: source URLs, series IDs, query parameters, transformations, and generated data snapshot hash. This keeps each visualization reproducible even before a full database model exists.
+2. **JSONL research cache** — append-only `data/research-cache/*.jsonl` for low-friction capture of source discovery, schema notes, and raw API responses. Easier to diff/replay than SQLite, and can later be migrated into SQLite.
+3. **DuckDB/Parquet sidecar for analytical datasets** — useful for larger tabular extracts where SQL analytics matter but zero-server file-based workflows are preferred. DuckDB can read Parquet/CSV directly and complements SQLite when datasets become columnar/time-series heavy.
+4. **Content-addressed raw-data cache** — store raw API responses under hashes keyed by source/request parameters. Prevents repeated BLS/API calls and provides reproducibility independent of the curated SQLite schema.
+5. **Hybrid model** — SQLite for curated metadata/indexes and queryable facts; artifact manifests for per-chart provenance; raw JSON/CSV/Parquet files for source snapshots. This avoids forcing all data into SQLite prematurely.
+
+Recommended next design step before W5: define a small provenance manifest schema for artifacts, then decide which fields belong in SQLite indexes versus per-artifact metadata.
+
+
+Additional W4 validation:
+
+- Directly invoked `create_bls_sa_nsa_chart` with `survey="LN"`, `concept="unemployment_rate"`, `startYear=2023`, `endYear=2024`.
+- The tool successfully fetched BLS data using the lookup-driven SA/NSA pair and generated a self-contained D3 HTML artifact.
+- Temporary smoke output was removed after validation.

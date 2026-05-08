@@ -14,9 +14,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { createArtifactStore } from "./artifacts.js";
 import { loadProjectEnv } from "./env.js";
 import { startHost } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
+import { createVisualizationTools } from "./visualization-tools.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -67,6 +69,9 @@ function stopProxy() {
 }
 
 // ─── Custom tools ────────────────────────────────────────────────────────────
+
+let activeRuntime: any;
+const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
 
 const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
   {
@@ -142,7 +147,13 @@ const pushSvgTool = defineTool({
   },
 });
 
-const customTools = [...mcpTools, helloTool, pushSvgTool];
+const visualizationTools = createVisualizationTools({
+  artifactStore,
+  cwd: process.cwd(),
+  getSessionId: () => activeRuntime?.session?.sessionId,
+});
+
+const customTools = [...mcpTools, helloTool, pushSvgTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 
@@ -175,6 +186,7 @@ const runtime = await createAgentSessionRuntime(createRuntime, {
   sessionManager,
   sessionStartEvent,
 });
+activeRuntime = runtime;
 
 async function bindActiveSessionExtensions() {
   const bindExtensions = runtime.session?.bindExtensions;
@@ -196,7 +208,7 @@ for (const methodName of ["newSession", "switchSession", "fork", "importFromJson
   };
 }
 
-const host = startHost({ runtime });
+const host = startHost({ runtime, artifactStore });
 startProxy();
 
 const proxyPort = process.env["PORT"] ?? "8080";

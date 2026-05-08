@@ -6,11 +6,16 @@ import {
   ProviderKeysStore,
   SessionsStore,
   SettingsStore,
+  registerToolRenderer,
   setAppStorage,
 } from "@mariozechner/pi-web-ui";
 import "@mariozechner/pi-web-ui/app.css";
 import "./app.css";
+import "./artifact-panel";
+import { DelegateRenderer } from "./delegate-renderer";
 import { RemoteAgent } from "./remote-agent";
+
+registerToolRenderer("delegate", new DelegateRenderer());
 
 const settings = new SettingsStore();
 const providerKeys = new ProviderKeysStore();
@@ -37,6 +42,7 @@ const app = document.getElementById("app");
 if (!app) throw new Error("#app not found");
 
 function showStatus(kind: "loading" | "error", message: string) {
+  if(app)
   app.innerHTML = `
     <main class="boot-screen ${kind}">
       <section>
@@ -69,7 +75,15 @@ async function boot() {
     panel.agentInterface.enableThinkingSelector = false;
   }
 
-  app.replaceChildren(panel);
+  const shell = document.createElement("main");
+  shell.className = "web-ui-shell";
+  const chatRegion = document.createElement("section");
+  chatRegion.className = "chat-region";
+  chatRegion.appendChild(panel);
+  const artifactPanel = document.createElement("artifact-panel");
+  shell.append(chatRegion, artifactPanel);
+  if(app)
+  app.replaceChildren(shell);
 }
 
 boot().catch((err) => {

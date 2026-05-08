@@ -80,13 +80,17 @@ final result as JSON to stdout so it flows back through the tool response.
 
 ## Rendering
 
-**Before pushing any content**, navigate to `http://localhost:8080/ui` using
-Playwright and confirm the page has loaded. If no browser is open or no
-WebSocket client is connected, `push_svg` will return 204 but nothing will
-render. Always open the canvas first, then push data.
+The primary web visualization path is artifact-based:
 
-The browser at `http://localhost:8080/ui` has an SVG canvas that receives
-messages over WebSocket.
+- Use `create_artifact` for durable HTML, SVG, Markdown, text, or JSON outputs.
+- Use `create_chart_svg` for one-off SVG charts.
+- Use `create_bls_sa_nsa_chart` for BLS seasonally-adjusted vs not-seasonally-adjusted D3 charts using `data/lookups/*.json`.
+- Generated artifacts appear in the `/ui` artifact panel and are served from `/ui/api/artifacts/<artifactId>`.
+
+`push_svg` and `/ui/canvas` remain available as a legacy/debug path. Before using
+`push_svg`, navigate to `http://localhost:8080/ui/canvas` using Playwright and
+confirm the page has loaded. If no browser is open or no WebSocket client is
+connected, `push_svg` will return 204 but nothing will render.
 
 ### Push Protocol
 
@@ -104,16 +108,17 @@ Use `push_svg` with these actions:
 
 ### Rendering Strategy
 
-D3.js runs **client-side**. The preferred approach is to push a D3 data-driven
-update by appending SVG elements directly:
+For prompt-driven visualizations, prefer artifacts over the legacy canvas:
 
-- Push `clear` to reset the canvas
-- Push `append` with complete SVG markup generated from your data
-- Use `replace` with a stable `id` to update a chart in place without clearing
+- For static charts, generate a complete SVG and call `create_chart_svg`.
+- For interactive charts, generate a complete self-contained HTML document and call `create_artifact` with `mimeType: "text/html"`.
+- For BLS SA/NSA comparisons, call `create_bls_sa_nsa_chart` unless custom transformations are required.
 
-> **Do not push `<script>` tags.** Browsers block script execution in markup
-> injected via `innerHTML`. Instead, generate the final SVG server-side and
-> push the rendered markup via `append` or `replace`.
+D3.js may run client-side inside an HTML artifact. If using the legacy SVG canvas,
+generate final SVG server-side and push the rendered markup via `append` or
+`replace`.
+
+> **Do not push `<script>` tags to the legacy canvas.** Browsers block script execution in markup injected via `innerHTML`.
 
 ### Styling
 
@@ -147,7 +152,8 @@ You may spawn or delegate to other agents when it makes sense:
 |------|---------|
 | MCP tools (codegen) | Code execution (Python, etc.) for data work |
 | `playwright_navigate`, `playwright_screenshot` | Browser automation and validation |
-| `push_svg` | Push SVG to the browser canvas (posts to active `HOST_PORT`, default `3100`, directly) |
+| `create_artifact` / `create_chart_svg` / `create_bls_sa_nsa_chart` | Create durable visualization artifacts displayed in the `/ui` artifact panel |
+| `push_svg` | Legacy/debug SVG canvas push (posts to active `HOST_PORT`, default `3100`, directly) |
 | `read` / `write` / `edit` / `bash` | File and shell operations |
 
 ## Guidelines
