@@ -24,6 +24,7 @@ function toolResultFor(record: ArtifactRecord, text = `Created artifact: ${recor
       mimeType: record.mimeType,
       url: record.url,
       size: record.size,
+      role: record.role,
     },
   };
 }
@@ -196,12 +197,17 @@ export function createVisualizationTools(options: {
       mimeType: Type.Union([
         Type.Literal("image/svg+xml"),
         Type.Literal("text/html"),
+        Type.Literal("text/css"),
+        Type.Literal("text/csv"),
         Type.Literal("text/markdown"),
         Type.Literal("text/plain"),
         Type.Literal("application/json"),
       ], { description: "Artifact MIME type." }),
       content: Type.String({ description: "Complete artifact content." }),
       description: Type.Optional(Type.String({ description: "Short note shown in artifact metadata." })),
+      role: Type.Optional(Type.String({
+        description: "Lowercase-kebab semantic tag, e.g. 'memory', 'research-notes', 'link-inventory', 'dataset-csv', 'dataset-meta', 'section', 'chart-briefs', 'chart', 'shared-css', 'page'. The orchestrator filters artifacts by role."
+      })),
     }),
     execute: async (_toolCallId, params) => {
       const record = await options.artifactStore.create({ ...params, sessionId: options.getSessionId() });
@@ -318,5 +324,61 @@ export function createVisualizationTools(options: {
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool];
+  const createDocumentTool = defineTool({
+    name: "create_document",
+    label: "Create Document Manifest",
+    description:
+      "Persist a paged-document manifest. The manifest must contain a non-empty `pages` array; " +
+      "each `pages[i].artifactId` must resolve to an existing text/html artifact. " +
+      "This tool is the only legitimate producer of document manifests.",
+    parameters: Type.Object({
+      title:       Type.String({ description: "Document title; used as the artifact title." }),
+      manifest:    Type.Any({ description: "The document manifest. Must contain pages: [{artifactId, ...}]." }),
+      filename:    Type.Optional(Type.String({ description: "Filename, defaults to slug(title).document.json." })),
+      description: Type.Optional(Type.String()),
+      role:        Type.Optional(Type.String({ description: "Defaults to 'document-manifest'." })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const m = params.manifest as any;
+      if (!m || typeof m !== "object")
+        throw new Error("manifest must be an object");
+      if (!Array.isArray(m.pages) || m.pages.length === 0)
+        throw new Error("manifest.pages must be a non-empty array");
+
+      const currentSessionId = options.getSessionId() || "standalone";
+      for (const [i, p] of m.pages.entries()) {
+        if (!p?.artifactId)
+          throw new Error(`pages[${i}].artifactId is required`);
+        const hit = options.artifactStore.get(p.artifactId);
+        if (!hit)
+          throw new Error(`pages[${i}].artifactId "${p.artifactId}" does not exist`);
+        if (hit.record.mimeType !== "text/html")
+          throw new Error(`pages[${i}].artifactId "${p.artifactId}" must be text/html, got ${hit.record.mimeType}`);
+        if (hit.record.sessionId !== currentSessionId)
+          throw new Error(`pages[${i}].artifactId "${p.artifactId}" belongs to a different session (${hit.record.sessionId})`);
+      }
+
+      const manifest = {
+        ...m,
+        kind: "document",
+        schemaVersion: 2,
+        createdAt: new Date().toISOString(),
+        title: params.title,
+      };
+
+      const record = await options.artifactStore.create({
+        sessionId: options.getSessionId(),
+        title: params.title,
+        filename: params.filename
+          ?? `${params.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "document"}.document.json`,
+        mimeType: "application/vnd.dva.document+json",
+        content: JSON.stringify(manifest, null, 2),
+        description: params.description,
+        role: params.role ?? "document-manifest",
+      });
+      return toolResultFor(record, `Created document "${params.title}" with ${m.pages.length} pages`);
+    },
+  });
+
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool];
 }

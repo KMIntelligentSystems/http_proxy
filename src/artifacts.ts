@@ -5,9 +5,12 @@ import path from "node:path";
 export type ArtifactMimeType =
   | "image/svg+xml"
   | "text/html"
+  | "text/css"
+  | "text/csv"
   | "text/markdown"
   | "text/plain"
-  | "application/json";
+  | "application/json"
+  | "application/vnd.dva.document+json";
 
 export type ArtifactRecord = {
   id: string;
@@ -20,6 +23,7 @@ export type ArtifactRecord = {
   size: number;
   url: string;
   description?: string;
+  role?: string;        // semantic tag, e.g. "memory", "dataset-csv", "chart", "page", "document-manifest"
 };
 
 export type CreateArtifactInput = {
@@ -29,6 +33,7 @@ export type CreateArtifactInput = {
   mimeType: string;
   content: string;
   description?: string;
+  role?: string;
 };
 
 type ArtifactListener = (artifact: ArtifactRecord) => void;
@@ -36,10 +41,19 @@ type ArtifactListener = (artifact: ArtifactRecord) => void;
 const ALLOWED_MIME_TYPES = new Set<ArtifactMimeType>([
   "image/svg+xml",
   "text/html",
+  "text/css",
+  "text/csv",
   "text/markdown",
   "text/plain",
   "application/json",
+  "application/vnd.dva.document+json",
 ]);
+
+export function isUtf8ArtifactMime(mimeType: string): boolean {
+  return mimeType.startsWith("text/")
+      || mimeType === "application/json"
+      || mimeType === "application/vnd.dva.document+json";
+}
 
 function safeSessionId(sessionId: string | null | undefined): string {
   const value = (sessionId || "standalone").trim();
@@ -88,6 +102,12 @@ export class ArtifactStore {
     if (!title) throw new Error("title is required");
     if (title.length > 200) throw new Error("title is too long");
 
+    if (input.role !== undefined) {
+      const role = String(input.role).trim();
+      if (role.length > 64) throw new Error("role is too long");
+      if (role && !/^[a-z0-9-]+$/.test(role)) throw new Error("role must be lowercase kebab-case");
+    }
+
     const mimeType = input.mimeType as ArtifactMimeType;
     if (!ALLOWED_MIME_TYPES.has(mimeType)) {
       throw new Error(`Unsupported artifact mimeType: ${input.mimeType}`);
@@ -121,6 +141,7 @@ export class ArtifactStore {
       size,
       url: `/ui/api/artifacts/${encodeURIComponent(id)}`,
       description: input.description?.trim() || undefined,
+      role: input.role?.trim() || undefined,
     };
     fs.writeFileSync(path.resolve(dir, "metadata.json"), JSON.stringify(record, null, 2), "utf-8");
 

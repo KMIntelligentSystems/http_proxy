@@ -26,6 +26,8 @@ Thumbs.db
 *.suo
 *.user
 data/.env
-
+data/artifacts/*
 *.xlsx
 *.pdf
+*.html
+*.png

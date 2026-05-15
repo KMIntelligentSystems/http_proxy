@@ -8,11 +8,15 @@ function formatSize(size?: number): string {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function iconFor(mimeType: string): string {
+function iconFor(mimeType: string, role?: string): string {
+  if (role === "memory") return "✎";
   if (mimeType === "image/svg+xml") return "◈";
   if (mimeType === "text/html") return "▣";
   if (mimeType === "text/markdown") return "▤";
+  if (mimeType === "text/css") return "≡";
+  if (mimeType === "text/csv") return "▥";
   if (mimeType === "application/json") return "{}";
+  if (mimeType === "application/vnd.dva.document+json") return "▦";
   return "◇";
 }
 
@@ -38,6 +42,7 @@ export class ArtifactPanel extends LitElement {
     this.style.display = "flex";
     this.style.minHeight = "0";
     this.addEventListener("click", this.onClick as EventListener);
+
     artifactEvents.addEventListener("artifact_created", this.onArtifactCreated as EventListener);
     void this.loadArtifacts();
   }
@@ -88,7 +93,15 @@ export class ArtifactPanel extends LitElement {
       `;
     }
 
-    if (artifact.mimeType === "text/markdown" || artifact.mimeType === "text/plain" || artifact.mimeType === "application/json") {
+    if (artifact.mimeType === "application/vnd.dva.document+json") {
+      return html`<document-paginator manifest-url=${artifact.url}></document-paginator>`;
+    }
+
+    if (artifact.mimeType === "text/markdown"
+        || artifact.mimeType === "text/plain"
+        || artifact.mimeType === "text/css"
+        || artifact.mimeType === "text/csv"
+        || artifact.mimeType === "application/json") {
       return html`<iframe class="artifact-frame" src=${artifact.url} title=${artifact.title}></iframe>`;
     }
 
@@ -97,6 +110,7 @@ export class ArtifactPanel extends LitElement {
 
   override render(): TemplateResult {
     const selected = this.artifacts.find((artifact) => artifact.id === this.selectedId) ?? this.artifacts[0];
+
     return html`
       <aside class="artifact-panel-shell" aria-label="Artifacts">
         <header class="artifact-header">
@@ -115,14 +129,17 @@ export class ArtifactPanel extends LitElement {
             : this.artifacts.length
               ? this.artifacts.map((artifact) => html`
                   <button
-                    class="artifact-item ${artifact.id === selected?.id ? "active" : ""}"
+                    class="artifact-item ${artifact.id === selected?.id ? "active" : ""} ${artifact.role === "memory" ? "memory" : ""}"
                     data-artifact-id=${artifact.id}
                     title=${artifact.title}
                   >
-                    <span class="artifact-icon">${iconFor(artifact.mimeType)}</span>
+                    <span class="artifact-icon">${iconFor(artifact.mimeType, artifact.role)}</span>
                     <span class="artifact-item-main">
                       <strong>${artifact.title}</strong>
-                      <small>${artifact.filename} · ${artifact.mimeType}${artifact.size ? ` · ${formatSize(artifact.size)}` : ""}</small>
+                      <small>
+                        ${artifact.filename} · ${artifact.mimeType}${artifact.size ? ` · ${formatSize(artifact.size)}` : ""}
+                        ${artifact.role ? html` · <span class="role-tag">${artifact.role}</span>` : ""}
+                      </small>
                     </span>
                   </button>
                 `)

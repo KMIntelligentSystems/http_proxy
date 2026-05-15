@@ -1,4 +1,5 @@
-import type { Agent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "@mariozechner/pi-web-ui";
+import type { Agent, AgentMessage, AgentState, AgentTool, ThinkingLevel } from "@mariozechner/pi-agent-core"; 
+
 
 type RemoteListener = (event: any, signal: AbortSignal) => void | Promise<void>;
 
@@ -12,6 +13,7 @@ export type ArtifactRecord = {
   updatedAt?: string;
   size?: number;
   url: string;
+  role: string;
   description?: string;
 };
 
@@ -191,8 +193,8 @@ function createToolResultMessage(event: any, result: any, isError: boolean): Age
     timestamp: Date.now(),
   } as AgentMessage;
 }
-
-export class RemoteAgent implements Agent {
+//https://github.com/earendil-works/pi/blob/f348a06294f12792858c083dac2bcc462988a3d3/packages/agent/src/agent.ts
+export class RemoteAgent {
   readonly state = createInitialState();
   readonly remoteTools: AgentTool<any>[] = [];
 
@@ -214,7 +216,16 @@ export class RemoteAgent implements Agent {
     await this.refreshState();
     this.connectEvents();
   }
-
+/**
+	 * Subscribe to agent lifecycle events.
+	 *
+	 * Listener promises are awaited in subscription order and are included in
+	 * the current run's settlement. Listeners also receive the active abort
+	 * signal for the current run.
+	 *
+	 * `agent_end` is the final emitted event for a run, but the agent does not
+	 * become idle until all awaited listeners for that event have settled.
+	 */
   subscribe(listener: RemoteListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -417,7 +428,7 @@ export class RemoteAgent implements Agent {
       case "tool_execution_end":
         if (event.toolCallId) this.state.pendingToolCalls.delete(event.toolCallId);
         if (event.toolCallId && !messagesHaveToolCall(this.state.messages, event.toolCallId)) {
-          const synthetic = messageHasToolCall(this.state.streamingMessage, event.toolCallId)
+          const synthetic = this.state.streamingMessage && messageHasToolCall(this.state.streamingMessage, event.toolCallId)
             ? this.state.streamingMessage
             : createSyntheticToolCallMessage(event, this.state);
           this.state.messages = [...this.state.messages, synthetic];

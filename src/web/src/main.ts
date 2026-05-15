@@ -12,6 +12,7 @@ import {
 import "@mariozechner/pi-web-ui/app.css";
 import "./app.css";
 import "./artifact-panel";
+import "./document-paginator";
 import { DelegateRenderer } from "./delegate-renderer";
 import { RemoteAgent } from "./remote-agent";
 

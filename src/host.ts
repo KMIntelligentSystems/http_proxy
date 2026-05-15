@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
-import { createArtifactStore, type ArtifactStore } from "./artifacts.js";
+import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
 
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
@@ -594,6 +594,7 @@ const server = http.createServer((req, res) => {
     // Artifact listing/content for Phase W4. Artifacts are created by backend
     // tools and served through the authenticated /ui route.
     if (pathname === "/ui/api/artifacts" && req.method === "GET") {
+ 
       const state = getAgentState(ctx);
       const includeAll = requestUrl.searchParams.get("all") === "1";
       const sessionId = includeAll ? undefined : state?.sessionId ?? undefined;
@@ -616,7 +617,7 @@ const server = http.createServer((req, res) => {
       }
       const data = fs.readFileSync(hit.filePath);
       res.writeHead(200, {
-        "Content-Type": hit.record.mimeType.includes("text") || hit.record.mimeType === "application/json"
+        "Content-Type": isUtf8ArtifactMime(hit.record.mimeType)
           ? `${hit.record.mimeType}; charset=utf-8`
           : hit.record.mimeType,
         "Cache-Control": "no-store",
