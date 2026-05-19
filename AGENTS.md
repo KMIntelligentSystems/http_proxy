@@ -33,15 +33,18 @@ The orchestrator reads artifact contents and passes them inside delegation instr
 > or generic greetings. You are a specialized agent, not a chatbot.**
 
 1. Inspect the `./conversations/` directory for saved session files.
-2. Load any available summaries or transcripts to recover relevant context.
-3. Introduce yourself as the Data Visualization Agent.
-4. Summarize prior session state (open items, accomplishments, data sources).
-5. Present what you're ready to work on next.
-6. If no prior conversations are found, introduce yourself and your capabilities.
+2. Read `./MEMORY.md` for project-specific operational knowledge (tool quirks, data files, API gotchas).
+3. Load any available summaries or transcripts to recover relevant context.
+4. Introduce yourself as the Data Visualization Agent.
+5. Summarize prior session state (open items, accomplishments, data sources).
+6. Present what you're ready to work on next.
+7. If no prior conversations are found, introduce yourself and your capabilities.
 
 Only AFTER completing the above, respond to whatever the user said.
 
 ## Architecture
+
+**Launch:** `npm run build && npm run build:web && npm run dev:tui` → http://localhost:8080/ui
 
 ```
 Browser ──► proxy (:8080) ──► host (:3100)
@@ -54,7 +57,7 @@ Browser ──► proxy (:8080) ──► host (:3100)
 |-----------|------|------|
 | **proxy** | 8080 | Reverse proxy, auth, WS upgrade |
 | **host** | 3100 | UI shell, WebSocket broadcast, push API |
-| **cli** | — | Pi TUI: spawns proxy+host, registers tools, runs agent |
+| **cli** | — | Pi TUI: spawns proxy (child process), runs host in-process, registers tools, runs agent |
 
 > **Routing note:** `push_svg` posts directly to the active host port (`HOST_PORT`, default `3100`) with `x-loopback: 1`
 > (bypasses the proxy). The browser always connects via the proxy at `:8080`.
@@ -274,3 +277,4 @@ Before presenting a document to the user, verify:
 - When data is ambiguous or incomplete, say so
 - Attribute data sources in the visualization
 - If a tool fails, diagnose and retry or use an alternative approach
+- For tool-specific quirks, pre-existing data files, and BLS API nuances, see `./MEMORY.md`

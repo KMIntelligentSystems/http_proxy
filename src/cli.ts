@@ -17,6 +17,9 @@ import fs from "node:fs";
 
 import { createMcpTools } from "./mcp-tools.js";
 import { loadProjectEnv } from "./env.js";
+import { createArtifactStore } from "./artifacts.js";
+import { createVisualizationTools } from "./visualization-tools.js";
+import { startHost } from "./host.js";
 
 loadProjectEnv(process.cwd());
 
@@ -43,43 +46,38 @@ const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.resolve(__dirname, "..");
 
-// ─── Proxy / Host process management ─────────────────────────────────────────
+// ─── Proxy process management ────────────────────────────────────────────
+// The host runs in-process via startHost() so it shares the artifact store
+// and the agent runtime. Only the proxy is spawned as a child process.
 
-type ProcName = "proxy" | "host";
-
-const procs: Record<ProcName, ChildProcess | null> = {
-  proxy: null,
-  host: null,
-};
+let proxyProc: ChildProcess | null = null;
 
 const logFile = fs.createWriteStream(path.join(DIST, "proxy-host.log"), { flags: "a" });
 
-function startProc(name: ProcName) {
-  if (procs[name]) procs[name]!.kill();
+function startProxy() {
+  if (proxyProc) proxyProc.kill();
 
-  const proc = spawn(process.execPath, [path.join(DIST, `dist/${name}.js`)], {
+  const proc = spawn(process.execPath, [path.join(DIST, "dist/proxy.js")], {
     env: { ...process.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
 
   const onData = (data: Buffer) =>
-    logFile.write(`[${name}] ${data.toString()}`);
+    logFile.write(`[proxy] ${data.toString()}`);
 
   proc.stdout?.on("data", onData);
   proc.stderr?.on("data", onData);
   proc.on("exit", (code) => {
-    logFile.write(`[system] ${name} exited (code ${code})\n`);
-    procs[name] = null;
+    logFile.write(`[system] proxy exited (code ${code})\n`);
+    proxyProc = null;
   });
 
-  procs[name] = proc;
+  proxyProc = proc;
 }
 
-function stopAll() {
-  for (const name of Object.keys(procs) as ProcName[]) {
-    procs[name]?.kill();
-    procs[name] = null;
-  }
+function stopProxy() {
+  proxyProc?.kill();
+  proxyProc = null;
 }
 
 // ─── Custom tools ─────────────────────────────────────────────────────────────
@@ -139,7 +137,22 @@ const pushSvgTool = defineTool({
   },
 });
 
-const customTools = [...mcpTools, helloTool, pushSvgTool];
+// ─── Artifact store + visualization tools ─────────────────────────────────
+
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
+
+// Mutable ref so visualizationTools can resolve the session ID
+// after the runtime is created (below).
+const sessionIdRef = { current: (): string | null => null };
+
+const visualizationTools = createVisualizationTools({
+  artifactStore,
+  getSessionId: () => sessionIdRef.current(),
+  cwd: process.cwd(),
+});
+
+const customTools = [...mcpTools, helloTool, pushSvgTool, ...visualizationTools];
 
 // ─── Agent session factory ────────────────────────────────────────────────────
 
@@ -169,28 +182,43 @@ const createRuntime: CreateAgentSessionRuntimeFactory = async ({
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
-// Start proxy and host silently — logs go to proxy-host.log
-startProc("proxy");
-startProc("host");
-
-process.on("SIGINT", () => {
-  stopAll();
-  process.exit(0);
-});
-
-// Build the agent session runtime then hand control to InteractiveMode.
-// InteractiveMode owns the terminal from here — it creates its own TUI,
-// enters an input loop, and passes each submission to the agent.
+// Build the agent session runtime first — the host needs it.
 const runtime = await createAgentSessionRuntime(createRuntime, {
   cwd,
   agentDir,
   sessionManager,
   sessionStartEvent,
 });
-const allTools = runtime.session.getAllTools()
+
+// Wire the live session ID through the mutable ref.
+sessionIdRef.current = () => runtime.session?.sessionId ?? null;
+
+// Start the host in-process so it shares the artifact store.
+// artifact_created events are broadcast to browser WebSocket clients
+// via artifactStore.onCreated() inside startHost().
+const host = startHost({ runtime, artifactStore });
+
+// Start the proxy as a child process.
+startProxy();
+
+console.log("Open http://localhost:" + (process.env["PORT"] ?? "8080") + "/ui");
+
+process.on("SIGINT", async () => {
+  stopProxy();
+  try { await host.close(); } catch {}
+  process.exit(0);
+});
+process.on("SIGTERM", async () => {
+  stopProxy();
+  try { await host.close(); } catch {}
+  process.exit(0);
+});
+
+const allTools = runtime.session.getAllTools();
 console.log('ALL TOOLS', allTools)
 const mode = new InteractiveMode(runtime);
 await mode.run();
 
 // mode.run() only returns on clean shutdown (Ctrl+D)
-stopAll();
+stopProxy();
+try { await host.close(); } catch {}

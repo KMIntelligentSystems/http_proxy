@@ -1,107 +1,63 @@
-# MEMORY.md — Preliminary
+# Project Memory
 
-> This file will evolve as the project matures. Current status: early-stage.
+Loaded at session start. Non-generic, project-specific operational knowledge:
+tool quirks, data file locations, BLS API gotchas, architecture decisions.
 
-## Project Overview
+## Python MCP: `\n` in print strings
 
-Data visualization agent built on the Pi coding-agent SDK. Fetches data from
-external sources, transforms it, and renders interactive SVG charts in a browser.
+The Python MCP server's `execute_python` tool chokes on escaped newlines (`\n`)
+inside print statements and complex f-strings — produces `SyntaxError: unterminated
+string literal`.
+
+**Pattern that breaks:**
+```python
+print("\nSaved file to", path)       # \n kills it
+print(f"\nHeader: {value}")          # \n in f-string kills it
+```
+
+**Pattern that works:**
+```python
+print("Saved file to", path)          # no \n
+print("Header: %s" % value)           # % formatting, not f-strings
+```
+
+**Workaround for multi-line scripts:** Write the script to a temp location
+with the `write` tool, execute via `bash`, then **delete the file immediately**
+afterward. These scripts are transient — only their outputs (JSON, CSV, etc.)
+should persist.
+```bash
+# Write, run, delete — script is ephemeral
+C:\repos\codeGen-mcp-server\venv\Scripts\python.exe temp_script.py && rm temp_script.py
+```
+
+## BLS API v2 — OEWS limitation
+
+The BLS time series API v2 does **not** serve multi-year OEWS data. OE series IDs
+in all tested formats return "Series does not exist" with 0 data points. Single-year
+OEWS data (e.g. May 2024) is available via flat file download.
+
+**Working BLS series patterns:**
+- **CES:** State-level uses `SM` (SA) / `SMU` (NSA) prefix. e.g. `SMS48000000000000001`
+- **CPS:** `LNS14000000` for national unemployment rate.
+
+**Common FIPS codes:** 48 = Texas, 06 = California, 36 = New York.
+
+## Pre-Existing Data Files
+
+Check these before fetching fresh data:
+
+| File | Contents |
+|------|----------|
+| `dist/oe_national_2024.json` | 1403 OEWS occupation records (May 2024, national, cross-industry). |
+| `dist/oe_histogram_density.json` | 12-bin PDF histogram (BLS wage intervals A–L). 772 occupations, 146.4M workers. |
+| `dist/oe_histogram_density.html` | Standalone D3 histogram chart artifact. |
+| `dist/tx_nonfarm.json` | Texas CES nonfarm payroll (SA + NSA), 120 monthly points each, 2014–2023. |
+| `data/lookups/` | `oe_occupations.json`, `oe_areas.json`, `oe_datatypes.json`, `oe_industries.json`, `ln_concepts.json`, `surveys.json`. |
 
 ## Architecture
 
-```
-Browser ──► proxy (:8080) ──► host (:3000)
-                 ▲                  │  ├── /ui          HTML + D3.js canvas
-                 └── loopback ──────┘  ├── /ui/ws       WebSocket push
-                                       └── /ui/svg      POST endpoint for SVG messages
-```
-
-| Component | File | Port | Role |
-|-----------|------|------|------|
-| proxy | `src/proxy.ts` | 8080 | Reverse proxy, auth, WS upgrade |
-| host | `src/host.ts` | 3000 | UI shell, WebSocket broadcast, SVG push API |
-| cli | `src/cli.ts` | — | Pi TUI: spawns proxy+host, registers tools, runs agent |
-| mcp-tools | `src/mcp-tools.ts` | — | MCP-to-pi tool bridge via mcporter |
-
-## Tech Stack
-
-- **Runtime**: Node 24, ES modules, TypeScript 6
-- **Agent SDK**: `@mariozechner/pi-coding-agent` + `pi-tui` + `pi-agent-core`
-- **Tool schemas**: `@sinclair/typebox`
-- **MCP bridge**: `mcporter` → connects to MCP servers, exposes as pi tools
-- **Browser rendering**: D3.js (CDN, client-side)
-- **WebSocket**: `ws` library for real-time SVG push
-
-## Build & Run
-
-```bash
-pnpm run build        # tsc
-pnpm run start:tui    # node dist/cli.js  (starts proxy + host + agent TUI)
-pnpm run dev:tui      # build + start
-```
-
-Proxy/host logs → `dist/proxy-host.log`
-
-## Custom Tools Registered
-
-| Tool | Defined in | Description |
-|------|-----------|-------------|
-| `push_svg` | `src/cli.ts` | Push SVG to browser canvas (posts to host :3000 with `x-loopback: 1`) |
-| `hello` | `src/cli.ts` | Test greeting tool |
-| MCP tools (codegen) | `src/mcp-tools.ts` → `localhost:3003/mcp` | Python execution via codegen MCP server |
-
-## Key Conventions
-
-- **SVG push**: `push_svg` posts to host `:3000` directly (bypasses proxy). Browser connects via proxy `:8080`.
-- **Canvas pre-check**: Always navigate to `http://localhost:8080/ui` with Playwright before pushing SVG. If no browser WS client is connected, `push_svg` returns 204 but nothing renders.
-- **No `<script>` tags in SVG push** — browsers block innerHTML script execution. Generate final SVG server-side.
-- **Dark theme**: bg `#161b22`, text `#c9d1d9`, grid `#30363d`, accents `#58a6ff` `#3fb950` `#f78166` `#d2a8ff`
-- **Data output**: When using Python/scripts, print final result as JSON to stdout.
-
-## What's Working
-
-- [x] CLI with MCP tool bridge (mcporter)
-- [x] Proxy + host process management from cli.ts
-- [x] push_svg tool for SVG canvas updates
-- [x] AGENTS.md system prompt with full pipeline description
-
-## What's Not Yet Done
-
-- [ ] Validate host UI supports D3.js rendering end-to-end
-- [ ] Test with real data source (BLS, FRED, etc.)
-- [ ] Playwright validation workflow
-- [ ] Richer chart types and interactivity
-- [ ] Semantic search over conversations, memories, and tools (see below)
-
-## Planned: Semantic Search with Ollama
-
-**Goal**: Make saved conversations, memories, tools, and other artefacts searchable
-via semantic similarity rather than just keyword matching.
-
-**Approach**:
-- Install [Ollama](https://ollama.com/) locally for embedding generation
-- Use an embedding model (e.g. `nomic-embed-text`, `mxbai-embed-large`, or `all-minilm`)
-- Index: conversations, MEMORY.md content, tool descriptions, agent outputs
-- Store embeddings in a local vector store (options: SQLite + `sqlite-vss`, LanceDB, ChromaDB, or flat JSON + cosine similarity for simplicity)
-- Query: embed the search query → find nearest neighbours → return relevant chunks
-
-**Key decisions still needed**:
-- Which embedding model (trade-off: quality vs speed vs memory)
-- Vector storage backend (lightweight file-based vs proper DB)
-- Chunking strategy (per-conversation, per-message, per-section)
-- When to index (on save? batch? on demand?)
-- Search API surface (CLI command? tool? both?)
-
-**Ollama basics**:
-```bash
-ollama pull nomic-embed-text          # download embedding model
-ollama run nomic-embed-text           # test it
-# API: POST http://localhost:11434/api/embeddings
-#   { "model": "nomic-embed-text", "prompt": "search text here" }
-```
-
-## Notes
-
-- `createMcpTools()` in `src/mcp-tools.ts` accepts an array of MCP server configs — extensible for adding more servers
-- Proxy/host are spawned as child processes with stdout/stderr piped to a log file
-- `InteractiveMode` owns the terminal after boot — handles TUI input loop
+- **Python MCP venv:** `C:\repos\codeGen-mcp-server\venv\Scripts\python.exe`
+- **BLS API key:** in `data/.env` as `BLS_API_KEY`
+- **Artifact store:** `data/artifacts/` on disk, served at `/ui/api/artifacts/<id>`
+- **React UI:** all non-memory artifacts appear in sidebar. Charts auto-selected, rendered in iframe.
+- **Launch:** `npm run build && npm run build:web && npm run dev:tui`

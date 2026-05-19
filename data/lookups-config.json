@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "surveys": [
+    {
+      "id": "oews",
+      "label": "OEWS (Wages & Employment)",
+      "description": "BLS Occupational Employment and Wage Statistics",
+      "lookupSlots": [
+        { "id": "areaType",   "label": "Area Type",   "source": "lookups/oe_areatypes.json",   "keyField": "code",          "displayField": "label" },
+        { "id": "area",       "label": "Area",        "source": "lookups/oe_areas.json",       "keyField": "area_code",     "displayField": "area_name" },
+        { "id": "occupation", "label": "Occupation",  "source": "lookups/oe_occupations.json",  "keyField": "occ_code",      "displayField": "occ_title" },
+        { "id": "industry",   "label": "Industry",    "source": "lookups/oe_industries.json",  "keyField": "industry_code",  "displayField": "industry_name" },
+        { "id": "datatype",   "label": "Datatype",    "source": "lookups/oe_datatypes.json",   "keyField": "code",          "displayField": "label" }
+      ]
+    },
+    {
+      "id": "ces",
+      "label": "CES (Employment, Hours)",
+      "description": "BLS Current Employment Statistics",
+      "lookupSlots": [
+        { "id": "industry",   "label": "Industry",    "source": "lookups/ce_industries.json",  "keyField": "industry_code",  "displayField": "label" },
+        { "id": "datatype",   "label": "Datatype",    "source": "lookups/ce_datatypes.json",   "keyField": "code",          "displayField": "label" }
+      ]
+    },
+    {
+      "id": "cps",
+      "label": "CPS (Labor Force)",
+      "description": "BLS Current Population Survey / Labor Force Statistics",
+      "lookupSlots": [
+        { "id": "demographic", "label": "Demographic", "source": "lookups/ln_demographics.json", "keyField": "code",          "displayField": "label" },
+        { "id": "concept",     "label": "Concept",     "source": "lookups/ln_concepts.json",     "keyField": "concept_code",  "displayField": "concept_text" }
+      ]
+    },
+    {
+      "id": "ec",
+      "label": "Economic Census",
+      "description": "Census Bureau Economic Census (every 5 years)"
+    },
+    {
+      "id": "asm",
+      "label": "Manufacturers Survey",
+      "description": "Census Bureau Annual Survey of Manufactures"
+    },
+    {
+      "id": "fred-ipi",
+      "label": "FRED Industrial Production",
+      "description": "Federal Reserve Industrial Production Index"
+    }
+  ],
+  "commonSlots": [
+    { "id": "naics", "label": "NAICS Industry", "source": "lookups/naics.json", "keyField": "code", "displayField": "label" }
+  ],
+  "statistics": [
+    { "id": "pqde",    "label": "PQDE density",     "description": "Piecewise quadratic density estimation (O'Malley JSM 2008)" },
+    { "id": "kde",     "label": "KDE overlay",      "description": "Gaussian kernel density estimate from employment-weighted points" },
+    { "id": "sa-nsa",  "label": "SA/NSA comparison", "description": "Overlay seasonally adjusted vs non-adjusted series" },
+    { "id": "yoy",     "label": "Year-over-year Δ",  "description": "Compute year-over-year percentage change" },
+    { "id": "index",   "label": "Index (base year)", "description": "Rebase series to a user-chosen base year" }
+  ],
+  "timeSeriesMetrics": [
+    { "key": "A_MEAN",   "datatype": "04", "label": "Annual Mean" },
+    { "key": "A_MEDIAN", "datatype": "13", "label": "Annual Median" },
+    { "key": "H_MEAN",   "datatype": "03", "label": "Hourly Mean" },
+    { "key": "H_MEDIAN", "datatype": "08", "label": "Hourly Median" },
+    { "key": "TOT_EMP",  "datatype": "01", "label": "Employment" },
+    { "key": "EMP_PRSE", "datatype": "16", "label": "Emp. % RSE" }
+  ]
+}

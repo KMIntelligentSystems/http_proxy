@@ -766,6 +766,29 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // Serve other static files from dist/web/ (publicDir artifacts like lookups-config.json, lookups/*.json)
+    // Matches /ui/lookups/*, /ui/*.json, etc. that aren't already handled by a more specific route above.
+    if (pathname !== "/ui/" && !pathname.startsWith("/ui/assets/") && !pathname.startsWith("/ui/data/") && !pathname.startsWith("/ui/app/") && !pathname.startsWith("/ui/api/") && pathname !== "/ui/canvas" && pathname !== "/ui/portal") {
+      const relativeName = decodeURIComponent(pathname.slice("/ui/".length));
+      const filePath = path.resolve(WEB_DIST_DIR, relativeName);
+      if (!relativeName || path.isAbsolute(relativeName) || !isInside(WEB_DIST_DIR, filePath)) {
+        res.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Invalid static path");
+        return;
+      }
+      try {
+        const stat = fs.statSync(filePath);
+        if (!stat.isFile()) throw new Error("not a file");
+        const data = fs.readFileSync(filePath);
+        res.writeHead(200, { "Content-Type": getContentType(filePath), "Cache-Control": "public, max-age=3600" });
+        res.end(data);
+      } catch {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Static file not found");
+      }
+      return;
+    }
+
     // POST /ui/svg — TUI or any local process can push SVG messages here
     if (pathname === "/ui/svg" && req.method === "POST") {
       const body: Buffer[] = [];
