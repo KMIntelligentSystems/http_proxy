@@ -1,0 +1,14 @@
+[
+  { "code": "EMP",         "label": "Number of Employees",               "unit": "Count" },
+  { "code": "PAYANN",      "label": "Annual Payroll",                    "unit": "$1,000" },
+  { "code": "RCPTOT",      "label": "Total Value of Shipments/Receipts", "unit": "$1,000" },
+  { "code": "CSTMTOT",     "label": "Total Cost of Materials",           "unit": "$1,000" },
+  { "code": "VALADD",      "label": "Value Added",                       "unit": "$1,000" },
+  { "code": "EMPPW",       "label": "Production Workers",                "unit": "Count" },
+  { "code": "PAYPW",       "label": "Production Worker Wages",           "unit": "$1,000" },
+  { "code": "HOURPW",      "label": "Production Worker Hours",           "unit": "1,000 hours" },
+  { "code": "INVTOT",      "label": "Total Inventories, Year-End",       "unit": "$1,000" },
+  { "code": "CAPEX",       "label": "Capital Expenditures",              "unit": "$1,000" },
+  { "code": "BENHEA",      "label": "Health Insurance Cost",             "unit": "$1,000" },
+  { "code": "BENTOT",      "label": "Total Fringe Benefits",             "unit": "$1,000" }
+]

@@ -768,5 +768,199 @@ document.getElementById('legend').innerHTML = groups.map((g,i)=>'<span><i style=
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool];
+  // ─── ASM Chart Tool ────────────────────────────────────────────────────────
+
+  function renderAsmHtml(opts: {
+    title: string;
+    subtitle: string;
+    unit: string;
+    source: string;
+    xLabel: string;
+    series: { label: string; points: { x: string; value: number }[] }[];
+    metadata: Record<string, unknown>;
+  }): string {
+    const payload = JSON.stringify(opts).replace(/<\//g, "<\\/");
+    const isTimeSeries = opts.series.length > 0 && opts.series[0].points.every((p: any) => /^\d{4}$/.test(p.x));
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>${esc(opts.title)}</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+:root{color-scheme:dark;--bg:#090d12;--panel:#111821;--ink:#d8e0ea;--muted:#8090a4;--line:#273241;font-family:"Segoe UI",ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 8% 10%,rgba(88,166,255,.18),transparent 32%),linear-gradient(135deg,#06090d,#0d1117 58%,#070a0f);color:var(--ink)}main{width:min(1100px,calc(100vw - 34px));margin:0 auto;padding:28px 0 36px}.card{border:1px solid rgba(128,144,164,.22);background:linear-gradient(180deg,rgba(17,24,33,.92),rgba(13,20,29,.82));border-radius:22px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.36);margin-bottom:18px}.eyebrow{font:800 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}h1{margin:10px 0 8px;font-size:clamp(24px,4vw,42px);letter-spacing:-.04em;color:#f0f6fc}.subtitle{color:#a9b8c8;line-height:1.55}svg{display:block;width:100%;height:auto}.bar{transition:opacity .15s}.bar:hover{opacity:.8}.line-path{fill:none;stroke-width:2.8}.axis text{fill:#8b949e;font-size:11px}.axis path,.axis line{stroke:#334155}.grid line{stroke:#1e293b}.grid path{display:none}.legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 4px 4px;color:#a9b8c8;font-size:13px}.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:6px}.tooltip{position:fixed;pointer-events:none;opacity:0;background:#0b1118;border:1px solid #3b4656;border-radius:10px;padding:8px 12px;box-shadow:0 14px 50px rgba(0,0,0,.45);font-size:12px;z-index:5}.source{margin-top:12px;color:#718096;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <div class="card"><div class="eyebrow">Annual Survey of Manufactures</div><h1>${esc(opts.title)}</h1><div class="subtitle">${esc(opts.subtitle)}</div></div>
+  <div class="card">
+    <svg id="chart" viewBox="0 0 1100 ${isTimeSeries ? 480 : Math.max(500, 60 + opts.series.reduce((a: number, s: any) => a + Math.max(1, s.points.length), 0) * 24)}" role="img"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="source">${esc(opts.source)}</div>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const payload = ${payload};
+const isTimeSeries = ${isTimeSeries};
+const fmt = d3.format(',.0f');
+const colors = ['#58a6ff','#3fb950','#f78166','#d2a8ff','#f0c24b','#9c6ade','#4cb5ab','#e5537b'];
+const svg = d3.select('#chart');
+const W = 1100;
+let H = ${isTimeSeries ? 480 : Math.max(500, 60 + opts.series.reduce((a: number, s: any) => a + Math.max(1, s.points.length), 0) * 24)};
+const margin = isTimeSeries ? {top:20,right:40,bottom:48,left:90} : {top:20,right:60,bottom:24,left:280};
+const innerW = W - margin.left - margin.right, innerH = H - margin.top - margin.bottom;
+const g = svg.append('g').attr('transform','translate('+margin.left+','+margin.top+')');
+
+if (isTimeSeries) {
+  // LINE CHART: time series across years
+  const allPts = payload.series.flatMap((s,i) => s.points.map(p => ({x: p.x, v: p.value, series:s, idx:i})));
+  const x = d3.scaleBand().domain([...new Set(allPts.map(d=>d.x))].sort()).range([0,innerW]).padding(.3);
+  const maxV = d3.max(allPts, d=>d.v) || 1;
+  const y = d3.scaleLinear().domain([0, maxV*1.12]).range([innerH,0]);
+  g.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(6).tickSize(-innerW).tickFormat(''));
+  g.append('g').attr('class','axis').attr('transform','translate(0,'+innerH+')').call(d3.axisBottom(x)).selectAll('text').style('font-size','12px').style('fill','#c9d1d9');
+  g.append('g').attr('class','axis').call(d3.axisLeft(y).ticks(6).tickFormat(d=>fmt(d)));
+
+  payload.series.forEach((s,i) => {
+    const pts = s.points.map(p => ({...p, xVal: x(p.x)+x.bandwidth()/2}));
+    const line = d3.line().x(d => d.xVal).y(d => y(d.value)).curve(d3.curveMonotoneX);
+    g.append('path').datum(pts).attr('class','line-path').attr('stroke',colors[i%colors.length]).attr('d',line);
+    g.selectAll('.dot-'+i).data(pts).enter().append('circle').attr('cx',d=>d.xVal).attr('cy',d=>y(d.value)).attr('r',3.5).attr('fill',colors[i%colors.length]).on('mouseover',(event,d)=>{
+      d3.select('#tooltip').style('opacity',1).style('left',event.clientX+'px').style('top',event.clientY+'px').html('<b>'+s.label+'</b><br>'+d.x+': '+fmt(d.value)+' '+payload.unit);
+    }).on('mouseout',()=>d3.select('#tooltip').style('opacity',0));
+  });
+  document.getElementById('legend').innerHTML = payload.series.map((s,i)=>'<span><i style="background:'+colors[i%colors.length]+'"></i>'+s.label+'</span>').join('');
+} else {
+  // BAR CHART: cross-section by NAICS
+  const flat = payload.series.flatMap(s => s.points.map(p => ({label: p.x, value: p.value, series: s.label})));
+  flat.sort((a,b) => b.value - a.value);
+  const y = d3.scaleBand().domain(flat.map(d=>d.label)).range([0,innerH]).padding(.12);
+  const maxV = d3.max(flat,d=>d.value)||1;
+  const x = d3.scaleLinear().domain([0,maxV*1.12]).range([0,innerW]);
+  g.append('g').attr('class','grid').call(d3.axisTop(x).ticks(6).tickSize(-innerH).tickFormat(''));
+  g.append('g').attr('class','axis').call(d3.axisLeft(y).tickFormat(d => { const t = String(d); return t.length > 32 ? t.slice(0,30)+'\u2026' : t; })).selectAll('text').style('text-anchor','end').attr('dx','-.6em').style('font-size','12px').style('fill','#c9d1d9');
+  g.append('g').attr('class','axis').attr('transform','translate(0,'+innerH+')').call(d3.axisBottom(x).ticks(6).tickFormat(d=>fmt(d)));
+  const colorMap = {};
+  payload.series.forEach((s,i) => { s.points.forEach(p => { colorMap[p.x] = colors[i%colors.length]; }); });
+  g.selectAll('.bar').data(flat).enter().append('rect').attr('class','bar').attr('y',d=>y(d.label)).attr('height',y.bandwidth()).attr('x',0).attr('width',d=>x(d.value)).attr('fill',d=>colorMap[d.label]||'#58a6ff').attr('rx',3).on('mouseover',(event,d)=>{
+    d3.select('#tooltip').style('opacity',1).style('left',event.clientX+'px').style('top',event.clientY+'px').html('<b>'+d.label+'</b><br>'+fmt(d.value)+' '+payload.unit);
+  }).on('mouseout',()=>d3.select('#tooltip').style('opacity',0));
+  document.getElementById('legend').innerHTML = payload.series.map((s,i)=>'<span><i style="background:'+colors[i%colors.length]+'"></i>'+s.label+'</span>').join('');
+}
+</script>
+</body>
+</html>`;
+  }
+
+  const createAsmChartTool = defineTool({
+    name: "create_asm_chart",
+    label: "Create ASM Chart",
+    description: "Fetch Annual Survey of Manufactures data from the Census Bureau API and create a D3 HTML chart. Time series (line chart) when NAICS is specified; cross-section (bar chart) comparing all manufacturing subsectors for a single year.",
+    parameters: Type.Object({
+      naics: Type.Optional(Type.String({ description: "NAICS code, e.g. 31-33 for all manufacturing, 311 for food, or omit for all 3-digit subsectors." })),
+      year: Type.Optional(Type.Integer({ description: "Year (2018-2021). Omit to get all years (time series mode)." })),
+      variable: Type.Optional(Type.String({ description: "Variable from data/lookups/asm_variables.json, e.g. EMP, PAYANN, VALADD." })),
+      title: Type.Optional(Type.String({ description: "Chart title override." })),
+      filename: Type.Optional(Type.String({ description: "HTML artifact filename." })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const apiKey = process.env["CENSUS_API_KEY"];
+      if (!apiKey) throw new Error("CENSUS_API_KEY not set in environment");
+
+      const variableCode = params.variable ?? "EMP";
+      const variables = readLookup<{ code: string; label: string; unit: string }>(cwd, "asm_variables");
+      const variable = variables.find((v) => v.code === variableCode);
+      if (!variable) throw new Error(`Unknown ASM variable ${variableCode}`);
+
+      const naicsCode = params.naics ?? "31*"; // Default: all manufacturing 3-digit
+      const year = params.year;
+
+      const series: { label: string; points: { x: string; value: number }[] }[] = [];
+
+      if (year) {
+        // Cross-section mode: single year, multiple NAICS
+        const url = `https://api.census.gov/data/timeseries/asm/area2017?get=YEAR,NAICS2017,NAICS2017_LABEL,${variableCode}&for=us:*&YEAR=${year}&NAICS2017=${encodeURIComponent(naicsCode)}&key=${apiKey}`;
+        const res = await fetch(url, { headers: { "User-Agent": "Census-Client/1.0" } });
+        if (!res.ok) throw new Error(`Census API returned HTTP ${res.status}`);
+        const text = await res.text();
+        if (!text || text.trim().length === 0) throw new Error("ASM API returned empty response");
+        let json: any;
+        try { json = JSON.parse(text); } catch { throw new Error("ASM API returned invalid JSON"); }
+        if (!Array.isArray(json) || json.length < 2) throw new Error("No data rows returned");
+        const headers: string[] = json[0];
+        const naicsIdx = headers.indexOf("NAICS2017_LABEL");
+        const valIdx = headers.indexOf(variableCode);
+        const points: { x: string; value: number }[] = [];
+        for (let i = 1; i < json.length; i++) {
+          const row: any[] = json[i];
+          const label = row[naicsIdx] ?? row[1] ?? "?";
+          const val = Number(row[valIdx]);
+          if (Number.isFinite(val)) {
+            points.push({ x: label, value: val });
+          }
+        }
+        if (points.length === 0) throw new Error("No valid data in ASM response");
+        series.push({ label: String(year), points });
+      } else {
+        // Time series mode: all years for a specific NAICS
+        const url = `https://api.census.gov/data/timeseries/asm/area2017?get=YEAR,NAICS2017,NAICS2017_LABEL,${variableCode}&for=us:*&NAICS2017=${encodeURIComponent(naicsCode)}&key=${apiKey}`;
+        const res = await fetch(url, { headers: { "User-Agent": "Census-Client/1.0" } });
+        if (!res.ok) throw new Error(`Census API returned HTTP ${res.status}`);
+        const text = await res.text();
+        if (!text || text.trim().length === 0) throw new Error("ASM API returned empty response");
+        let json: any;
+        try { json = JSON.parse(text); } catch { throw new Error("ASM API returned invalid JSON"); }
+        if (!Array.isArray(json) || json.length < 2) throw new Error("No data rows returned");
+        const headers: string[] = json[0];
+        const yearIdx = headers.indexOf("YEAR");
+        const labelIdx = headers.indexOf("NAICS2017_LABEL");
+        const valIdx = headers.indexOf(variableCode);
+        const label = json[1][labelIdx] ?? naicsCode;
+        const points: { x: string; value: number }[] = [];
+        for (let i = 1; i < json.length; i++) {
+          const row: any[] = json[i];
+          const y = String(row[yearIdx]);
+          const val = Number(row[valIdx]);
+          if (Number.isFinite(val)) {
+            points.push({ x: y, value: val });
+          }
+        }
+        points.sort((a, b) => a.x.localeCompare(b.x));
+        if (points.length === 0) throw new Error("No valid data in ASM response");
+        series.push({ label, points });
+      }
+
+      const title = params.title
+        ?? (year
+          ? `ASM ${year}: ${variable.label} by NAICS`
+          : `${variable.label} — ASM ${series[0]?.label ?? ""}`.trim());
+
+      const html = renderAsmHtml({
+        title,
+        subtitle: year
+          ? `U.S. manufacturing, NAICS filter: ${naicsCode}, ${year}.`
+          : `U.S. manufacturing, ${naicsCode}, 2018–2021.`,
+        unit: variable.unit,
+        source: "Source: U.S. Census Bureau, Annual Survey of Manufactures API (timeseries/asm).",
+        xLabel: year ? "NAICS Industry" : "Year",
+        series,
+        metadata: { naics: naicsCode, year: year ?? "all", variable: variableCode },
+      });
+
+      const fn = params.filename ?? `asm-${naicsCode.replace(/[^a-z0-9]/gi, "-")}-${variableCode.toLowerCase()}.html`;
+      const record = await options.artifactStore.create({
+        sessionId: options.getSessionId(),
+        title,
+        filename: fn,
+        mimeType: "text/html",
+        content: html,
+        description: `ASM ${year ?? "2018-2021"}, ${variable.label}`,
+      });
+      return toolResultFor(record, `Created ASM chart artifact: ${record.title}`);
+    },
+  });
+
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool];
 }

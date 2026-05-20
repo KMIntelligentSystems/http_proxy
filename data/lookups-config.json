@@ -41,6 +41,15 @@
       ]
     },
     {
+      "id": "asm",
+      "label": "ASM (Annual Survey of Manufactures)",
+      "description": "Census Bureau Annual Survey of Manufactures (2018-2021)",
+      "lookupSlots": [
+        { "id": "year",     "label": "Year",         "source": "lookups/asm_years.json",      "keyField": "code", "displayField": "label" },
+        { "id": "variable", "label": "Variable",     "source": "lookups/asm_variables.json",  "keyField": "code", "displayField": "label" }
+      ]
+    },
+    {
       "id": "abs",
       "label": "Annual Business Survey",
       "description": "Census Bureau Annual Business Survey (business owner demographics)",

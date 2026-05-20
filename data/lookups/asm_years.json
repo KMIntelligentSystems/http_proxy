@@ -1,0 +1,6 @@
+[
+  { "code": "2018", "label": "2018", "apiDataset": "area2017" },
+  { "code": "2019", "label": "2019", "apiDataset": "area2017" },
+  { "code": "2020", "label": "2020", "apiDataset": "area2017" },
+  { "code": "2021", "label": "2021", "apiDataset": "area2017" }
+]
