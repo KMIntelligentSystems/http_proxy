@@ -1,0 +1,23 @@
+[
+  {
+    "code": "abscs",
+    "label": "Company Summary",
+    "description": "Employer businesses by sector, owner demographics, firm size",
+    "apiDataset": "abscs",
+    "years": [2023, 2022, 2021, 2020, 2019, 2018]
+  },
+  {
+    "code": "abscb",
+    "label": "Characteristics of Businesses",
+    "description": "Firm-level business characteristics by owner demographics",
+    "apiDataset": "abscb",
+    "years": [2023, 2022, 2021, 2020, 2019, 2018]
+  },
+  {
+    "code": "abscbo",
+    "label": "Characteristics of Business Owners",
+    "description": "Owner-level characteristics by demographics",
+    "apiDataset": "abscbo",
+    "years": [2023, 2022, 2021, 2020, 2019, 2018]
+  }
+]

@@ -34,17 +34,27 @@
     {
       "id": "ec",
       "label": "Economic Census",
-      "description": "Census Bureau Economic Census (every 5 years)"
+      "description": "Census Bureau Economic Census (every 5 years)",
+      "lookupSlots": [
+        { "id": "year",     "label": "Census Year",  "source": "lookups/ec_years.json",      "keyField": "code", "displayField": "label" },
+        { "id": "variable", "label": "Variable",     "source": "lookups/ec_variables.json",  "keyField": "code", "displayField": "label" }
+      ]
     },
     {
-      "id": "asm",
-      "label": "Manufacturers Survey",
-      "description": "Census Bureau Annual Survey of Manufactures"
+      "id": "abs",
+      "label": "Annual Business Survey",
+      "description": "Census Bureau Annual Business Survey (business owner demographics)",
+      "lookupSlots": [
+        { "id": "dataset", "label": "Dataset",      "source": "lookups/abs_datasets.json",  "keyField": "code", "displayField": "label" }
+      ]
     },
     {
       "id": "fred-ipi",
       "label": "FRED Industrial Production",
-      "description": "Federal Reserve Industrial Production Index"
+      "description": "Federal Reserve Industrial Production Index",
+      "lookupSlots": [
+        { "id": "concept", "label": "Concept", "source": "lookups/fred_ipi.json", "keyField": "code", "displayField": "label" }
+      ]
     }
   ],
   "commonSlots": [

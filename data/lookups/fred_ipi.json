@@ -1,0 +1,26 @@
+[
+  {
+    "code": "indpro_total",
+    "label": "Industrial Production: Total Index",
+    "sa": "INDPRO",
+    "nsa": "IPB50001N",
+    "unit": "Index 2017=100",
+    "frequency": "Monthly"
+  },
+  {
+    "code": "indpro_manufacturing",
+    "label": "Industrial Production: Manufacturing (NAICS)",
+    "sa": "IPMAN",
+    "nsa": "IPGMFN",
+    "unit": "Index 2017=100",
+    "frequency": "Monthly"
+  },
+  {
+    "code": "capacity_util",
+    "label": "Capacity Utilization: Total Index",
+    "sa": "TCU",
+    "nsa": "TCU",
+    "unit": "Percent",
+    "frequency": "Monthly"
+  }
+]

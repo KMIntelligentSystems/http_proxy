@@ -380,5 +380,393 @@ export function createVisualizationTools(options: {
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool];
+  // ─── FRED Chart Tool ──────────────────────────────────────────────────────
+
+  const createFredChartTool = defineTool({
+    name: "create_fred_chart",
+    label: "Create FRED Chart",
+    description: "Fetch FRED Industrial Production or Capacity Utilization series and create a D3 HTML artifact comparing SA vs NSA.",
+    parameters: Type.Object({
+      concept: Type.Optional(Type.String({ description: "Concept code from data/lookups/fred_ipi.json, e.g. indpro_total." })),
+      startYear: Type.Optional(Type.Integer({ description: "Start year, default current year - 4." })),
+      endYear: Type.Optional(Type.Integer({ description: "End year, default current year." })),
+      title: Type.Optional(Type.String({ description: "Artifact/chart title override." })),
+      filename: Type.Optional(Type.String({ description: "HTML artifact filename." })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const currentYear = new Date().getFullYear();
+      const startYear = params.startYear ?? currentYear - 4;
+      const endYear = params.endYear ?? currentYear;
+      if (startYear > endYear) throw new Error("startYear must be <= endYear");
+
+      const conceptCode = params.concept ?? "indpro_total";
+      const concepts = readLookup<{ code: string; label: string; sa: string; nsa: string; unit: string; frequency: string }>(cwd, "fred_ipi");
+      const concept = concepts.find((item) => item.code === conceptCode);
+      if (!concept) throw new Error(`Unknown FRED concept ${conceptCode}`);
+
+      const apiKey = process.env["FRED_API_KEY"];
+      if (!apiKey) throw new Error("FRED_API_KEY not set in environment");
+
+      // Fetch SA and NSA series from FRED
+      const fetchFred = async (seriesId: string) => {
+        const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${startYear}-01-01&observation_end=${endYear}-12-31`;
+        const res = await fetch(url, { headers: { "User-Agent": "FRED-Client/1.0" } });
+        if (!res.ok) throw new Error(`FRED API returned HTTP ${res.status} for ${seriesId}`);
+        const json = await res.json() as any;
+        const obs = json?.observations ?? [];
+        return obs
+          .filter((d: any) => d.value !== ".")
+          .map((d: any) => ({
+            date: d.date,
+            label: d.date,
+            value: Number(d.value),
+            year: d.date.slice(0, 4),
+            period: "M" + d.date.slice(5, 7),
+            periodName: new Date(d.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", year: "numeric" }),
+          }))
+          .filter((d: { value: number }) => Number.isFinite(d.value))
+          .sort((a: { date: string }, b: { date: string }) => a.date.localeCompare(b.date));
+      };
+
+      const saPoints = await fetchFred(concept.sa);
+      const nsaPoints = concept.nsa !== concept.sa ? await fetchFred(concept.nsa) : [];
+
+      const series: BLSSeries[] = [
+        { id: concept.sa, label: `${concept.label} (SA)`, seasonality: "SA", points: saPoints },
+      ];
+      if (nsaPoints.length > 0) {
+        series.push({ id: concept.nsa, label: `${concept.label} (NSA)`, seasonality: "NSA", points: nsaPoints });
+      }
+
+      if (series.every(s => s.points.length === 0)) throw new Error("FRED API returned no usable observations");
+
+      const html = renderSeasonalHtml({
+        title: params.title ?? `${concept.label}: SA vs NSA`,
+        subtitle: `Federal Reserve Industrial Production, ${concept.frequency}, ${startYear}–${endYear}. Series: ${concept.sa} / ${concept.nsa}.`,
+        unit: concept.unit,
+        source: "Source: Board of Governors of the Federal Reserve System (FRED via St. Louis Fed).",
+        series,
+        metadata: { concept: conceptCode, seriesIds: [concept.sa, concept.nsa], startYear, endYear },
+      });
+
+      const fn = params.filename ?? `${(params.title ?? concept.label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "fred-chart"}.html`;
+      const record = await options.artifactStore.create({
+        sessionId: options.getSessionId(),
+        title: params.title ?? concept.label,
+        filename: fn,
+        mimeType: "text/html",
+        content: html,
+        description: `FRED ${concept.label}, ${startYear}–${endYear}`,
+      });
+      return toolResultFor(record, `Created FRED chart artifact: ${record.title}`);
+    },
+  });
+
+  // ─── Economic Census Chart Tool ─────────────────────────────────────────────
+
+  function renderEcBarHtml(opts: {
+    title: string;
+    subtitle: string;
+    unit: string;
+    source: string;
+    rows: { label: string; value: number; naics: string }[];
+    metadata: Record<string, unknown>;
+  }): string {
+    const payload = JSON.stringify(opts).replace(/<\//g, "<\\/");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>${esc(opts.title)}</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+:root{color-scheme:dark;--bg:#090d12;--panel:#111821;--ink:#d8e0ea;--muted:#8090a4;--line:#273241;--blue:#58a6ff;--orange:#f78166;--green:#3fb950;--violet:#d2a8ff;font-family:"Segoe UI",ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 8% 10%,rgba(88,166,255,.18),transparent 32%),linear-gradient(135deg,#06090d,#0d1117 58%,#070a0f);color:var(--ink)}main{width:min(1100px,calc(100vw - 34px));margin:0 auto;padding:28px 0 36px}.card{border:1px solid rgba(128,144,164,.22);background:linear-gradient(180deg,rgba(17,24,33,.92),rgba(13,20,29,.82));border-radius:22px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.36);margin-bottom:18px}.eyebrow{font:800 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}h1{margin:10px 0 8px;font-size:clamp(28px,4vw,46px);letter-spacing:-.04em;color:#f0f6fc}.subtitle{color:#a9b8c8;line-height:1.55}svg{display:block;width:100%;height:auto}.bar{transition:opacity .15s}.bar:hover{opacity:.8}.axis text{fill:#8b949e;font-size:11px}.axis path,.axis line{stroke:#334155}.grid line{stroke:#1e293b}.grid path{display:none}.tooltip{position:fixed;pointer-events:none;opacity:0;background:#0b1118;border:1px solid #3b4656;border-radius:10px;padding:8px 12px;box-shadow:0 14px 50px rgba(0,0,0,.45);font-size:12px;z-index:5}.source{margin-top:12px;color:#718096;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <div class="card"><div class="eyebrow">Economic Census</div><h1>${esc(opts.title)}</h1><div class="subtitle">${esc(opts.subtitle)}</div></div>
+  <div class="card"><svg id="chart" viewBox="0 0 1100 800" role="img"></svg></div>
+  <div class="source">${esc(opts.source)}</div>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const payload = ${payload};
+const data = payload.rows || [];
+const fmt = d3.format(',.0f');
+const svg = d3.select('#chart');
+const W = 1100, H = 800, margin = {top:20,right:60,bottom:24,left:280};
+const innerW = W - margin.left - margin.right, innerH = H - margin.top - margin.bottom;
+const g = svg.append('g').attr('transform','translate('+margin.left+','+margin.top+')');
+const y = d3.scaleBand().domain(data.map(d=>d.label)).range([0,innerH]).padding(.15);
+const maxVal = d3.max(data,d=>d.value)||1;
+const x = d3.scaleLinear().domain([0,maxVal*1.12]).range([0,innerW]);
+g.append('g').attr('class','grid').call(d3.axisTop(x).ticks(6).tickSize(-innerH).tickFormat(''));
+g.append('g').attr('class','axis').call(d3.axisLeft(y)).selectAll('text').style('text-anchor','end').attr('dx','-.8em').style('font-size','12px').style('fill','#c9d1d9');
+g.append('g').attr('class','axis').attr('transform','translate(0,'+innerH+')').call(d3.axisBottom(x).ticks(6).tickFormat(d=>fmt(d)));
+g.selectAll('.bar').data(data).enter().append('rect').attr('class','bar').attr('y',d=>y(d.label)).attr('height',y.bandwidth()).attr('x',0).attr('width',d=>x(d.value)).attr('fill','#58a6ff').attr('rx',3).on('mouseover',(event,d)=>{
+  d3.select('#tooltip').style('opacity',1).style('left',event.clientX+'px').style('top',event.clientY+'px').html('<b>'+d.label+'</b><br>'+fmt(d.value)+' '+payload.unit);
+}).on('mouseout',()=>d3.select('#tooltip').style('opacity',0));
+</script>
+</body>
+</html>`;
+  }
+
+  const createEcChartTool = defineTool({
+    name: "create_ec_chart",
+    label: "Create Economic Census Chart",
+    description: "Fetch Economic Census data from the Census Bureau API and create a D3 HTML bar chart comparing NAICS sectors.",
+    parameters: Type.Object({
+      year: Type.Optional(Type.String({ description: "Census year: 2022 or 2017." })),
+      variable: Type.Optional(Type.String({ description: "Variable code from data/lookups/ec_variables.json, e.g. EMP, PAYANN, RCPTOT." })),
+      naics: Type.Optional(Type.String({ description: "NAICS sector filter (2-digit code like 31-33), or omit for all sectors." })),
+      title: Type.Optional(Type.String({ description: "Chart title override." })),
+      filename: Type.Optional(Type.String({ description: "HTML artifact filename." })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const year = params.year ?? "2022";
+      const variableCode = params.variable ?? "EMP";
+      const apiKey = process.env["CENSUS_API_KEY"];
+      if (!apiKey) throw new Error("CENSUS_API_KEY not set in environment");
+
+      const variables = readLookup<{ code: string; label: string; unit: string }>(cwd, "ec_variables");
+      const variable = variables.find((v) => v.code === variableCode);
+      if (!variable) throw new Error(`Unknown EC variable ${variableCode}`);
+
+      const years = readLookup<{ code: string; label: string; apiDataset: string }>(cwd, "ec_years");
+      const yearEntry = years.find((y) => y.code === year);
+      if (!yearEntry) throw new Error(`Unknown EC year ${year}`);
+
+      const naics = readLookup<{ code: string; level: string; label: string; parent: string | null }>(cwd, "naics");
+
+      // Build NAICS filter: if specific NAICS requested, drill into subsectors; otherwise get all sectors
+      let naicsList: { code: string; label: string }[];
+      if (params.naics) {
+        const parent = naics.find((n) => n.code === params.naics);
+        if (!parent) throw new Error(`Unknown NAICS ${params.naics}`);
+        const children = naics.filter((n) => n.parent === params.naics);
+        naicsList = children.length > 0 ? children : [parent];
+      } else {
+        naicsList = naics.filter((n) => n.level === "sector" && !n.code.includes("-"));
+      }
+
+      // Fetch data for each NAICS code
+      const rows: { label: string; value: number; naics: string }[] = [];
+      for (const n of naicsList) {
+        const url = `https://api.census.gov/data/${year}/${yearEntry.apiDataset}?get=GEO_ID,NAME,NAICS2022,NAICS2022_LABEL,${variableCode}&for=us:*&NAICS2022=${encodeURIComponent(n.code)}&key=${apiKey}`;
+        const res = await fetch(url, { headers: { "User-Agent": "Census-Client/1.0" } });
+        if (!res.ok) {
+          if (res.status === 204) continue; // No data for this NAICS
+          throw new Error(`Census API returned HTTP ${res.status} for NAICS ${n.code}`);
+        }
+        const text = await res.text();
+        if (!text || text.trim().length === 0) continue; // Empty body = no data
+        let json: any;
+        try { json = JSON.parse(text); } catch { continue; }
+        // Census API returns array of arrays: [headers, ...rows]
+        if (Array.isArray(json) && json.length > 1) {
+          const headers: string[] = json[0];
+          const dataRow: any[] = json[1];
+          const valIdx = headers.indexOf(variableCode);
+          if (valIdx >= 0) {
+            const val = Number(dataRow[valIdx]);
+            if (Number.isFinite(val) && val > 0) {
+              rows.push({ label: n.label, value: val, naics: n.code });
+            }
+          }
+        }
+        // Small delay to be nice to the API
+        await new Promise((r) => setTimeout(r, 50));
+      }
+
+      if (rows.length === 0) throw new Error("Census API returned no data for the requested parameters");
+      rows.sort((a, b) => b.value - a.value);
+
+      const title = params.title ?? `Economic Census ${year}: ${variable.label} by NAICS Sector`;
+      const html = renderEcBarHtml({
+        title,
+        subtitle: `U.S. total, ${variable.label} (${variable.unit}) by NAICS sector, ${year} Economic Census.`,
+        unit: variable.unit,
+        source: "Source: U.S. Census Bureau, Economic Census API (ecnbasic).",
+        rows,
+        metadata: { year, variable: variableCode, naicsFilter: params.naics ?? "all sectors" },
+      });
+
+      const fn = params.filename ?? `ec-${year}-${variableCode.toLowerCase()}.html`;
+      const record = await options.artifactStore.create({
+        sessionId: options.getSessionId(),
+        title,
+        filename: fn,
+        mimeType: "text/html",
+        content: html,
+        description: `${year} Economic Census, ${variable.label} by NAICS`,
+      });
+      return toolResultFor(record, `Created Economic Census chart artifact: ${record.title}`);
+    },
+  });
+
+  // ─── ABS Chart Tool ────────────────────────────────────────────────────────
+
+  function renderAbsGroupedBarHtml(opts: {
+    title: string;
+    subtitle: string;
+    source: string;
+    categories: string[];
+    groups: { label: string; values: number[] }[];
+    metadata: Record<string, unknown>;
+  }): string {
+    const payload = JSON.stringify(opts).replace(/<\//g, "<\\/");
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>${esc(opts.title)}</title>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<style>
+:root{color-scheme:dark;--bg:#090d12;--panel:#111821;--ink:#d8e0ea;--muted:#8090a4;--line:#273241;font-family:"Segoe UI",ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 8% 10%,rgba(88,166,255,.18),transparent 32%),linear-gradient(135deg,#06090d,#0d1117 58%,#070a0f);color:var(--ink)}main{width:min(1100px,calc(100vw - 34px));margin:0 auto;padding:28px 0 36px}.card{border:1px solid rgba(128,144,164,.22);background:linear-gradient(180deg,rgba(17,24,33,.92),rgba(13,20,29,.82));border-radius:22px;padding:22px;box-shadow:0 24px 80px rgba(0,0,0,.36);margin-bottom:18px}.eyebrow{font:800 11px/1 ui-monospace,Consolas,monospace;letter-spacing:.16em;text-transform:uppercase;color:var(--green)}h1{margin:10px 0 8px;font-size:clamp(24px,4vw,42px);letter-spacing:-.04em;color:#f0f6fc}.subtitle{color:#a9b8c8;line-height:1.55}svg{display:block;width:100%;height:auto}.bar{transition:opacity .15s}.bar:hover{opacity:.8}.axis text{fill:#8b949e;font-size:11px}.axis path,.axis line{stroke:#334155}.grid line{stroke:#1e293b}.grid path{display:none}.legend{display:flex;flex-wrap:wrap;gap:16px;margin:14px 0 4px;color:#a9b8c8;font-size:13px}.legend i{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:6px}.tooltip{position:fixed;pointer-events:none;opacity:0;background:#0b1118;border:1px solid #3b4656;border-radius:10px;padding:8px 12px;box-shadow:0 14px 50px rgba(0,0,0,.45);font-size:12px;z-index:5}.source{margin-top:12px;color:#718096;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+  <div class="card"><div class="eyebrow">Annual Business Survey</div><h1>${esc(opts.title)}</h1><div class="subtitle">${esc(opts.subtitle)}</div></div>
+  <div class="card">
+    <svg id="chart" viewBox="0 0 1100 600" role="img"></svg>
+    <div class="legend" id="legend"></div>
+  </div>
+  <div class="source">${esc(opts.source)}</div>
+</main>
+<div class="tooltip" id="tooltip"></div>
+<script>
+const payload = ${payload};
+const groups = payload.groups || [];
+const categories = payload.categories || [];
+const fmt = d3.format(',.0f');
+const svg = d3.select('#chart');
+const W = 1100, H = 600, margin = {top:20,right:40,bottom:80,left:100};
+const innerW = W - margin.left - margin.right, innerH = H - margin.top - margin.bottom;
+const g = svg.append('g').attr('transform','translate('+margin.left+','+margin.top+')');
+const x0 = d3.scaleBand().domain(categories).range([0,innerW]).padding(.2);
+const x1 = d3.scaleBand().domain(groups.map(d=>d.label)).range([0,x0.bandwidth()]).padding(.05);
+const colors = ['#58a6ff','#3fb950','#f78166','#d2a8ff','#f0c24b','#9c6ade','#4cb5ab','#e5537b'];
+const maxVal = d3.max(groups.flatMap(d=>d.values))||1;
+const y = d3.scaleLinear().domain([0,maxVal*1.12]).range([innerH,0]);
+g.append('g').attr('class','grid').call(d3.axisLeft(y).ticks(5).tickSize(-innerW).tickFormat(''));
+g.append('g').attr('class','axis').attr('transform','translate(0,'+innerH+')').call(d3.axisBottom(x0)).selectAll('text').style('text-anchor','end').attr('dx','-.8em').attr('dy','.15em').attr('transform','rotate(-25)').style('font-size','11px').style('fill','#c9d1d9');
+g.append('g').attr('class','axis').call(d3.axisLeft(y).ticks(5).tickFormat(d=>fmt(d)));
+const catGroup = g.selectAll('.cat').data(categories).enter().append('g').attr('transform',d=>'translate('+x0(d)+',0)');
+catGroup.selectAll('rect').data((cat,i)=>groups.map(g=>({cat,g,idx:i,val:g.values[i]}))).enter().append('rect').attr('class','bar').attr('x',d=>x1(d.g.label)).attr('y',d=>y(d.val)).attr('width',x1.bandwidth()).attr('height',d=>innerH-y(d.val)).attr('fill',d=>colors[groups.indexOf(d.g)%colors.length]).attr('rx',2).on('mouseover',(event,d)=>{
+  d3.select('#tooltip').style('opacity',1).style('left',event.clientX+'px').style('top',event.clientY+'px').html('<b>'+d.g.label+'</b> — '+d.cat+'<br>'+fmt(d.val));
+}).on('mouseout',()=>d3.select('#tooltip').style('opacity',0));
+document.getElementById('legend').innerHTML = groups.map((g,i)=>'<span><i style="background:'+colors[i%colors.length]+'"></i>'+g.label+'</span>').join('');
+</script>
+</body>
+</html>`;
+  }
+
+  const createAbsChartTool = defineTool({
+    name: "create_abs_chart",
+    label: "Create ABS Chart",
+    description: "Fetch Annual Business Survey data from the Census Bureau API and create a D3 HTML grouped bar chart of business demographics.",
+    parameters: Type.Object({
+      dataset: Type.Optional(Type.String({ description: "ABS dataset: abscs (Company Summary), abscb (Characteristics of Businesses), or abscbo (Characteristics of Business Owners)." })),
+      year: Type.Optional(Type.Integer({ description: "Survey reference year (2023=most recent)." })),
+      naics: Type.Optional(Type.String({ description: "NAICS sector filter (2-digit code), or omit for all sectors." })),
+      dimension: Type.Optional(Type.String({ description: "Demographic dimension to group by: SEX, RACE_GROUP, ETH_GROUP, or VET_GROUP." })),
+      title: Type.Optional(Type.String({ description: "Chart title override." })),
+      filename: Type.Optional(Type.String({ description: "HTML artifact filename." })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const datasetCode = params.dataset ?? "abscs";
+      const refYear = params.year ?? 2023;
+      const apiKey = process.env["CENSUS_API_KEY"];
+      if (!apiKey) throw new Error("CENSUS_API_KEY not set in environment");
+
+      const datasets = readLookup<{ code: string; label: string; description: string; apiDataset: string; years: number[] }>(cwd, "abs_datasets");
+      const dataset = datasets.find((d) => d.code === datasetCode);
+      if (!dataset) throw new Error(`Unknown ABS dataset ${datasetCode}`);
+      if (!dataset.years.includes(refYear)) throw new Error(`Year ${refYear} not available for dataset ${datasetCode}. Available: ${dataset.years.join(", ")}`);
+
+      const naics = readLookup<{ code: string; level: string; label: string; parent: string | null }>(cwd, "naics");
+      const dim = params.dimension ?? "SEX";
+
+      // For ABS, if NAICS specified, use it; otherwise get top-level sectors with significant firm counts
+      const naicsCodes = params.naics
+        ? [params.naics]
+        : naics.filter((n) => n.level === "sector" && !n.code.includes("-")).slice(0, 10).map((n) => n.code);
+
+      // Dimension labels lookup
+      const dimLabels: Record<string, { code: string; label: string }[]> = {
+        SEX: [{ code: "001", label: "Male" }, { code: "002", label: "Female" }, { code: "003", label: "Equally M/F" }],
+        RACE_GROUP: [{ code: "00", label: "Total" }, { code: "RAC10", label: "White" }, { code: "RAC20", label: "Black/AA" }, { code: "RAC30", label: "American Indian" }, { code: "RAC40", label: "Asian" }, { code: "RAC60", label: "Other" }],
+        ETH_GROUP: [{ code: "001", label: "Hispanic" }, { code: "002", label: "Non-Hispanic" }, { code: "096", label: "Equally H/NH" }],
+        VET_GROUP: [{ code: "001", label: "Veteran" }, { code: "002", label: "Nonveteran" }, { code: "003", label: "Equally Vet/Nonvet" }],
+      };
+      const dimValues = dimLabels[dim] ?? dimLabels["SEX"];
+
+      // Fetch FIRMPDEMP (number of firms) for each NAICS x dimension combination
+      const groups: { label: string; values: number[] }[] = [];
+      const categories: string[] = [];
+      const naicsLabelMap = new Map(naics.map((n) => [n.code, n.label]));
+
+      for (const nCode of naicsCodes) {
+        const naicsLabel = naicsLabelMap.get(nCode) ?? nCode;
+        categories.push(naicsLabel.length > 28 ? naicsLabel.slice(0, 26) + "…" : naicsLabel);
+
+        // Build dimension groups
+        if (groups.length === 0) {
+          for (const dv of dimValues) {
+            groups.push({ label: dv.label, values: [] });
+          }
+        }
+
+        for (const dv of dimValues) {
+          const url = `https://api.census.gov/data/${refYear}/${dataset.apiDataset}?get=GEO_ID,NAME,NAICS2022,NAICS2022_LABEL,${dim},${dim}_LABEL,FIRMPDEMP&for=us:*&NAICS2022=${encodeURIComponent(nCode)}&${dim}=${dv.code}&key=${apiKey}`;
+          const res = await fetch(url, { headers: { "User-Agent": "Census-Client/1.0" } });
+          if (!res.ok) {
+            groups[dimValues.indexOf(dv)].values.push(0);
+            continue;
+          }
+          const text = await res.text();
+          if (!text || text.trim().length === 0) { groups[dimValues.indexOf(dv)].values.push(0); continue; }
+          let json: any;
+          try { json = JSON.parse(text); } catch { groups[dimValues.indexOf(dv)].values.push(0); continue; }
+          if (Array.isArray(json) && json.length > 1) {
+            const headers: string[] = json[0];
+            const dataRow: any[] = json[1];
+            const valIdx = headers.indexOf("FIRMPDEMP");
+            const val = valIdx >= 0 ? Number(dataRow[valIdx]) : 0;
+            groups[dimValues.indexOf(dv)].values.push(Number.isFinite(val) ? val : 0);
+          } else {
+            groups[dimValues.indexOf(dv)].values.push(0);
+          }
+          await new Promise((r) => setTimeout(r, 50));
+        }
+      }
+
+      if (groups.every(g => g.values.every(v => v === 0))) throw new Error("ABS API returned no data for the requested parameters");
+
+      const title = params.title ?? `ABS ${refYear}: ${dataset.label} — Firms by ${dim.replace(/_/g, " ")}`;
+      const html = renderAbsGroupedBarHtml({
+        title,
+        subtitle: `${dataset.label} (reference year ${refYear}), number of employer firms by NAICS sector and ${dim.replace(/_/g, " ").toLowerCase()}.`,
+        source: "Source: U.S. Census Bureau, Annual Business Survey API (ABS).",
+        categories,
+        groups,
+        metadata: { dataset: datasetCode, year: refYear, dimension: dim, naicsFilter: params.naics ?? "top sectors" },
+      });
+
+      const fn = params.filename ?? `abs-${refYear}-${datasetCode}.html`;
+      const record = await options.artifactStore.create({
+        sessionId: options.getSessionId(),
+        title,
+        filename: fn,
+        mimeType: "text/html",
+        content: html,
+        description: `ABS ${refYear}, ${dataset.label} by ${dim}`,
+      });
+      return toolResultFor(record, `Created ABS chart artifact: ${record.title}`);
+    },
+  });
+
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool];
 }

@@ -91,6 +91,59 @@
     "examples": ["CES0000000001", "CES0500000001", "CEU0600000003"],
     "notes": "CES data typically available in both seasonally adjusted (S) and not seasonally adjusted (U) forms"
   },
+  "IP": {
+    "name": "Industry Productivity (IPP)",
+    "length": 20,
+    "positional_layout": [
+      {"position": "1-2", "field": "survey", "type": "fixed", "example": "IP", "values": ["IP"]},
+      {"position": "3", "field": "seasonal_adjustment", "type": "letter", "example": "U", "values": ["S", "U"]},
+      {"position": "4", "field": "sector_group", "type": "letter", "example": "Z", "values": ["H", "J", "Z"], "description": "Sector grouping code; H=Retail, J=Information, Z=Aggregate"},
+      {"position": "5", "field": "area", "type": "fixed", "example": "N", "values": ["N"], "description": "N=National"},
+      {"position": "6-11", "field": "industry_code", "type": "6-digit", "example": "452210", "description": "NAICS-based 6-digit industry; ______ for aggregates"},
+      {"position": "12", "field": "measure_category", "type": "letter", "example": "L", "values": ["L", "U"], "description": "L=Labor productivity/costs, U=Unit labor costs"},
+      {"position": "13-20", "field": "measure_code", "type": "8-digit", "example": "000000000", "description": "Measure detail code; see measure_codes below"}
+    ],
+    "seasonal_adjustment_codes": {
+      "S": "Seasonally adjusted",
+      "U": "Not seasonally adjusted"
+    },
+    "sector_group_codes": {
+      "H": "Retail Trade (44-45)",
+      "J": "Information (51)",
+      "Z": "Sector Aggregates / Total"
+    },
+    "measure_category_codes": {
+      "L": "Labor Productivity and Costs",
+      "U": "Unit Labor Costs and Related"
+    },
+    "measure_codes": {
+      "000000000": "Labor productivity (output per hour) — index",
+      "001000000": "Output — index",
+      "010000000": "Hours worked — index",
+      "200000000": "Labor costs per unit of output — index",
+      "100000000": "Unit labor costs — index",
+      "131010000": "Labor compensation — percent change",
+      "131020000": "Output — percent change",
+      "131040000": "Hours worked — percent change",
+      "131050000": "Labor productivity — percent change",
+      "131560000": "Unit labor costs — percent change",
+      "131981000": "Hourly compensation — percent change",
+      "131982000": "Real hourly compensation — percent change",
+      "131983000": "Employment — percent change",
+      "131984000": "Labor compensation — percent change (2nd variant)"
+    },
+    "example": "IPUHN452210L000000000",
+    "example_breakdown": {
+      "IP": "Industry Productivity",
+      "U": "Not seasonally adjusted",
+      "H": "Retail Trade sector group",
+      "N": "National",
+      "452210": "Department Stores (NAICS)",
+      "L": "Labor productivity / costs",
+      "000000000": "Labor productivity (output per hour)"
+    },
+    "notes": "Industry Productivity data is quarterly or annual. Series IDs use 6-digit NAICS industries. Sector group code (position 4) varies by NAICS sector: H=Retail, J=Information, and others. Underscores in industry code denote sector aggregates. Position 12 categorizes the measure family (L=labor, U=unit costs). Data is typically available with a 1-2 year lag."
+  },
   "LN": {
     "name": "Labor Force Statistics from the Current Population Survey (CPS)",
     "length": 12,
