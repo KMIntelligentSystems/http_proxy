@@ -153,17 +153,30 @@ to verify that visualizations render correctly in the browser:
 
 ## Sub-agents
 
-Available specialist agents and their roles in the document pipeline:
+Available specialist agents:
 
 | Agent | Role | Artifacts Produced |
 |-------|------|--------------------|
 | `research` | Source discovery (Mode A) and CSV extraction (Mode B) | `text/markdown`, `application/json`, `text/csv` |
+| `statistician` | Applied statistical analysis: density, regression, time-series, seasonal adjustment, causal. **Method-agnostic** — picks the right technique from `.pi/skills/` and runs it in Python with explicit uncertainty. | `text/markdown`, `application/json`, `text/csv` (all `role: statistical-analysis` except CSVs which are `dataset-csv`) |
 | `narrator` | Prose sections and chart briefs | `text/markdown`, `application/json` |
 | `coder` | Self-contained D3 chart HTML | `text/html` |
 | `stylist` | Page composition, CSS, document manifest | `text/css`, `text/html`, `application/vnd.dva.document+json` |
 
-> The `statistician` and `validator` agents are deprecated for the document pipeline.
-> They may still be used for standalone statistical analysis or validation tasks.
+> The `validator` agent is deprecated; validation is currently done by orchestrator + Playwright.
+
+### Agents are roles, skills are methods
+
+The project's specialist sub-agents are **roles** (research, statistician, narrator, coder, stylist). Specific *techniques* live as `SKILL.md` files under `.pi/skills/`. A role discovers and follows a skill on demand. Adding a new technique = adding a new skill folder, not a new agent.
+
+| Layer | Lives in | Lifespan | Example |
+|-------|----------|----------|---------|
+| Agent (role) | `.pi/agents/<name>.md` | Stable | applied statistician |
+| Skill (method) | `.pi/skills/<topic>/SKILL.md` | Grows continually | `industry-output-nowcast`, `seasonal-adjustment` |
+| Lookup (data dictionary) | `data/lookups/<name>.json` | Tracks data sources | `fred_ipi`, `m3_series` |
+| Tool (verb) | `src/visualization-tools.ts` | Code; reusable | `create_fred_chart` |
+
+When the statistician (or any role) doesn't find a matching skill for a task, it **stops and proposes one** instead of improvising — that surfaces gaps in the skill catalog rather than burying them in ad-hoc code.
 
 ### Routing — when to use the document pipeline
 
@@ -173,7 +186,10 @@ Not every user request needs the full pipeline. Use this routing table before de
 |--------------|------|
 | Single chart, table, or visualization | Direct tools (`create_chart_svg`, `create_artifact`, `create_bls_sa_nsa_chart`). No pipeline. |
 | Standalone analysis or Q&A without visualization | Answer directly, or with one `text/markdown` artifact. No pipeline. |
-| Multi-page narrative, briefing, report, or document | Document pipeline (Research → Narrator → Coder → Stylist). |
+| Forecast, nowcast, prediction, or output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill → optional narrator/coder. |
+| Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` (or appropriate density skill). |
+| Seasonal adjustment, structural-break test, or any other named statistical technique | `statistician` + matching skill in `.pi/skills/`. |
+| Multi-page narrative, briefing, report, or document | Document pipeline (Research → optional Statistician → Narrator → Coder → Stylist). |
 | Ambiguous between a chart and a report | **Ask the user which they want before delegating.** Do not guess. |
 
 ### Delegation Protocol
@@ -207,10 +223,11 @@ Agents never touch the filesystem. They read what they are given and emit a memo
 
 | Memory artifact (role: "memory", title prefix) | Read by orchestrator? | Passed downstream to |
 |------------------------------------------------|-----------------------|----------------------|
-| `Research memory — …`  | yes | research (on re-call), narrator |
-| `Narrator memory — …`  | yes | narrator (on re-call), coder, stylist |
-| `Coder memory — …`     | yes | coder (on re-call), stylist |
-| `Stylist memory — …`   | yes | stylist (on re-call) |
+| `Research memory — …`     | yes | research (on re-call), statistician, narrator |
+| `Statistician memory — …` | yes | statistician (on re-call), narrator |
+| `Narrator memory — …`     | yes | narrator (on re-call), coder, stylist |
+| `Coder memory — …`        | yes | coder (on re-call), stylist |
+| `Stylist memory — …`      | yes | stylist (on re-call) |
 
 Memory artifacts are visible in the artifact panel but visually de-emphasized so they don't compete with deliverables. They are not shown to the end user as content.
 
@@ -255,6 +272,7 @@ Before presenting a document to the user, verify:
 
 - **Research:** Named sources visited; every claim traces to a source ID.
 - **CSV:** Header matches source; row count matches; missing cells empty (not zero); units stated.
+- **Statistical analysis:** Skill cited; assumptions stated; uncertainty quantified (CI / PI / RSE — never a point estimate alone); known data hiatuses surfaced in Caveats; `model_card.json` emitted.
 - **Narrative:** Coherent arc; every number cites a source; declarative voice.
 - **Chart:** SVG has children; no console errors; data embedded in artifact.
 - **Document:** Every page renders; every chart iframe returns 200; consistent typography.

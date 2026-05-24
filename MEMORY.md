@@ -54,10 +54,48 @@ Check these before fetching fresh data:
 | `dist/tx_nonfarm.json` | Texas CES nonfarm payroll (SA + NSA), 120 monthly points each, 2014–2023. |
 | `data/lookups/` | `oe_occupations.json`, `oe_areas.json`, `oe_datatypes.json`, `oe_industries.json`, `ln_concepts.json`, `surveys.json`. |
 
+## Statistical Methods Inventory
+
+The statistician sub-agent is **method-agnostic**; specific techniques live as skills under `.pi/skills/`. Index:
+
+| Skill | Family | Status |
+|-------|--------|--------|
+| `oews-histogram` | Density estimation (interval-censored) | Complete |
+| `industry-output-nowcast` | Time-series indicator-panel nowcasting | Complete |
+| `seasonal-adjustment` | STL + X-13ARIMA-SEATS | Complete |
+| `walk-forward-cv` | Time-series CV | Stub |
+| `bootstrap-ci` | Non-parametric uncertainty | Stub |
+| `regime-dummies` | Structural breaks / data hiatuses | Stub |
+
+New technique = new skill folder under `.pi/skills/`. Do not put methods in the agent prompts.
+
+## Data Hiatuses & Structural Breaks
+
+Canonical catalog for any analysis touching these sources. Always disclose in `analysis.md` Caveats.
+
+| Source | Break | Effective | Notes |
+|--------|-------|-----------|-------|
+| Census M3 | SA model & historical-revision freeze | 2026-01 → end-2026 (at least) | Published SA is stale post-freeze. Prefer NSA + own SA via `seasonal-adjustment` skill. Verbatim notice at <https://www.census.gov/manufacturing/m3/>. |
+| Census M3 Advance | Nondurable detail added | 2025-07-25 release onward | Pre-2025-07 Advance vintages lack nondurable detail. Step dummy on Advance-vintage nondurable features. |
+| All NAICS-indexed | NAICS-2017 → NAICS-2022 revision | 2022 onward | Use Census concordance; some NAICS-3 industries split/merged. |
+| All | COVID outliers | 2020-Q2 (esp. 2020-04 to 2020-06) | Robust loss (Tukey biweight) or X-13 AO/LS detection — do not delete observations. |
+
+## Tooling: X-13ARIMA-SEATS
+
+- **Binary installed:** `C:\Program Files\x13as\x13as.exe` (Win32 build, gfortran runtime).
+- **Docs (local PDFs):** `C:\Program Files\x13as\docs\docx13as.pdf` (reference manual), `qrefx13aspc.pdf` (quick ref).
+- **Python wrapper:** `statsmodels.tsa.x13.x13_arima_analysis(...)`. Set `X13PATH=C:/Program Files/x13as` (or pass `x12path=...` — yes, kwarg name is historical).
+- **Caveat:** `statsmodels` is **not yet installed** in the project venv. Before first X-13 call:
+  ```bash
+  C:/repos/codeGen-mcp-server/venv/Scripts/python.exe -m pip install statsmodels
+  ```
+- **Venv packages already present:** `numpy 2.3.4`, `pandas 2.3.3`, `scipy 1.16.3`, `scikit-learn 1.7.2`.
+
 ## Architecture
 
 - **Python MCP venv:** `C:\repos\codeGen-mcp-server\venv\Scripts\python.exe`
 - **BLS API key:** in `data/.env` as `BLS_API_KEY`
+- **Census API key:** in `data/.env` as `CENSUS_API_KEY`
 - **Artifact store:** `data/artifacts/` on disk, served at `/ui/api/artifacts/<id>`
-- **React UI:** all non-memory artifacts appear in sidebar. Charts auto-selected, rendered in iframe.
+- **React UI:** sidebar filter hides only `role === "memory"`. Any other role (or no role) is visible. Charts auto-selected, rendered in iframe.
 - **Launch:** `npm run build && npm run build:web && npm run dev:tui`
