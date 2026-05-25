@@ -3,6 +3,35 @@
 Loaded at session start. Non-generic, project-specific operational knowledge:
 tool quirks, data file locations, BLS API gotchas, architecture decisions.
 
+## React Artifact Viewer: iframe only renders HTML
+
+The React UI (`/ui`) renders selected artifacts in an `<iframe>`. The iframe
+can only display `text/html` artifacts — the browser shows a blank white screen
+for any other MIME type (including `text/markdown`, `image/svg+xml` on some
+configurations, `text/csv`, `application/json`).
+
+**Rule:** When producing an artifact intended for the iframe viewer, always use
+`mimeType: "text/html"` — even for tables, reports, or plain-text output.
+Self-contained HTML with inline styles (dark theme:
+background `#161b22`, text `#c9d1d9`, grid `#30363d`).
+
+## WebSocket artifact delivery: use proxy URL, not Vite dev server
+
+The React app loads artifacts via `GET /ui/api/artifacts` (reliable on reload)
+and receives real-time `artifact_created` pushes over WebSocket at `/ui/ws/agent`.
+
+The `/ui/ws/agent` endpoint on the host (3100) gates connections behind an
+`x-loopback: 1` header that only the proxy (8080) injects. When the browser is
+loaded from the Vite dev server at `http://localhost:5173/ui/`, the WebSocket
+path is: `Browser → Vite:5173 → Host:3100 → Proxy:8080 → Host:3100` — a relay
+that can drop if the proxy restarts. When loaded from the proxy at
+`http://localhost:8080/ui/`, the path is `Browser → Proxy:8080 → Host:3100`
+(one hop, reliable).
+
+**Rule:** After a run, if the artifact doesn't appear in the iframe, reload the
+page. The HTTP fetch on mount will pick it up. For interactive testing, prefer
+`http://localhost:8080/ui/` over the Vite URL.
+
 ## Python MCP: `\n` in print strings
 
 The Python MCP server's `execute_python` tool chokes on escaped newlines (`\n`)
