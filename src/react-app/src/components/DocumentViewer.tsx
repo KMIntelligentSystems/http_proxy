@@ -84,7 +84,7 @@ export function DocumentViewer({ manifest }: Props) {
         className="dv-iframe"
         src={`/ui/api/artifacts/${page.artifactId}`}
         title={page.title ?? `Page ${pageIndex + 1}`}
-        sandbox="allow-scripts allow-same-origin"
+        /* no sandbox — artifacts are same-origin trusted content */
       />
     </div>
   );

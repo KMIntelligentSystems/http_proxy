@@ -1,19 +1,19 @@
 ---
 name: seasonal-adjustment
-description: Seasonally adjust a monthly (or quarterly) economic time series. Two engines: STL (statsmodels, pure-Python, robust default) and X-13ARIMA-SEATS (Census reference implementation, via statsmodels.tsa.x13 wrapper around the local x13as.exe binary). Use when the source's published SA is stale, frozen, or unavailable — notably during the M3 SA freeze (Jan 2026 → at least Dec 2026).
+description: "Seasonally adjust a monthly (or quarterly) economic time series. Two engines: STL (statsmodels, pure-Python, robust default) and X-13ARIMA-SEATS (Census reference implementation, via statsmodels.tsa.x13 wrapper around the local x13as.exe binary). Use when the source's published SA is stale, frozen, or unavailable - notably during the M3 SA freeze (Jan 2026 → at least Dec 2026)."
 ---
 
 # Seasonal Adjustment Skill
 
 This skill produces an own-SA estimate of a monthly economic series.
-It is needed whenever the source's published SA cannot be trusted —
+It is needed whenever the source's published SA cannot be trusted -
 the M3 SA-model freeze for 2026 is the proximate cause.
 
 Two engines are supported:
 
-1. **STL** (Seasonal-Trend decomposition using Loess) — pure-Python,
+1. **STL** (Seasonal-Trend decomposition using Loess) - pure-Python,
    no external binary, robust to outliers, transparent.
-2. **X-13ARIMA-SEATS** — the Census Bureau's reference implementation
+2. **X-13ARIMA-SEATS** - the Census Bureau's reference implementation
    (`x13as.exe`). Matches the methodology Census uses on M3 itself.
    Authoritative; the right choice when we want our SA to be
    comparable in *kind* to the frozen published series.
@@ -23,7 +23,7 @@ will publish or compare against Census.
 
 ---
 
-## 1. Local install — verified
+## 1. Local install - verified
 
 The X-13 binary is already installed on this machine:
 
@@ -45,7 +45,7 @@ shells out to this binary. For the wrapper to find it, set:
 X13PATH=C:/Program Files/x13as
 ```
 
-(or pass `x12path="C:/Program Files/x13as"` as a kwarg — yes, the
+(or pass `x12path="C:/Program Files/x13as"` as a kwarg - yes, the
 kwarg is misnamed `x12path` for historical reasons; the wrapper
 works with X-13 too).
 
@@ -105,7 +105,7 @@ print(json.dumps({
 Key knobs:
 
 - `period=12` for monthly, `4` for quarterly.
-- `robust=True` downweights outliers using bisquare weights — turn on
+- `robust=True` downweights outliers using bisquare weights - turn on
   for any series spanning 2020.
 - `seasonal=13` (default) is fine; raise it for smoother seasonal
   patterns when seasonality drifts over a decade.
@@ -114,7 +114,7 @@ Key knobs:
 
 ## 4. X-13ARIMA-SEATS recipe
 
-Two passes — automatic and explicit — depending on how much control
+Two passes - automatic and explicit - depending on how much control
 we want.
 
 ### 4a. Automatic (recommended for first run on a new series)
@@ -150,7 +150,7 @@ print(json.dumps({
 ```
 
 ### 4b. Explicit `.spc` (when we need a specific ARIMA model or
-specific outlier handling — e.g., forcing an AO at 2020-04)
+specific outlier handling - e.g., forcing an AO at 2020-04)
 
 Build an X-13 `.spc` file directly and call `x13as.exe`. The full
 spec syntax is in `C:\Program Files\x13as\docs\docx13as.pdf`.
@@ -199,20 +199,40 @@ that still has seasonality is worse than the NSA original.
 The Census M3 SA is frozen through end-2026. To produce our own SA
 of an M3 series:
 
-1. Fetch NSA M3 from the Census M3 API (FRED does not mirror NSA
-   for most M3 series — see `data/lookups/m3_series.json`).
+1. **Fetch NSA M3 from the Census M3 EITS API.** FRED does not mirror
+   NSA for most M3 series. See `data/lookups/m3_series.json` for the
+   correct `category_code` + `data_type_code` per series, and see
+   `MEMORY.md` §"Census M3 EITS API" for query format and gotchas.
+
+   Working fetch example (Total Mfg Shipments, NSA, one year):
+   ```
+   GET https://api.census.gov/data/timeseries/eits/m3
+     ?get=cell_value,data_type_code,time_slot_id,seasonally_adj,category_code
+     &for=us:*
+     &category_code=MTM
+     &data_type_code=VS
+     &seasonally_adj=no
+     &time=2024
+     &key={CENSUS_API_KEY}
+   ```
+   Returns 12 monthly rows. Loop over years for the full history.
+
+   **Key gotchas:** `for=us:*` is mandatory (400 without it);
+   response has duplicate columns (time is at index 8); HTTP 204
+   means no data (check before JSON parse).
+
+   Pre-fetched file: `data/m3_total_mfg_shipments_nsa.csv`
+   (291 obs, Jan 2002–Mar 2026).
+
 2. Run X-13 (§4a) on the NSA history through end-2025 to fit the
-   model — this matches the freeze cutoff and uses only "live"
+   model — this matches the freeze cutoff and uses only “live”
    methodology.
 3. Apply the frozen model to NSA data 2026-01 onwards: pass
    `forecast_years=0`, `maxiter=0` on a refresh, or in `.spc` use
-   `seats { save = (s11) noadmiss = yes }` with the prior model's
+   `seats { save = (s11) noadmiss = yes }` with the prior model’s
    ARIMA coefficients fixed.
 4. Report both our SA and the frozen Census SA on the same chart,
    with the divergence shaded. This is itself a publishable artifact.
-
-A reference workflow script will be added to this skill at
-`industry-output-nowcast/regimes.md` once exercised.
 
 ---
 

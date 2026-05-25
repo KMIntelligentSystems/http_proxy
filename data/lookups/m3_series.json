@@ -2,8 +2,8 @@
   {
     "code": "total_mfg_shipments",
     "label": "Total Manufacturing Shipments",
-    "sa": { "source": "FRED",   "series_id": "AMTMVS" },
-    "nsa": { "source": "Census", "series_id": "VS41",  "endpoint": "timeseries/eits/m3", "note": "FRED does not mirror NSA; fetch from Census M3 API." },
+    "sa": { "source": "FRED", "series_id": "AMTMVS" },
+    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "VS" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -11,8 +11,8 @@
   {
     "code": "total_mfg_new_orders",
     "label": "Total Manufacturing New Orders",
-    "sa": { "source": "FRED",   "series_id": "AMTMNO" },
-    "nsa": { "source": "Census", "series_id": "NO41",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMTMNO" },
+    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "NO" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -20,8 +20,8 @@
   {
     "code": "total_mfg_unfilled_orders",
     "label": "Total Manufacturing Unfilled Orders",
-    "sa": { "source": "FRED",   "series_id": "AMTMUO" },
-    "nsa": { "source": "Census", "series_id": "UO41",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMTMUO" },
+    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "UO" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": null, "full": 6 },
@@ -30,8 +30,8 @@
   {
     "code": "total_mfg_inventories",
     "label": "Total Manufacturing Inventories",
-    "sa": { "source": "FRED",   "series_id": "AMTMTI" },
-    "nsa": { "source": "Census", "series_id": "TI41",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMTMTI" },
+    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "TI" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -39,8 +39,8 @@
   {
     "code": "durable_shipments",
     "label": "Durable Goods Shipments",
-    "sa": { "source": "FRED",   "series_id": "AMDMVS" },
-    "nsa": { "source": "Census", "series_id": "VS4B",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMDMVS" },
+    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "VS" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -48,8 +48,8 @@
   {
     "code": "durable_new_orders",
     "label": "Durable Goods New Orders",
-    "sa": { "source": "FRED",   "series_id": "DGORDER" },
-    "nsa": { "source": "Census", "series_id": "NO4B",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "DGORDER" },
+    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "NO" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -57,8 +57,8 @@
   {
     "code": "durable_unfilled_orders",
     "label": "Durable Goods Unfilled Orders",
-    "sa": { "source": "FRED",   "series_id": "AMDMUO" },
-    "nsa": { "source": "Census", "series_id": "UO4B",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMDMUO" },
+    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "UO" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": null, "full": 6 }
@@ -66,8 +66,8 @@
   {
     "code": "durable_inventories",
     "label": "Durable Goods Inventories",
-    "sa": { "source": "FRED",   "series_id": "AMDMTI" },
-    "nsa": { "source": "Census", "series_id": "TI4B",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "AMDMTI" },
+    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "TI" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -75,8 +75,8 @@
   {
     "code": "nondurable_shipments",
     "label": "Nondurable Goods Shipments",
-    "sa": { "source": "FRED",   "series_id": "ANXAVS" },
-    "nsa": { "source": "Census", "series_id": "VS4A",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "ANXAVS" },
+    "nsa": { "source": "Census", "category_code": "MNM", "data_type_code": "VS" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 },
@@ -85,8 +85,8 @@
   {
     "code": "nondurable_inventories",
     "label": "Nondurable Goods Inventories",
-    "sa": { "source": "FRED",   "series_id": "ANXATI" },
-    "nsa": { "source": "Census", "series_id": "TI4A",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "ANXATI" },
+    "nsa": { "source": "Census", "category_code": "MNM", "data_type_code": "TI" },
     "unit": "Millions of $",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": 4, "full": 6 }
@@ -94,8 +94,8 @@
   {
     "code": "inventories_to_shipments_ratio",
     "label": "Total Manufacturing Inventories-to-Shipments Ratio",
-    "sa": { "source": "FRED",   "series_id": "MNFCTRIRSA" },
-    "nsa": { "source": "Census", "series_id": "IM41",  "endpoint": "timeseries/eits/m3" },
+    "sa": { "source": "FRED", "series_id": "MNFCTRIRSA" },
+    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "IS" },
     "unit": "Ratio",
     "frequency": "Monthly",
     "release_lag_weeks": { "advance": null, "full": 6 },
@@ -103,8 +103,58 @@
   },
   {
     "_meta": {
-      "lookup_version": "2026-05-22",
-      "schema_notes": "Each entry pairs an SA (FRED-hosted) identifier with an NSA (Census M3) identifier. FRED rarely mirrors NSA M3 series; use the Census M3 endpoint when NSA is required. Census series_id values follow the M3 'category_code' convention (VS=shipments, NO=new orders, UO=unfilled, TI=inventories) plus an industry suffix (41=total mfg, 4A=nondurable, 4B=durable). Verify suffixes against the Census M3 API category-code documentation before first production use.",
+      "lookup_version": "2026-05-25",
+      "schema_notes": "Each entry pairs an SA (FRED-hosted) identifier with an NSA (Census M3 EITS API) identifier. NSA fields use `category_code` + `data_type_code`, which are the two dimensions the Census API requires. SA uses FRED series_id. FRED rarely mirrors NSA M3 series; use the Census EITS endpoint for NSA.",
+      "census_api": {
+        "endpoint": "https://api.census.gov/data/timeseries/eits/m3",
+        "required_params": {
+          "get": "cell_value,data_type_code,time_slot_id,seasonally_adj,category_code",
+          "for": "us:*",
+          "seasonally_adj": "no | yes",
+          "category_code": "(from lookup entry)",
+          "data_type_code": "(from lookup entry)",
+          "time": "YYYY (returns all months for that year)",
+          "key": "(Census API key)"
+        },
+        "gotchas": {
+          "duplicate_columns": "Response header contains duplicate column names; time is at index 8 (not 5). Parse by index, not by name.",
+          "for_clause_required": "Omitting for=us:* returns HTTP 400 'missing for argument'.",
+          "empty_response": "HTTP 204 with empty body means no data for that filter combo; check before JSON parse.",
+          "year_returns_months": "time=YYYY returns 12 monthly rows, not an annual aggregate."
+        },
+        "data_type_codes": {
+          "VS": "Value of Shipments",
+          "NO": "New Orders",
+          "UO": "Unfilled Orders",
+          "TI": "Total Inventories",
+          "FI": "Finished Goods Inventories",
+          "MI": "Materials & Supplies Inventories",
+          "WI": "Work-in-Process Inventories",
+          "IS": "Inventories-to-Shipments Ratio",
+          "US": "Unfilled Orders-to-Shipments Ratio",
+          "MPCVS": "Month % Change — Shipments",
+          "MPCNO": "Month % Change — New Orders",
+          "MPCUO": "Month % Change — Unfilled Orders",
+          "MPCTI": "Month % Change — Inventories",
+          "MPCFI": "Month % Change — Finished Goods Inv",
+          "MPCMI": "Month % Change — Materials Inv",
+          "MPCWI": "Month % Change — WIP Inv"
+        },
+        "aggregate_category_codes": {
+          "MTM": "Total Manufacturing",
+          "MDM": "Durable Goods",
+          "MNM": "Nondurable Goods",
+          "MTU": "Total Mfg excl. Transportation",
+          "MXD": "Total Mfg excl. Defense",
+          "MXT": "Total Mfg excl. Transportation & Defense",
+          "CDG": "Capital Goods",
+          "COG": "Capital Goods excl. Aircraft",
+          "CNG": "Consumer Goods",
+          "DEF": "Defense",
+          "DXD": "Durable excl. Defense",
+          "DXT": "Durable excl. Transportation"
+        }
+      },
       "hiatus_flags": {
         "sa_freeze_start": "2026-01-01",
         "sa_freeze_end_known": null,
@@ -114,7 +164,8 @@
       "vintage_archive": {
         "preferred": "ALFRED (https://alfred.stlouisfed.org) for FRED-mirrored SA series.",
         "limitation": "No comprehensive public NSA vintage archive for M3; pseudo-real-time backtests are SA-only on FRED-mirrored series."
-      }
+      },
+      "nondurable_limits": "MNM has no UO (unfilled orders) or related percent-change codes. Unfilled orders is durable/total only."
     }
   }
 ]

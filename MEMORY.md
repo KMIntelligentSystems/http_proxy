@@ -52,7 +52,8 @@ Check these before fetching fresh data:
 | `dist/oe_histogram_density.json` | 12-bin PDF histogram (BLS wage intervals A–L). 772 occupations, 146.4M workers. |
 | `dist/oe_histogram_density.html` | Standalone D3 histogram chart artifact. |
 | `dist/tx_nonfarm.json` | Texas CES nonfarm payroll (SA + NSA), 120 monthly points each, 2014–2023. |
-| `data/lookups/` | `oe_occupations.json`, `oe_areas.json`, `oe_datatypes.json`, `oe_industries.json`, `ln_concepts.json`, `surveys.json`. |
+| `data/m3_total_mfg_shipments_nsa.csv` | NSA Total Manufacturing Shipments (MTM/VS), 291 obs, Jan 2002–Mar 2026. From Census M3 API. |
+| `data/lookups/` | `oe_occupations.json`, `oe_areas.json`, `oe_datatypes.json`, `oe_industries.json`, `ln_concepts.json`, `surveys.json`, `m3_series.json`. |
 
 ## Statistical Methods Inventory
 
@@ -80,16 +81,44 @@ Canonical catalog for any analysis touching these sources. Always disclose in `a
 | All NAICS-indexed | NAICS-2017 → NAICS-2022 revision | 2022 onward | Use Census concordance; some NAICS-3 industries split/merged. |
 | All | COVID outliers | 2020-Q2 (esp. 2020-04 to 2020-06) | Robust loss (Tukey biweight) or X-13 AO/LS detection — do not delete observations. |
 
+## Census M3 EITS API
+
+Endpoint: `https://api.census.gov/data/timeseries/eits/m3`
+
+**Working query pattern:**
+```
+{BASE}?get=cell_value,data_type_code,time_slot_id,seasonally_adj,category_code
+  &for=us:*
+  &data_type_code=VS
+  &category_code=MTM
+  &seasonally_adj=no
+  &time=2024
+  &key={CENSUS_API_KEY}
+```
+
+**Gotchas (verified 2026-05-25):**
+
+| Gotcha | Detail |
+|--------|--------|
+| `for=us:*` mandatory | Omitting → HTTP 400 "missing for argument". Not obvious from docs. |
+| Duplicate columns in response | Header row has duplicate `data_type_code`, `category_code`, `seasonally_adj`. Time is at **index 8**, not 5. Parse by index, not by column name. |
+| HTTP 204 = empty | No data for that filter combo returns 204 with empty body. Must check `len(raw) == 0` before `json.loads()`. |
+| `time=YYYY` → monthly | A yearly `time` param returns all 12 monthly rows, not annual aggregate. |
+| `seasonally_adj` values | Literal `"no"` or `"yes"`, not a code. |
+| NSA not on FRED | FRED mirrors SA M3 but rarely NSA. Always use Census API for NSA. |
+| Old lookup IDs wrong | The `VS41` / `NO41` notation from Census flat-file docs does **not** work in the API. Use `category_code` + `data_type_code` from `data/lookups/m3_series.json`. |
+
+**Key category codes:** `MTM` = Total Mfg, `MDM` = Durable, `MNM` = Nondurable.
+**Key data_type codes:** `VS` = Shipments, `NO` = New Orders, `UO` = Unfilled Orders, `TI` = Inventories, `IS` = I/S Ratio.
+
+See `data/lookups/m3_series.json` (`_meta.census_api`) for the full taxonomy.
+
 ## Tooling: X-13ARIMA-SEATS
 
 - **Binary installed:** `C:\Program Files\x13as\x13as.exe` (Win32 build, gfortran runtime).
 - **Docs (local PDFs):** `C:\Program Files\x13as\docs\docx13as.pdf` (reference manual), `qrefx13aspc.pdf` (quick ref).
 - **Python wrapper:** `statsmodels.tsa.x13.x13_arima_analysis(...)`. Set `X13PATH=C:/Program Files/x13as` (or pass `x12path=...` — yes, kwarg name is historical).
-- **Caveat:** `statsmodels` is **not yet installed** in the project venv. Before first X-13 call:
-  ```bash
-  C:/repos/codeGen-mcp-server/venv/Scripts/python.exe -m pip install statsmodels
-  ```
-- **Venv packages already present:** `numpy 2.3.4`, `pandas 2.3.3`, `scipy 1.16.3`, `scikit-learn 1.7.2`.
+- **Venv packages confirmed present (2026-05-24):** `numpy 2.3.4`, `pandas 2.3.3`, `scipy 1.16.3`, `scikit-learn 1.7.2`, `statsmodels 0.14.6`, `patsy 1.0.2`. STL and `x13_arima_analysis` both importable; X-13 binary resolves correctly with `X13PATH=C:/Program Files/x13as`.
 
 ## Architecture
 

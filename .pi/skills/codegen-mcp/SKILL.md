@@ -1,7 +1,6 @@
-
 ---
 name: codegen-mcp
-description: Code generation tools provided via MCP server. Use when asked to generate, scaffold, or transform code using the codegen service.
+description: "Code generation tools provided via MCP server. Use when asked to generate, scaffold, or transform code using the codegen service."
 ---
 
 # CodeGen MCP Tools

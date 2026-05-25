@@ -1,6 +1,6 @@
 ---
 name: industry-output-nowcast
-description: Nowcast annual industry output (and downstream labor productivity) for U.S. manufacturing industries before the official benchmark release. Uses a panel of monthly indicator series and a menu of regularized linear and tree-based learners with leave-one-year-out cross-validation. Designed for predictor families known by mid-year: industrial production indexes, producer price indexes, manufacturers' shipments, imports and exports, and wages & employment.
+description: "Nowcast annual industry output (and downstream labor productivity) for U.S. manufacturing industries before the official benchmark release. Uses a panel of monthly indicator series and a menu of regularized linear and tree-based learners with leave-one-year-out cross-validation. Designed for predictor families known by mid-year: industrial production indexes, producer price indexes, manufacturers' shipments, imports and exports, and wages & employment."
 ---
 
 # Industry-Output Nowcast Skill

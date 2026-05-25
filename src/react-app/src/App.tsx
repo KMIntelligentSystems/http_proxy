@@ -130,7 +130,7 @@ export function App() {
             className="dv-iframe"
             src={viewArtifact.url}
             title={viewArtifact.title}
-            sandbox="allow-scripts allow-same-origin"
+            /* no sandbox — artifacts are same-origin trusted content */
           />
         ) : (
           <div className="empty-state">
