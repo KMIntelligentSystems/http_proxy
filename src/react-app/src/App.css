@@ -186,6 +186,40 @@ body {
 .saved-docs-list .doc-date {
   font-size: 11px; color: var(--text-dim);
 }
+.saved-docs-list .doc-actions {
+  display: flex; gap: 4px;
+  margin-top: 4px;
+}
+.doc-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.doc-btn-save {
+  background: var(--bg);
+  color: var(--text-dim);
+}
+.doc-btn-save:hover:not(:disabled) {
+  border-color: #3fb950;
+  color: #3fb950;
+}
+.doc-btn-save:disabled {
+  opacity: 0.4; cursor: default;
+}
+.doc-btn-discard {
+  background: transparent;
+  color: var(--text-dim);
+  border: none;
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1;
+}
+.doc-btn-discard:hover {
+  color: #f78166;
+}
 
 /* ===== Lookup Panel ===== */
 .lookup-loading {

@@ -6,7 +6,7 @@ import { DocumentViewer, type DocumentManifest } from "./components/DocumentView
 import { SavedDocs } from "./components/SavedDocs";
 
 export function App() {
-  const { artifacts, working, submit } = useAgent();
+  const { artifacts, working, submit, saveArtifact, discardArtifact } = useAgent();
   const {
     config,
     lookupData,
@@ -26,8 +26,10 @@ export function App() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // --- Artifact display ---
-  // Show all non-memory artifacts in the sidebar (charts, documents, etc.)
-  const displayArtifacts = artifacts.filter((a) => a.role !== "memory");
+  // Show only HTML artifacts in the sidebar, deduped by title (newest kept).
+  const displayArtifacts = artifacts
+    .filter((a) => a.role !== "memory" && a.mimeType === "text/html")
+    .filter((a, i, arr) => arr.findIndex((x) => x.title === a.title) === i);
 
   // Track what's selected and rendered
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
@@ -59,6 +61,15 @@ export function App() {
     const latest = displayArtifacts[0];
     loadItem(latest.id);
   }, [displayArtifacts, activeArtifactId, loadItem]);
+
+  // Clear view when active artifact is removed (saved/discarded)
+  useEffect(() => {
+    if (activeArtifactId && !artifacts.find((a) => a.id === activeArtifactId)) {
+      setActiveArtifactId(null);
+      setManifest(null);
+      setViewArtifact(null);
+    }
+  }, [artifacts, activeArtifactId]);
 
   const handleSubmit = () => {
     if (!prompt.trim() || working) return;
@@ -99,6 +110,8 @@ export function App() {
           docs={displayArtifacts}
           activeId={activeArtifactId}
           onSelect={loadItem}
+          onSave={saveArtifact}
+          onDiscard={discardArtifact}
         />
         <LookupPanel
           config={config}

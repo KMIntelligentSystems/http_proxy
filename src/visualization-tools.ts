@@ -1,8 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { defineTool } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { ArtifactStore, ArtifactRecord } from "./artifacts.js";
+
+const DB_ALLOWED_MIME_TYPES = new Set([
+  "image/svg+xml",
+  "text/html",
+  "text/css",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+  "application/json",
+  "application/vnd.dva.document+json",
+]);
 
 function esc(value: unknown): string {
   return String(value ?? "").replace(/[&<>"']/g, (ch) => ({
@@ -218,7 +230,7 @@ export function createVisualizationTools(options: {
   const createChartSvgTool = defineTool({
     name: "create_chart_svg",
     label: "Create SVG Chart Artifact",
-    description: "Create an SVG chart artifact in the web UI. Prefer this over push_svg for durable one-off charts.",
+    description: "Create an SVG chart artifact in the web UI for durable one-off charts.",
     parameters: Type.Object({
       title: Type.String({ description: "Chart title." }),
       filename: Type.String({ description: "SVG filename, e.g. wage-distribution.svg." }),
@@ -962,5 +974,145 @@ if (isTimeSeries) {
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool];
+  // ─── Query Artifact DB Tool ────────────────────────────────────────────────
+  //
+  // Translates a natural-language request into a SELECT against data/artifacts.db,
+  // then surfaces every renderable matching row to the frontend Documents panel
+  // via artifactStore.create() (which triggers the artifact_created WS broadcast).
+  //
+  // This is the agent's DEFAULT data-access path. Only fall back to external
+  // APIs / web search when this tool returns 0 rows or only irrelevant rows.
+
+  const queryArtifactsTool = defineTool({
+    name: "query_artifacts",
+    label: "Query Artifact Database",
+    description: `Run a read-only SELECT against the artifact database (data/artifacts.db) and
+surface every matching row to the user's Documents panel (Save / Discard buttons appear).
+
+**Use this BEFORE calling external APIs or web-search.** Many user requests can
+be satisfied entirely from prior-session artifacts already in the DB.
+
+Do NOT also call create_artifact for rows surfaced this way — they are already
+pushed to the frontend by this tool.
+
+Schema:
+  artifact(id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, model_id, replaces_id, provenance, tags)
+  session(id, subject_id, model_id, title, started_at, ended_at, prompt_count, created_at)
+  subject(id, category_id, name, description, tags, created_at, updated_at)
+  category(id, name, description, created_at, updated_at)
+  model(id, provider, display_name, created_at)
+
+  tags and provenance are JSON. For tag containment use LIKE: tags LIKE '%\"m3\"%'
+  role examples: chart, dataset-csv, dataset-meta, section, page, document-manifest, memory
+  mime_type examples: text/html, text/csv, text/markdown, application/json, image/svg+xml
+
+The query MUST select at minimum: id, title, filename, mime_type, content.
+Recommended: SELECT id, title, filename, mime_type, role, description, content, tags FROM artifact WHERE …
+
+Example — "Provide the results of M3 NSA data surveys":
+  SELECT id, title, filename, mime_type, role, description, content
+  FROM artifact
+  WHERE tags LIKE '%\"m3\"%' AND tags LIKE '%\"nsa\"%'
+  ORDER BY created_at DESC`,
+    parameters: Type.Object({
+      sql: Type.String({ description: "SELECT-only SQL query against data/artifacts.db. Must include content column to render artifacts." }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const sql = (params.sql || "").trim();
+      if (!/^SELECT\b/i.test(sql)) {
+        return {
+          content: [{ type: "text" as const, text: "Error: Only SELECT queries are allowed." }],
+          details: {},
+          isError: true,
+        };
+      }
+
+      const dbPath = path.resolve(cwd, "data", "artifacts.db");
+      let sqldb: DatabaseSync;
+      try {
+        sqldb = new DatabaseSync(dbPath);
+      } catch (err) {
+        return {
+          content: [{ type: "text" as const, text: `Error opening database: ${err instanceof Error ? err.message : String(err)}` }],
+          details: {},
+          isError: true,
+        };
+      }
+
+      let rows: Record<string, unknown>[];
+      try {
+        rows = sqldb.prepare(sql).all() as Record<string, unknown>[];
+      } catch (err) {
+        sqldb.close();
+        return {
+          content: [{ type: "text" as const, text: `SQL error: ${err instanceof Error ? err.message : String(err)}` }],
+          details: {},
+          isError: true,
+        };
+      } finally {
+        try { sqldb.close(); } catch {}
+      }
+
+      const surfaced: { id: string; dbId: string; title: string; url: string }[] = [];
+      const skipped: { id: string; reason: string }[] = [];
+
+      for (const row of rows) {
+        const dbId = String(row["id"] ?? "");
+        const title = String(row["title"] ?? "").trim() || `DB row ${dbId || "(unknown)"}`;
+        const filename = String(row["filename"] ?? "").trim();
+        const mimeType = String(row["mime_type"] ?? "").trim();
+        const content = row["content"];
+        const role = row["role"] != null ? String(row["role"]) : undefined;
+        const description = row["description"] != null ? String(row["description"]) : undefined;
+
+        if (!content || typeof content !== "string") {
+          skipped.push({ id: dbId || title, reason: "row has no string content column (include `content` in SELECT)" });
+          continue;
+        }
+        if (!mimeType || !DB_ALLOWED_MIME_TYPES.has(mimeType)) {
+          skipped.push({ id: dbId || title, reason: `unsupported mime_type "${mimeType}"` });
+          continue;
+        }
+        if (!filename) {
+          skipped.push({ id: dbId || title, reason: "row has no filename" });
+          continue;
+        }
+
+        try {
+          const record = await options.artifactStore.create({
+            sessionId: options.getSessionId(),
+            title,
+            filename,
+            mimeType,
+            content,
+            description: description ? `${description} (restored from DB row ${dbId})` : `Restored from DB row ${dbId}`,
+            role,
+          });
+          surfaced.push({ id: record.id, dbId, title: record.title, url: record.url });
+        } catch (err) {
+          skipped.push({ id: dbId || title, reason: err instanceof Error ? err.message : String(err) });
+        }
+      }
+
+      const lines: string[] = [];
+      lines.push(`Found ${rows.length} row(s); surfaced ${surfaced.length} to the Documents panel${skipped.length ? `, skipped ${skipped.length}` : ""}.`);
+      if (surfaced.length) {
+        lines.push("");
+        lines.push("Surfaced:");
+        for (const s of surfaced) lines.push(`  • ${s.title} (db:${s.dbId})`);
+      }
+      if (skipped.length) {
+        lines.push("");
+        lines.push("Skipped:");
+        for (const s of skipped) lines.push(`  • ${s.id}: ${s.reason}`);
+      }
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        details: {},
+      };
+    },
+  });
+
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool, queryArtifactsTool];
 }

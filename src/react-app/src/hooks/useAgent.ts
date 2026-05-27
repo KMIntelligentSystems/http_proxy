@@ -44,5 +44,17 @@ export function useAgent() {
     sendPrompt(prompt);
   }, []);
 
-  return { artifacts, working, submit };
+  const saveArtifact = useCallback(async (id: string) => {
+    const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/save`, { method: "POST" });
+    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+    setArtifacts((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  const discardArtifact = useCallback(async (id: string) => {
+    const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/discard`, { method: "POST" });
+    if (!res.ok) throw new Error(`Discard failed: ${res.status}`);
+    setArtifacts((prev) => prev.filter((a) => a.id !== id));
+  }, []);
+
+  return { artifacts, working, submit, saveArtifact, discardArtifact };
 }

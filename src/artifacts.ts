@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 
 export type ArtifactMimeType =
   | "image/svg+xml"
@@ -166,6 +167,62 @@ export class ArtifactStore {
     return records.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
+  /** All artifacts from the SQLite DB, returned as ArtifactRecord-shaped objects. */
+  dbList(): ArtifactRecord[] {
+    const dbPath = path.resolve(this.rootDir, "..", "artifacts.db");
+    if (!fs.existsSync(dbPath)) return [];
+    const sqldb = new DatabaseSync(dbPath);
+    try {
+      const rows = sqldb.prepare("SELECT id, session_id, title, filename, mime_type, role, description, size_bytes, created_at, updated_at FROM artifact ORDER BY created_at DESC").all() as Record<string, unknown>[];
+      return rows.map((rec) => ({
+        id: rec.id as string,
+        sessionId: rec.session_id as string,
+        title: rec.title as string,
+        filename: rec.filename as string,
+        mimeType: rec.mime_type as ArtifactMimeType,
+        role: (rec.role as string) || undefined,
+        description: (rec.description as string) || undefined,
+        size: (rec.size_bytes as number) || 0,
+        createdAt: rec.created_at as string,
+        updatedAt: rec.updated_at as string,
+        url: `/ui/api/artifacts/${rec.id}`,
+      }));
+    } finally {
+      sqldb.close();
+    }
+  }
+
+  /** Fetch a single artifact's content from the SQLite DB. Returns undefined if not found. */
+  dbGet(id: string): { record: ArtifactRecord; content: string } | undefined {
+    if (!/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
+    const dbPath = path.resolve(this.rootDir, "..", "artifacts.db");
+    if (!fs.existsSync(dbPath)) return undefined;
+    const sqldb = new DatabaseSync(dbPath);
+    try {
+      const rows = sqldb.prepare("SELECT id, session_id, title, filename, mime_type, role, description, size_bytes, created_at, updated_at, content FROM artifact WHERE id = ?").all(id) as Record<string, unknown>[];
+      if (rows.length === 0) return undefined;
+      const rec = rows[0];
+      return {
+        record: {
+          id: rec.id as string,
+          sessionId: rec.session_id as string,
+          title: rec.title as string,
+          filename: rec.filename as string,
+          mimeType: rec.mime_type as ArtifactMimeType,
+          role: (rec.role as string) || undefined,
+          description: (rec.description as string) || undefined,
+          size: (rec.size_bytes as number) || 0,
+          createdAt: rec.created_at as string,
+          updatedAt: rec.updated_at as string,
+          url: `/ui/api/artifacts/${rec.id}`,
+        },
+        content: rec.content as string,
+      };
+    } finally {
+      sqldb.close();
+    }
+  }
+
   get(id: string): { record: ArtifactRecord; filePath: string } | undefined {
     if (!/^[A-Za-z0-9_-]+-[A-Za-z0-9_-]+$/.test(id)) return undefined;
     for (const record of this.list()) {
@@ -177,6 +234,21 @@ export class ArtifactStore {
       return { record, filePath };
     }
     return undefined;
+  }
+
+  delete(id: string): boolean {
+    for (const record of this.list()) {
+      if (record.id !== id) continue;
+      const dir = path.resolve(this.rootDir, record.sessionId, record.id);
+      if (!this.isInsideRoot(dir)) return false;
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   private safeReadDir(dir: string): fs.Dirent[] {

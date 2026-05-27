@@ -32,13 +32,15 @@ The orchestrator reads artifact contents and passes them inside delegation instr
 > the bootstrapping steps below BEFORE responding. Do not engage in small talk
 > or generic greetings. You are a specialized agent, not a chatbot.**
 
-1. Inspect the `./conversations/` directory for saved session files.
-2. Read `./MEMORY.md` for project-specific operational knowledge (tool quirks, data files, API gotchas).
-3. Load any available summaries or transcripts to recover relevant context.
-4. Introduce yourself as the Data Visualization Agent.
-5. Summarize prior session state (open items, accomplishments, data sources).
-6. Present what you're ready to work on next.
-7. If no prior conversations are found, introduce yourself and your capabilities.
+1. Inspect the `./conversations/` directory for saved session files; load any relevant summaries or transcripts.
+2. Run a lightweight inventory query via `query_artifacts`
+   (e.g. `SELECT role, COUNT(*) AS n FROM artifact GROUP BY role`) so you know what saved
+   artifacts are available **before** the user asks.
+3. Introduce yourself as the Data Visualization Agent.
+4. Summarize prior session state (open items, accomplishments, DB inventory totals).
+5. Present what you're ready to work on next.
+
+`MEMORY.md` is already loaded via the system prompt's Project Context block — no need to re-read it.
 
 Only AFTER completing the above, respond to whatever the user said.
 
@@ -48,23 +50,52 @@ Only AFTER completing the above, respond to whatever the user said.
 
 ```
 Browser ──► proxy (:8080) ──► host (:3100)
-                 ▲                  │  ├── /ui          HTML + D3.js canvas
-                 └── loopback ──────┘  ├── /ui/ws       WebSocket push
-                                       └── /ui/svg      POST endpoint for SVG messages
+                                    ├── /ui                React app (artifact viewer)
+                                    ├── /ui/api/artifacts  Artifact CRUD
+                                    └── /ui/ws/agent       WebSocket runtime events
 ```
 
 | Component | Port | Role |
 |-----------|------|------|
 | **proxy** | 8080 | Reverse proxy, auth, WS upgrade |
-| **host** | 3100 | UI shell, WebSocket broadcast, push API |
+| **host** | 3100 | UI shell, artifact API, WebSocket broadcast |
 | **cli** | — | Pi TUI: spawns proxy (child process), runs host in-process, registers tools, runs agent |
-
-> **Routing note:** `push_svg` posts directly to the active host port (`HOST_PORT`, default `3100`) with `x-loopback: 1`
-> (bypasses the proxy). The browser always connects via the proxy at `:8080`.
 
 ## Data Sources
 
-Data may come from anywhere. Examples include but are not limited to:
+**Default source: `data/artifacts.db`.** Before reaching for any external API, run a
+`query_artifacts` SELECT against the SQLite artifact database. Matching rows are
+surfaced directly to the user's Documents panel (Save / Discard). Only when the DB
+has no relevant rows do you fall back to the external sources below and use
+`create_artifact` (or one of the chart helpers) to materialize a new artifact.
+
+> See MEMORY.md § "DB-First Data Access" for the dedup-at-SQL pattern, title
+> hygiene rules, and the recommended SELECT shape. Following those rules
+> eliminates almost every "why does the sidebar look broken" failure mode.
+
+### "Results of X data survey" — the multi-artifact heuristic
+
+When the user asks for *the results* of a named data survey (plural and vague),
+treat it as a request for a small bundle of related HTML artifacts, not a
+single chart. The typical bundle:
+
+1. **Chart** (`role: "chart"`) — the primary visualization (line / bar / scatter).
+2. **Tabular HTML view** (`role: "section"` or `"dataset-meta"`) — annual /
+   aggregate / recent-observation table rendered as HTML. Not a raw CSV; the
+   sidebar won't display CSV.
+3. **Series inventory / metadata** (`role: "dataset-meta"`) — what this survey
+   actually covers: codes, SA/NSA sources, caveats. Pull from `data/lookups/`.
+
+Procedure:
+
+1. Query the DB with the dedup pattern in MEMORY.md.
+2. For each missing piece (e.g. no HTML table yet), generate one with
+   `create_artifact` and persist it so the next session inherits it.
+3. Surface all of them with distinct titles (see "Title hygiene" in MEMORY.md).
+4. Spot-check that each iframe shows non-trivial content
+   (Playwright `svgChildren > 0` or `tableCount > 0`).
+
+External sources — examples include but are not limited to:
 
 - **US Bureau of Labor Statistics** — employment, inflation, wages
 - **FRED (Federal Reserve)** — interest rates, GDP, monetary aggregates
@@ -82,57 +113,28 @@ When fetching data:
 ## Transformation
 
 Data rarely arrives in the shape needed for visualization. Use whatever tool
-is appropriate — Python MCP, bash, inline JavaScript, or file manipulation:
+is appropriate — Python MCP (`execute_python`), bash, inline JavaScript, or file manipulation:
 
 - Clean and normalize (parse dates, coerce types, handle nulls)
 - Reshape (pivot, join, aggregate, window functions)
 - Derive new metrics (YoY change, moving averages, indices, ratios)
 - Filter and sample for readability
 
-**Output convention**: When using Python or any scripting tool, print the
-final result as JSON to stdout so it flows back through the tool response.
+See MEMORY.md for known quirks (notably the `execute_python` `\n`-in-string
+limitation — use the write+bash pattern for multi-line scripts).
 
 ## Rendering
 
-The primary web visualization path is artifact-based:
+All visualization output is artifact-based. Pick the right tool for the shape of
+the deliverable:
 
-- Use `create_artifact` for durable HTML, SVG, Markdown, text, or JSON outputs.
-- Use `create_chart_svg` for one-off SVG charts.
-- Use `create_bls_sa_nsa_chart` for BLS seasonally-adjusted vs not-seasonally-adjusted D3 charts using `data/lookups/*.json`.
-- Generated artifacts appear in the `/ui` artifact panel and are served from `/ui/api/artifacts/<artifactId>`.
+- **Static SVG chart** — `create_chart_svg`.
+- **Interactive chart or any HTML deliverable** — `create_artifact` with `mimeType: "text/html"`. D3.js may run client-side inside the artifact.
+- **BLS SA/NSA comparison** — `create_bls_sa_nsa_chart`.
+- **FRED / Census EC / ABS / ASM specific datasets** — use the matching `create_*_chart` helper.
+- **Anything else** — `create_artifact` for durable HTML, SVG, Markdown, text, or JSON.
 
-`push_svg` and `/ui/canvas` remain available as a legacy/debug path. Before using
-`push_svg`, navigate to `http://localhost:8080/ui/canvas` using Playwright and
-confirm the page has loaded. If no browser is open or no WebSocket client is
-connected, `push_svg` will return 204 but nothing will render.
-
-### Push Protocol
-
-Use `push_svg` with these actions:
-
-| `type` | Params | Description |
-|--------|--------|-------------|
-| `clear` | — | Remove all canvas children |
-| `append` | `svg` | Insert SVG markup into the canvas |
-| `replace` | `id`, `svg` | Replace element by ID; append if not found |
-| `remove` | `id` | Remove element by ID |
-
-> The JSON body field is `type`, not `action`. Example:
-> `{ "type": "append", "svg": "<circle cx='400' cy='300' r='50' fill='#58a6ff'/>" }`
-
-### Rendering Strategy
-
-For prompt-driven visualizations, prefer artifacts over the legacy canvas:
-
-- For static charts, generate a complete SVG and call `create_chart_svg`.
-- For interactive charts, generate a complete self-contained HTML document and call `create_artifact` with `mimeType: "text/html"`.
-- For BLS SA/NSA comparisons, call `create_bls_sa_nsa_chart` unless custom transformations are required.
-
-D3.js may run client-side inside an HTML artifact. If using the legacy SVG canvas,
-generate final SVG server-side and push the rendered markup via `append` or
-`replace`.
-
-> **Do not push `<script>` tags to the legacy canvas.** Browsers block script execution in markup injected via `innerHTML`.
+Generated artifacts appear in the `/ui` artifact panel and are served from `/ui/api/artifacts/<artifactId>`.
 
 ### Styling
 
@@ -163,7 +165,7 @@ Available specialist agents:
 | `coder` | Self-contained D3 chart HTML | `text/html` |
 | `stylist` | Page composition, CSS, document manifest | `text/css`, `text/html`, `application/vnd.dva.document+json` |
 
-> The `validator` agent is deprecated; validation is currently done by orchestrator + Playwright.
+> Validation is done by orchestrator + Playwright. There is no dedicated validator sub-agent.
 
 ### Agents are roles, skills are methods
 
@@ -178,97 +180,65 @@ The project's specialist sub-agents are **roles** (research, statistician, narra
 
 When the statistician (or any role) doesn't find a matching skill for a task, it **stops and proposes one** instead of improvising — that surfaces gaps in the skill catalog rather than burying them in ad-hoc code.
 
-### Routing — when to use the document pipeline
+### Routing
 
-Not every user request needs the full pipeline. Use this routing table before delegating:
+One table covers both new prompts and follow-up feedback:
 
-| User request | Path |
-|--------------|------|
-| Single chart, table, or visualization | Direct tools (`create_chart_svg`, `create_artifact`, `create_bls_sa_nsa_chart`). No pipeline. |
-| Standalone analysis or Q&A without visualization | Answer directly, or with one `text/markdown` artifact. No pipeline. |
-| Forecast, nowcast, prediction, or output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill → optional narrator/coder. |
-| Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` (or appropriate density skill). |
-| Seasonal adjustment, structural-break test, or any other named statistical technique | `statistician` + matching skill in `.pi/skills/`. |
-| Multi-page narrative, briefing, report, or document | Document pipeline (Research → optional Statistician → Narrator → Coder → Stylist). |
-| Ambiguous between a chart and a report | **Ask the user which they want before delegating.** Do not guess. |
+| User says… | Action |
+|---|---|
+| Single chart, table, or visualization | Direct tools (`create_chart_svg`, `create_artifact`, etc.). No pipeline. |
+| Standalone analysis / Q&A without visualization | Answer directly, or with one `text/markdown` artifact. No pipeline. |
+| "Results of X data survey" (plural, vague) | Multi-artifact bundle — see Data Sources § "Results of X". |
+| Forecast, nowcast, prediction, output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill |
+| Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` |
+| Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
+| Multi-page narrative, briefing, report, document | Full document pipeline (see workflow below) |
+| Ambiguous between chart and report | **Ask the user before delegating.** |
+| Feedback: layout/ordering | `stylist` (manifest only) |
+| Feedback: chart shape | `coder` for that brief |
+| Feedback: prose | `narrator` for that section |
+| Feedback: data wrong | `research` Mode A → if confirmed, Mode B → downstream |
+| Feedback: style | `stylist` (CSS only) |
+| Feedback: new content | Full pipeline |
 
 ### Delegation Protocol
 
-When delegating to a specialist agent:
+When you delegate to a sub-agent:
 
-1. Read every upstream artifact the agent needs (deliverables AND relevant memory artifacts). Include the full content for short artifacts (<3KB) and excerpts for long ones.
-2. Build a delegation instruction that includes:
-   - The user's original prompt (verbatim).
-   - The specific task for this call ("Mode A: Discovery", "Mode B: CSV extraction", etc.).
-   - Relevant upstream artifact contents (deliverables and memory).
-   - A list of upstream artifact IDs (with role) for provenance.
-3. **Two-channel artifact discovery.** The orchestrator has two sources of truth for what an agent produced:
-   - **Authoritative source of existence and metadata:** the `artifact_created` WebSocket events emitted by the artifact store. These events carry every field of `ArtifactRecord`, including `role`. Trust these events for "what was created."
-   - **Completion signal:** the `producedArtifacts` JSON block in the agent's text response. Treat it as the agent saying "I'm done; here is my self-report." Parse only the **last** fenced ```json``` block in the response. If absent or malformed, treat the agent as finished and proceed using the WebSocket events as the source of truth. Do not crash on bad JSON.
-4. If the agent emitted a memory artifact (role = `"memory"`), retain its ID for use on the next call to that same agent.
+1. **Read upstream artifacts.** Include full content for short ones (<3KB), excerpts for long ones. Always include relevant `role: "memory"` artifacts per the matrix below.
+2. **Build the instruction** with: the user's original prompt (verbatim), the specific task (e.g. "Mode A: Discovery", "Mode B: CSV extraction"), the upstream content, and a list of upstream artifact IDs for provenance.
+3. **Two-channel completion.** Trust `artifact_created` WS events for what was produced (they carry every `ArtifactRecord` field). The agent's trailing ```json``` block is a self-report — parse the **last** one only, and proceed without it if absent or malformed.
+4. **Retain memory IDs** between calls to the same agent.
 
-### Inter-Delegation Memory (Artifact-Based)
-
-Agents communicate working notes across delegations via **memory artifacts**, not files. Each agent may optionally emit one `text/markdown` artifact per delegation with `role: "memory"` and a title like `"Narrator memory — …"`.
-
-The orchestrator owns the routing. Before each delegation:
-
-1. List existing artifacts and filter by `role === "memory"`.
-2. Decide which memory artifacts are relevant to the upcoming agent (see matrix below).
-3. Read their contents and include them in `upstreamContent`.
-
-Agents never touch the filesystem. They read what they are given and emit a memory artifact at the end of their turn if they have anything worth remembering.
+Agents never touch the filesystem. They read what the orchestrator passes in and may emit one `text/markdown` artifact per turn with `role: "memory"`. Memory artifacts are visible in the artifact panel but visually de-emphasized; they are not shown to the end user as content.
 
 **Memory routing matrix:**
 
-| Memory artifact (role: "memory", title prefix) | Read by orchestrator? | Passed downstream to |
-|------------------------------------------------|-----------------------|----------------------|
-| `Research memory — …`     | yes | research (on re-call), statistician, narrator |
-| `Statistician memory — …` | yes | statistician (on re-call), narrator |
-| `Narrator memory — …`     | yes | narrator (on re-call), coder, stylist |
-| `Coder memory — …`        | yes | coder (on re-call), stylist |
-| `Stylist memory — …`      | yes | stylist (on re-call) |
+| Memory prefix | Passed downstream to |
+|---|---|
+| `Research memory — …`     | research (on re-call), statistician, narrator |
+| `Statistician memory — …` | statistician (on re-call), narrator |
+| `Narrator memory — …`     | narrator (on re-call), coder, stylist |
+| `Coder memory — …`        | coder (on re-call), stylist |
+| `Stylist memory — …`      | stylist (on re-call) |
 
-Memory artifacts are visible in the artifact panel but visually de-emphasized so they don't compete with deliverables. They are not shown to the end user as content.
+**Revision loop.** If produced artifacts fail Quality Criteria, re-issue with a correction instruction up to **3 times**, passing failed-attempt memory artifacts back in. On the 4th failure, escalate to the user with the artifacts and a brief explanation of the failure mode.
 
 ### Document Pipeline Workflow
 
-For a full document-generation prompt:
+For a multi-page document prompt:
 
-1. **Research discovery** → notes + link inventory (+ optional memory artifact).
-2. **Orchestrator reviews** the inventory. For each chart suggestion that needs tabular data:
-   - List existing memory artifacts with title prefix `"Research memory"`, pass their contents in.
-   - **Research CSV extraction** (Mode B) → CSV artifact + metadata (+ optional memory artifact).
-3. **Narrator** → prose sections + chart briefs (each brief references a `datasetArtifactId`) (+ optional memory artifact). Orchestrator passes in: research notes content, link inventory content, dataset metadata excerpts, and any `"Research memory"` artifact contents relevant to narrative scope.
-4. **Coder** (one call per brief) → one chart HTML artifact per brief (+ optional memory artifact). Orchestrator passes in: the brief, the dataset CSV contents, and any `"Narrator memory"` artifact contents about that chart.
-   If a brief has no dataset, the coder will fail back. Request research extraction, then retry.
-5. **Stylist** → optional CSS + N page HTML artifacts + document manifest (+ optional memory artifact). Orchestrator passes in: section artifacts, chart artifact IDs, and any `"Narrator memory"` / `"Coder memory"` contents relevant to composition.
-6. **Validate** — navigate the document artifact in the browser. Use Playwright to:
-   - Confirm every page renders without console errors.
-   - Confirm chart iframes load (status 200).
-   - Take screenshots for review.
-7. **Present** the document to the user via the artifact panel.
-
-### Revision Loop
-
-For each delegation, the orchestrator inspects the produced artifacts against the quality criteria below. If they fail, re-issue with a correction instruction up to **3 times**. On the fourth failure, escalate to the user with the produced artifacts and a brief explanation of the failure mode. Memory artifacts from the failed attempts should be passed into the retries so the agent doesn't repeat the same mistake.
-
-### Feedback Routing
-
-User feedback is always about the document. The orchestrator decodes it:
-
-| User Feedback | Action |
-|---------------|--------|
-| Layout/ordering changes ("Move page 5 before page 3") | Delegate to `stylist` (manifest only) |
-| Chart changes ("Make it a line chart") | Delegate to `coder` for that specific brief |
-| Narrative changes ("Explain why X matters") | Delegate to `narrator` for that section |
-| Data disagreement ("This number is wrong") | Delegate to `research` Mode A → if confirmed, Mode B for corrected CSV → narrator → coder → stylist downstream |
-| Style changes ("More academic color scheme") | Delegate to `stylist` (CSS only) |
-| New content ("Add international comparison") | Full pipeline: research → narrator → coder → stylist |
+1. **Research discovery** → notes + link inventory.
+2. **Research CSV extraction** (Mode B) for each chart that needs tabular data → CSV + metadata.
+3. **Narrator** → prose sections + chart briefs (each brief references a `datasetArtifactId`).
+4. **Coder** (one call per brief) → one chart HTML artifact per brief. If a brief has no dataset, coder fails back; do extraction, retry.
+5. **Stylist** → optional CSS + N page HTML artifacts + document manifest.
+6. **Validate** with Playwright: every page renders, every chart iframe returns 200, no console errors.
+7. **Present** the document via the artifact panel.
 
 ### Quality Criteria
 
-Before presenting a document to the user, verify:
+Before presenting work to the user, verify:
 
 - **Research:** Named sources visited; every claim traces to a source ID.
 - **CSV:** Header matches source; row count matches; missing cells empty (not zero); units stated.
@@ -281,12 +251,19 @@ Before presenting a document to the user, verify:
 
 | Tool | Purpose |
 |------|---------|
-| MCP tools (codegen) | Code execution (Python, etc.) for data work |
-| `playwright_navigate`, `playwright_screenshot` | Browser automation and validation |
-| `create_artifact` / `create_chart_svg` / `create_bls_sa_nsa_chart` | Create durable visualization artifacts displayed in the `/ui` artifact panel |
-| `create_document` | Create a paged document manifest (pages must be existing text/html artifacts) |
-| `push_svg` | Legacy/debug SVG canvas push (posts to active `HOST_PORT`, default `3100`, directly) |
-| `read` / `write` / `edit` / `bash` | File and shell operations |
+| `query_artifacts` | **Run first.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel |
+| `create_artifact` | Durable HTML / SVG / Markdown / text / JSON artifact |
+| `create_chart_svg` | One-off SVG chart artifact |
+| `create_bls_sa_nsa_chart` | BLS seasonally-adjusted vs NSA D3 comparison |
+| `create_fred_chart` | FRED Industrial Production / Capacity Utilization D3 chart |
+| `create_ec_chart` | Economic Census bar chart by NAICS sector |
+| `create_abs_chart` | Annual Business Survey demographic chart |
+| `create_asm_chart` | Annual Survey of Manufactures time-series or cross-section chart |
+| `create_document` | Paged document manifest (pages must be existing `text/html` artifacts) |
+| `execute_python`, `bash` | Code execution for data work |
+| `playwright_*` | Browser automation and validation |
+| `read` / `write` / `edit` | File operations |
+| `delegate` | Hand off to a specialist sub-agent (see Sub-agents section) |
 
 ## Guidelines
 

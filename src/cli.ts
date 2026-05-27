@@ -5,11 +5,9 @@ import {
   createAgentSessionFromServices,
   SessionManager,
   getAgentDir,
-  defineTool,
   type CreateAgentSessionRuntimeFactory,
   type SessionStartEvent,
 } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,64 +78,10 @@ function stopProxy() {
   proxyProc = null;
 }
 
-// ─── Custom tools ─────────────────────────────────────────────────────────────
-
-const helloTool = defineTool({
-  name: "hello",
-  label: "Hello",
-  description: "A simple greeting tool. Returns a greeting for the given name.",
-  parameters: Type.Object({
-    name: Type.String({ description: "Name to greet" }),
-  }),
-  execute: async (_toolCallId, params) => ({
-    content: [{ type: "text" as const, text: `Hello, ${params.name}! 👋` }],
-    details: {},
-  }),
-});
-
-const pushSvgTool = defineTool({
-  name: "push_svg",
-  label: "Push SVG",
-  description: "Push an SVG fragment to the browser canvas at http://localhost:8080/ui/canvas. Supports actions: clear, append, replace, remove.",
-  parameters: Type.Object({
-    action: Type.Union([
-      Type.Literal("clear"),
-      Type.Literal("append"),
-      Type.Literal("replace"),
-      Type.Literal("remove"),
-    ], { description: "SVG action type" }),
-    svg: Type.Optional(Type.String({ description: "SVG markup (for append/replace)" })),
-    id: Type.Optional(Type.String({ description: "Element ID (for replace/remove)" })),
-  }),
-  execute: async (_toolCallId, params) => {
-    try {
-      const body: Record<string, string> = { type: params.action };
-      if (params.svg) body.svg = params.svg;
-      if (params.id) body.id = params.id;
-
-      const hostPort = process.env["HOST_PORT"] ?? "3100";
-      const res = await fetch(`http://localhost:${hostPort}/ui/svg`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-loopback": "1" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`Host returned ${res.status}`);
-
-      return {
-        content: [{ type: "text" as const, text: `SVG ${params.action} sent to canvas.` }],
-        details: {},
-      };
-    } catch (err) {
-      return {
-        content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
-        details: {},
-        isError: true,
-      };
-    }
-  },
-});
-
 // ─── Artifact store + visualization tools ─────────────────────────────────
+// The query_artifacts tool now lives in visualization-tools.ts so it can
+// share the artifactStore closure and surface DB rows to the frontend via
+// the artifact_created WebSocket broadcast.
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
@@ -152,7 +96,7 @@ const visualizationTools = createVisualizationTools({
   cwd: process.cwd(),
 });
 
-const customTools = [...mcpTools, helloTool, pushSvgTool, ...visualizationTools];
+const customTools = [...mcpTools, ...visualizationTools];
 
 // ─── Agent session factory ────────────────────────────────────────────────────
 

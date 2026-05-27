@@ -3,61 +3,36 @@
 Loaded at session start. Non-generic, project-specific operational knowledge:
 tool quirks, data file locations, BLS API gotchas, architecture decisions.
 
-## React Artifact Viewer: iframe only renders HTML
+## Frontend rendering rules
 
-The React UI (`/ui`) renders selected artifacts in an `<iframe>`. The iframe
-can only display `text/html` artifacts — the browser shows a blank white screen
-for any other MIME type (including `text/markdown`, `image/svg+xml` on some
-configurations, `text/csv`, `application/json`).
+The React UI (`/ui`, `src/react-app/src/App.tsx`) shows artifacts in an `<iframe>`.
+Two filters in `App.tsx` (lines ~28–31) determine what's reachable from the sidebar:
 
-**Rule:** When producing an artifact intended for the iframe viewer, always use
-`mimeType: "text/html"` — even for tables, reports, or plain-text output.
-Self-contained HTML with inline styles (dark theme:
-background `#161b22`, text `#c9d1d9`, grid `#30363d`).
+1. **HTML-only:** the sidebar lists only `mimeType === "text/html"`. CSV / markdown /
+   JSON / SVG rows are written to the file store but invisible in the sidebar —
+   they only render if the user navigates directly to `/ui/api/artifacts/<id>`.
+2. **Title-dedup:** rows with identical titles collapse to one entry. Because
+   the WebSocket reducer prepends each new `artifact_created` event, the
+   surviving entry is whichever event arrived **last** — NOT necessarily the
+   most recent vintage. See "DB-First Data Access" below for the dedup-at-SQL
+   pattern that avoids this.
 
-## WebSocket artifact delivery: use proxy URL, not Vite dev server
-
-The React app loads artifacts via `GET /ui/api/artifacts` (reliable on reload)
-and receives real-time `artifact_created` pushes over WebSocket at `/ui/ws/agent`.
-
-The `/ui/ws/agent` endpoint on the host (3100) gates connections behind an
-`x-loopback: 1` header that only the proxy (8080) injects. When the browser is
-loaded from the Vite dev server at `http://localhost:5173/ui/`, the WebSocket
-path is: `Browser → Vite:5173 → Host:3100 → Proxy:8080 → Host:3100` — a relay
-that can drop if the proxy restarts. When loaded from the proxy at
-`http://localhost:8080/ui/`, the path is `Browser → Proxy:8080 → Host:3100`
-(one hop, reliable).
-
-**Rule:** After a run, if the artifact doesn't appear in the iframe, reload the
-page. The HTTP fetch on mount will pick it up. For interactive testing, prefer
-`http://localhost:8080/ui/` over the Vite URL.
+**Always use the proxy URL** (`http://localhost:8080/ui/`), not the Vite dev
+server at `:5173`. The `/ui/ws/agent` WebSocket requires the `x-loopback: 1`
+header that only the proxy injects; via Vite the WS connection is a brittle
+4-hop relay.
 
 ## Python MCP: `\n` in print strings
 
-The Python MCP server's `execute_python` tool chokes on escaped newlines (`\n`)
-inside print statements and complex f-strings — produces `SyntaxError: unterminated
-string literal`.
+`execute_python` chokes on escaped newlines inside string literals — produces
+`SyntaxError: unterminated string literal`.
 
-**Pattern that breaks:**
-```python
-print("\nSaved file to", path)       # \n kills it
-print(f"\nHeader: {value}")          # \n in f-string kills it
-```
-
-**Pattern that works:**
-```python
-print("Saved file to", path)          # no \n
-print("Header: %s" % value)           # % formatting, not f-strings
-```
-
-**Workaround for multi-line scripts:** Write the script to a temp location
-with the `write` tool, execute via `bash`, then **delete the file immediately**
-afterward. These scripts are transient — only their outputs (JSON, CSV, etc.)
-should persist.
+**Workaround for any non-trivial script:** write to a temp file with `write`,
+execute via `bash`, delete immediately.
 ```bash
-# Write, run, delete — script is ephemeral
-C:\repos\codeGen-mcp-server\venv\Scripts\python.exe temp_script.py && rm temp_script.py
+"C:\repos\codeGen-mcp-server\venv\Scripts\python.exe" data/_tmp.py && rm data/_tmp.py
 ```
+Keep only the script's *output* (CSV, JSON) — the script itself is ephemeral.
 
 ## BLS API v2 — OEWS limitation
 
@@ -70,6 +45,97 @@ OEWS data (e.g. May 2024) is available via flat file download.
 - **CPS:** `LNS14000000` for national unemployment rate.
 
 **Common FIPS codes:** 48 = Texas, 06 = California, 36 = New York.
+
+## DB-First Data Access (`query_artifacts`)
+
+**Before fetching from external APIs (BLS, FRED, Census, web-search, etc.), ALWAYS query
+`data/artifacts.db` first** via the `query_artifacts` tool. Saved artifacts from prior
+sessions (charts, CSVs, dataset metadata, document pages) frequently already contain
+the data the user is asking for.
+
+The tool takes a single `sql` string (SELECT-only). It runs the query, then for each
+matching row that has `content` + a renderable `mime_type`, it surfaces the row to the
+user's Documents panel via `artifactStore.create()` (Save / Discard buttons appear).
+**Do not also call `create_artifact` for rows surfaced this way** — the tool already
+pushes them to the frontend.
+
+### Schema
+
+```
+artifact(id, session_id, title, filename, mime_type, role, description,
+         content, size_bytes, created_at, updated_at, model_id, replaces_id,
+         provenance, tags)
+session(id, subject_id, model_id, title, started_at, ended_at, prompt_count, created_at)
+subject(id, category_id, name, description, tags, created_at, updated_at)
+category(id, name, description, created_at, updated_at)
+model(id, provider, display_name, created_at)
+```
+
+- `tags` is a JSON array stored as TEXT. For tag containment use `LIKE`:
+  `tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'`.
+- `provenance` is a JSON object stored as TEXT.
+- `role` examples: `chart`, `dataset-csv`, `dataset-meta`, `section`, `page`,
+  `document-manifest`, `memory`.
+- `mime_type` values that render in the Documents iframe: `text/html`, `text/csv`,
+  `text/markdown`, `application/json`, `image/svg+xml`.
+
+### Rules for the SELECT
+
+- Include at minimum: `id`, `title`, `filename`, `mime_type`, `content`.
+- Recommended: `SELECT id, title, filename, mime_type, role, description, content, tags FROM artifact WHERE … ORDER BY created_at DESC`.
+- Only `SELECT` is permitted. Any other statement is rejected.
+
+### Recommended SELECT pattern (dedup + HTML-only)
+
+The raw `ORDER BY created_at DESC` pattern surfaces ALL matching rows, including
+stale vintages with duplicate titles — which the sidebar's title-dedup then
+collapses to a near-random survivor (often the broken oldest one). Use this
+instead:
+
+```sql
+WITH ranked AS (
+  SELECT *, ROW_NUMBER() OVER (
+    PARTITION BY filename, mime_type
+    ORDER BY created_at DESC
+  ) AS rn
+  FROM artifact
+  WHERE tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'
+)
+SELECT id, title, filename, mime_type, role, description, content
+FROM ranked
+WHERE rn = 1
+  AND mime_type = 'text/html'
+ORDER BY title;
+```
+
+This guarantees one row per `(filename, mime_type)`, drops older vintages, and
+only surfaces rows the sidebar will actually display.
+
+If the query returns 0 rows (or only rows that don't actually answer the question),
+then and only then fall back to external APIs / web-search and write the result
+with `create_artifact`.
+
+### Title hygiene
+
+Every `text/html` artifact — whether created via `create_artifact` or persisted
+in the DB — MUST have a globally unique, role-distinguishing title. Pattern:
+
+  `"<dataset> - <view type> (<qualifier>)"`
+
+Examples:
+- `"M3 NSA Survey - Total Manufacturing Shipments (Monthly Line Chart)"`
+- `"M3 NSA Survey - Series Inventory (codes, SA/NSA sources, caveats)"`
+- `"M3 NSA Survey - Annual Totals Table"`
+
+Bad: three rows all titled `"Total Manufacturing Shipments — NSA (Jan 2002 – Mar 2026)"`.
+The sidebar will hide two of them and surface a near-random survivor.
+
+### Discard/save asymmetry across browser tabs
+
+`POST /ui/api/artifacts/<id>/save` and `/discard` only update the React state
+of the client that initiated the call. There is no `artifact_removed` WS
+broadcast yet. If you (or another agent) mutate the file store via Playwright
+or a curl call, tell the user to **refresh their tab** to clear stale entries.
 
 ## Pre-Existing Data Files
 
@@ -136,6 +202,8 @@ Endpoint: `https://api.census.gov/data/timeseries/eits/m3`
 | `seasonally_adj` values | Literal `"no"` or `"yes"`, not a code. |
 | NSA not on FRED | FRED mirrors SA M3 but rarely NSA. Always use Census API for NSA. |
 | Old lookup IDs wrong | The `VS41` / `NO41` notation from Census flat-file docs does **not** work in the API. Use `category_code` + `data_type_code` from `data/lookups/m3_series.json`. |
+| No multi-year range param | `time=YYYY` returns 12 months for that year. No `time=2002-2026` or `time=FROM&time=TO` range. N years = N serial calls. |
+| Serial fetches timeout | 25+ sequential API calls in Python MCP can exceed the 60s bash timeout. Check `data/` for pre-existing CSVs first (e.g., `data/m3_total_mfg_shipments_nsa.csv`). A single `curl` call for the latest year is ~200 ms. |
 
 **Key category codes:** `MTM` = Total Mfg, `MDM` = Durable, `MNM` = Nondurable.
 **Key data_type codes:** `VS` = Shipments, `NO` = New Orders, `UO` = Unfilled Orders, `TI` = Inventories, `IS` = I/S Ratio.

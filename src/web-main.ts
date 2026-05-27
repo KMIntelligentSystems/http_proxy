@@ -105,55 +105,13 @@ const helloTool = defineTool({
   }),
 });
 
-const pushSvgTool = defineTool({
-  name: "push_svg",
-  label: "Push SVG",
-  description: "Push an SVG fragment to the browser canvas at http://localhost:8080/ui/canvas. Supports actions: clear, append, replace, remove.",
-  parameters: Type.Object({
-    action: Type.Union([
-      Type.Literal("clear"),
-      Type.Literal("append"),
-      Type.Literal("replace"),
-      Type.Literal("remove"),
-    ], { description: "SVG action type" }),
-    svg: Type.Optional(Type.String({ description: "SVG markup (for append/replace)" })),
-    id: Type.Optional(Type.String({ description: "Element ID (for replace/remove)" })),
-  }),
-  execute: async (_toolCallId, params) => {
-    try {
-      const body: Record<string, string> = { type: params.action };
-      if (params.svg) body.svg = params.svg;
-      if (params.id) body.id = params.id;
-
-      const hostPort = process.env["HOST_PORT"] ?? "3100";
-      const res = await fetch(`http://localhost:${hostPort}/ui/svg`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-loopback": "1" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`Host returned ${res.status}`);
-
-      return {
-        content: [{ type: "text" as const, text: `SVG ${params.action} sent to canvas.` }],
-        details: {},
-      };
-    } catch (err) {
-      return {
-        content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
-        details: {},
-        isError: true,
-      };
-    }
-  },
-});
-
 const visualizationTools = createVisualizationTools({
   artifactStore,
   cwd: process.cwd(),
   getSessionId: () => activeRuntime?.session?.sessionId,
 });
 
-const customTools = [...mcpTools, helloTool, pushSvgTool, ...visualizationTools];
+const customTools = [...mcpTools, helloTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 

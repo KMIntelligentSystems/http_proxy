@@ -3,6 +3,7 @@ import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
@@ -23,27 +24,8 @@ try {
   console.warn(`[host] Could not read data/.env for BLS key`);
 }
 
-// Browser WS clients connected to /ui/ws — receive SVG push messages.
-const browserClients = new Set<WebSocket>();
-
 // Browser WS clients connected to /ui/ws/agent — receive server-side runtime events.
 const agentClients = new Set<WebSocket>();
-
-// Broadcast an SVG command to all browser clients
-export function broadcastSvg(msg: SvgMessage) {
-  const payload = JSON.stringify(msg);
-  for (const client of browserClients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
-  }
-}
-
-export type SvgMessage =
-  | { type: "clear" }
-  | { type: "append"; svg: string }
-  | { type: "replace"; id: string; svg: string }
-  | { type: "remove"; id: string };
 
 type AgentWsMessage = {
   type: string;
@@ -230,7 +212,7 @@ function renderPortalHtml(): string {
     <header>
       <div>
         <h1>Data Visualization Agent Portal</h1>
-        <p class="lede">Launch generated HTML applications through the authenticated proxy path, inspect system status, and keep the legacy SVG canvas available for pushed visualizations.</p>
+        <p class="lede">Launch generated HTML applications through the authenticated proxy path and inspect system status.</p>
       </div>
       <span class="pill">proxy route /ui online</span>
     </header>
@@ -240,13 +222,6 @@ function renderPortalHtml(): string {
         <h2>Apps</h2>
         <div class="apps">
           ${appCards || `<div class="empty">No valid <code>src/ui/*.html</code> apps found. Use lowercase kebab-case file names.</div>`}
-          <a class="card" href="/ui/canvas">
-            <span class="kicker">Legacy</span>
-            <strong>SVG Push Canvas</strong>
-            <p>Open the WebSocket-backed canvas used by the <code>push_svg</code> tool.</p>
-            <code>/ui/canvas</code>
-            <small>${browserClients.size} connected WebSocket client${browserClients.size === 1 ? "" : "s"}</small>
-          </a>
         </div>
       </section>
 
@@ -258,7 +233,6 @@ function renderPortalHtml(): string {
             <li><span>Proxy entry</span><b class="ok">${escapeHtml(PROXY_URL)}</b></li>
             <li><span>BLS API key</span><b class="${BLS_API_KEY ? "ok" : "warn"}">${BLS_API_KEY ? "present" : "missing"}</b></li>
             <li><span>Discovered apps</span><b>${apps.length}</b></li>
-            <li><span>WS canvas clients</span><b>${browserClients.size}</b></li>
           </ul>
         </section>
 
@@ -267,7 +241,6 @@ function renderPortalHtml(): string {
           <p>Source prompt viewing is planned for Phase 2C. Prompt changes will require <code>/reload</code> or a new session before they affect the running agent.</p>
           <div class="button-row">
             <a class="button" href="/ui/app/bls-explorer">Open BLS Explorer</a>
-            <a class="button" href="/ui/canvas">Open SVG Canvas</a>
           </div>
         </section>
       </aside>
@@ -278,51 +251,6 @@ function renderPortalHtml(): string {
 </body>
 </html>`;
 }
-
-// ─── Legacy SVG canvas shell served at /ui/canvas ───────────────────────────
-
-const UI_HTML = /* html */ `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>http-proxy canvas</title>
-  <style>
-    body { margin: 0; background: #0d1117; display: flex; justify-content: center; align-items: center; height: 100vh; }
-    svg  { background: #161b22; border: 1px solid #30363d; border-radius: 6px; }
-  </style>
-</head>
-<body>
-  <svg id="canvas" width="800" height="600" xmlns="http://www.w3.org/2000/svg"></svg>
-  <script>
-    const canvas = document.getElementById("canvas");
-    const wsUrl  = "ws://" + location.host + "/ui/ws";
-    let   ws;
-
-    function connect() {
-      ws = new WebSocket(wsUrl);
-
-      ws.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "clear") {
-          canvas.innerHTML = "";
-        } else if (msg.type === "append") {
-          canvas.insertAdjacentHTML("beforeend", msg.svg);
-        } else if (msg.type === "replace") {
-          const el = document.getElementById(msg.id);
-          if (el) el.outerHTML = msg.svg;
-          else canvas.insertAdjacentHTML("beforeend", msg.svg);
-        } else if (msg.type === "remove") {
-          document.getElementById(msg.id)?.remove();
-        }
-      };
-
-      ws.onclose = () => setTimeout(connect, 1500); // auto-reconnect
-    }
-
-    connect();
-  </script>
-</body>
-</html>`;
 
 // ─── Host runtime API helpers ───────────────────────────────────────────────
 
@@ -584,17 +512,9 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // Legacy SVG canvas at /ui/canvas
-    if (pathname === "/ui/canvas") {
-      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-      res.end(UI_HTML);
-      return;
-    }
-
-    // Artifact listing/content for Phase W4. Artifacts are created by backend
-    // tools and served through the authenticated /ui route.
+    // Artifact listing — file store only (current-session artifacts).
+    // DB artifacts are queried on-demand via query_artifacts and re-surfaced via create_artifact.
     if (pathname === "/ui/api/artifacts" && req.method === "GET") {
- 
       const state = getAgentState(ctx);
       const includeAll = requestUrl.searchParams.get("all") === "1";
       const sessionId = includeAll ? undefined : state?.sessionId ?? undefined;
@@ -602,9 +522,76 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // POST /ui/api/artifacts/<id>/save — persist from file store to DB, then delete file
+    const saveMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)\/save$/);
+    if (saveMatch && req.method === "POST") {
+      const id = decodeURIComponent(saveMatch[1]);
+      const hit = artifactStore.get(id);
+      if (!hit) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Artifact not found");
+        return;
+      }
+      try {
+        const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
+        try {
+          const record = hit.record;
+          const content = fs.readFileSync(hit.filePath, "utf-8");
+          const now = new Date().toISOString();
+          const role = record.role || "chart";
+          const tags = JSON.stringify(record.role ? [record.role] : []);
+          const esc = (s: string) => s.replace(/'/g, "''");
+          // Ensure session exists
+          sqldb.exec(`INSERT OR IGNORE INTO session (id, model_id, title, started_at, prompt_count) VALUES ('${record.sessionId}', NULL, '${esc(record.title)}', '${record.createdAt}', 1)`);
+          // Insert artifact
+          const desc = record.description ? `'${esc(record.description)}'` : "NULL";
+          sqldb.exec(`INSERT OR REPLACE INTO artifact (id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, provenance, tags) VALUES ('${record.id}', '${record.sessionId}', '${esc(record.title)}', '${record.filename}', '${record.mimeType}', '${role}', ${desc}, '${esc(content)}', ${record.size}, '${record.createdAt}', '${now}', '{}', '${tags}')`);
+          artifactStore.delete(id);
+          sendJson(res, 200, { ok: true, id });
+        } finally {
+          sqldb.close();
+        }
+      } catch (err) {
+        console.error(`[host] artifact save error: ${err instanceof Error ? err.message : String(err)}`);
+        sendJson(res, 500, { error: err instanceof Error ? err.message : "Save failed" });
+      }
+      return;
+    }
+
+    // POST /ui/api/artifacts/<id>/discard — delete from file store
+    const discardMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)\/discard$/);
+    if (discardMatch && req.method === "POST") {
+      const id = decodeURIComponent(discardMatch[1]);
+      const deleted = artifactStore.delete(id);
+      if (!deleted) {
+        res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+        res.end("Artifact not found");
+        return;
+      }
+      sendJson(res, 200, { ok: true, id });
+      return;
+    }
+
     const artifactMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)(?:\/metadata)?$/);
     if (artifactMatch && req.method === "GET") {
       const id = decodeURIComponent(artifactMatch[1]);
+      // DB first, file store as fallback
+      const dbHit = artifactStore.dbGet(id);
+      if (dbHit) {
+        if (pathname.endsWith("/metadata")) {
+          sendJson(res, 200, dbHit.record);
+          return;
+        }
+        const mime = dbHit.record.mimeType;
+        res.writeHead(200, {
+          "Content-Type": isUtf8ArtifactMime(mime) ? `${mime}; charset=utf-8` : mime,
+          "Cache-Control": "no-store",
+          "X-Content-Type-Options": "nosniff",
+          "Content-Disposition": `inline; filename="${dbHit.record.filename.replace(/["\\]/g, "_")}"`,
+        });
+        res.end(dbHit.content);
+        return;
+      }
       const hit = artifactStore.get(id);
       if (!hit) {
         res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
@@ -768,7 +755,7 @@ const server = http.createServer((req, res) => {
 
     // Serve other static files from dist/web/ (publicDir artifacts like lookups-config.json, lookups/*.json)
     // Matches /ui/lookups/*, /ui/*.json, etc. that aren't already handled by a more specific route above.
-    if (pathname !== "/ui/" && !pathname.startsWith("/ui/assets/") && !pathname.startsWith("/ui/data/") && !pathname.startsWith("/ui/app/") && !pathname.startsWith("/ui/api/") && pathname !== "/ui/canvas" && pathname !== "/ui/portal") {
+    if (pathname !== "/ui/" && !pathname.startsWith("/ui/assets/") && !pathname.startsWith("/ui/data/") && !pathname.startsWith("/ui/app/") && !pathname.startsWith("/ui/api/") && pathname !== "/ui/portal") {
       const relativeName = decodeURIComponent(pathname.slice("/ui/".length));
       const filePath = path.resolve(WEB_DIST_DIR, relativeName);
       if (!relativeName || path.isAbsolute(relativeName) || !isInside(WEB_DIST_DIR, filePath)) {
@@ -786,24 +773,6 @@ const server = http.createServer((req, res) => {
         res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
         res.end("Static file not found");
       }
-      return;
-    }
-
-    // POST /ui/svg — TUI or any local process can push SVG messages here
-    if (pathname === "/ui/svg" && req.method === "POST") {
-      const body: Buffer[] = [];
-      req.on("data", (chunk) => body.push(chunk));
-      req.on("end", () => {
-        try {
-          const msg: SvgMessage = JSON.parse(Buffer.concat(body).toString());
-          broadcastSvg(msg);
-          res.writeHead(204);
-          res.end();
-        } catch {
-          res.writeHead(400);
-          res.end("Bad JSON");
-        }
-      });
       return;
     }
 
@@ -854,13 +823,6 @@ wss.on("connection", (clientSocket, req) => {
   const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
   const wsPathname = new URL(req.url ?? "/", "http://host.local").pathname;
   console.log(`[${new Date().toISOString()}] WS ${clientId} ${req.url}`);
-
-  // /ui/ws — browser SVG canvas client
-  if (wsPathname === "/ui/ws") {
-    browserClients.add(clientSocket);
-    clientSocket.on("close", () => browserClients.delete(clientSocket));
-    return;
-  }
 
   // /ui/ws/agent — browser runtime event stream. Only serve the loopback-tagged
   // second hop that has passed through the proxy.
@@ -929,8 +891,6 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 server.listen(HOST_PORT, "127.0.0.1", () => {
   console.log(`Host listening on http://127.0.0.1:${HOST_PORT}`);
   console.log(`UI portal at   ${PROXY_URL}/ui`);
-  console.log(`SVG canvas at  ${PROXY_URL}/ui/canvas`);
-  console.log(`SVG push API   POST ${PROXY_URL}/ui/svg`);
 });
 
 return {
@@ -939,7 +899,7 @@ return {
   close: () => new Promise<void>((resolve, reject) => {
     detachAgentEventBridge();
     detachArtifactEvents();
-    for (const client of [...browserClients, ...agentClients]) client.close();
+    for (const client of agentClients) client.close();
     wss.close((wsErr) => {
       if (wsErr) {
         reject(wsErr);
