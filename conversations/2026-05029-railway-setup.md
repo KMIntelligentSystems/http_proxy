@@ -705,7 +705,7 @@
  The user wants concluding thoughts to help them decide. Let me summarize the key tradeoffs clearly.                                                                                                                                 
 
  Three takeaways to guide your decision:                                                                                                                                                                                             
-                                                                                                                                                                                                                                     
+          estt                                                                                                                                                                                                                           
  1. The X-13 binary is the only hard platform constraint. Everything else in the stack (Node.js, Python via the MCP servers, the React build) is platform-agnostic. If you want full seasonal-adjustment capability, you need either 
  a Linux host (Droplet) or to accept STL-only (which works fine inside Railway containers). The Census Bureau provides x13as for Linux — it's a straightforward install.                                                             
  2. The Droplet is the natural path if you plan to grow. Right now you have MCP servers in Railway and a static-dashboard Express server in Railway. The DVA app adds a third service. At some point the networking across services  
