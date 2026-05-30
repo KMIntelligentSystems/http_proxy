@@ -73,10 +73,14 @@ function stopProxy() {
 let activeRuntime: any;
 const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
 
+const MCP_PLAYWRIGHT_URL = process.env["MCP_PLAYWRIGHT_URL"] ?? "http://localhost:3000/mcp";
+const MCP_SEARCH_URL = process.env["MCP_SEARCH_URL"] ?? "http://localhost:3004/mcp";
+const MCP_CODEGEN_URL = process.env["MCP_CODEGEN_URL"] ?? "http://localhost:3003/mcp";
+
 const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
   {
     name: "codegen",
-    url: "http://localhost:3003/mcp",
+    url: MCP_CODEGEN_URL,
     skillPath: ".pi/skills/codegen-mcp/SKILL.md",
     promptGuidelines: [
       "Use these tools when asked to generate, scaffold, or transform code via the codegen service.",
@@ -84,11 +88,11 @@ const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
   },
   {
     name: "playwright",
-    url: "http://localhost:3000/mcp",
+    url: MCP_PLAYWRIGHT_URL,
   },
   {
     name: "search",
-    url: "http://localhost:3004/mcp",
+    url: MCP_SEARCH_URL,
   },
 ]);
 

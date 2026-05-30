@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ["nodejs_24"]
+
+[phases.build]
+cmds = [
+  "npm ci",
+  "npx tsc",
+  "npm run build:web"
+]
+
+[start]
+cmd = "node dist/web-main.js"
