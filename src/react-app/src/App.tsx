@@ -6,7 +6,7 @@ import { DocumentViewer, type DocumentManifest } from "./components/DocumentView
 import { SavedDocs } from "./components/SavedDocs";
 
 export function App() {
-  const { artifacts, working, submit, saveArtifact, discardArtifact } = useAgent();
+  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice } = useAgent();
   const {
     config,
     lookupData,
@@ -86,6 +86,12 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {notice && (
+        <div className={`notice notice-${notice.kind}`} role="status">
+          <span>{notice.message}</span>
+          <button className="notice-close" onClick={dismissNotice} aria-label="Dismiss">×</button>
+        </div>
+      )}
       <nav className="navbar">
         <span className="brand">DVA</span>
         <input

@@ -11,18 +11,20 @@ import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./a
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
 
-// Load BLS API key from data/.env
-let BLS_API_KEY = "";
-try {
-  const envPath = path.resolve(import.meta.dirname ?? ".", "..", "data", ".env");
-  const envText = fs.readFileSync(envPath, "utf-8");
-  const match = envText.match(/^BLS_API_KEY=(.+)$/m);
-  if (match) BLS_API_KEY = match[1].trim().replace(/["']/g, "");
-  if (BLS_API_KEY) console.log(`[host] BLS API key loaded (${BLS_API_KEY.slice(0, 6)}…)`);
-  else console.warn(`[host] BLS_API_KEY not found in ${envPath}`);
-} catch (e) {
-  console.warn(`[host] Could not read data/.env for BLS key`);
+// BLS API key — prefer process.env (set by Railway or loadProjectEnv), fall back to data/.env
+let BLS_API_KEY = process.env["BLS_API_KEY"]?.trim().replace(/["']/g, "") ?? "";
+if (!BLS_API_KEY) {
+  try {
+    const envPath = path.resolve(import.meta.dirname ?? ".", "..", "data", ".env");
+    const envText = fs.readFileSync(envPath, "utf-8");
+    const match = envText.match(/^BLS_API_KEY=(.+)$/m);
+    if (match) BLS_API_KEY = match[1].trim().replace(/["']/g, "");
+  } catch {
+    // No data/.env (e.g. Railway) — process.env was the only chance
+  }
 }
+if (BLS_API_KEY) console.log(`[host] BLS API key loaded (${BLS_API_KEY.slice(0, 6)}…)`);
+else console.warn(`[host] BLS_API_KEY not set in env or data/.env`);
 
 // Browser WS clients connected to /ui/ws/agent — receive server-side runtime events.
 const agentClients = new Set<WebSocket>();
@@ -395,6 +397,98 @@ function isMainModule(): boolean {
   return path.resolve(fileURLToPath(import.meta.url)) === path.resolve(entry);
 }
 
+interface ModelCommandResult {
+  ok: boolean;
+  changed: boolean;
+  message: string;
+  current?: { provider: string; id: string; name: string };
+  matches?: Array<{ provider: string; id: string; name: string }>;
+  available?: Array<{ provider: string; id: string; name: string }>;
+}
+
+function summarizeModel(m: { provider: string; id: string; name: string }) {
+  return { provider: m.provider, id: m.id, name: m.name };
+}
+
+export async function applyModelSelection(
+  session: AgentSession,
+  query: string,
+): Promise<ModelCommandResult> {
+  const registry = session.modelRegistry;
+  const available = registry.getAvailable();
+  const explicit = query.includes(":") ? query.split(":", 2) : null;
+
+  let candidates = available;
+  if (explicit) {
+    const [prov, id] = explicit;
+    candidates = available.filter(
+      (m) => m.provider.toLowerCase() === prov.toLowerCase() && m.id.toLowerCase() === id.toLowerCase(),
+    );
+  } else {
+    const lower = query.toLowerCase();
+    const exact = available.filter((m) => m.id.toLowerCase() === lower);
+    candidates = exact.length > 0
+      ? exact
+      : available.filter((m) => m.id.toLowerCase().includes(lower) || m.name.toLowerCase().includes(lower));
+  }
+
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      changed: false,
+      message: `No model matches "${query}". Use /m alone to list available models.`,
+      available: available.map(summarizeModel),
+    };
+  }
+  if (candidates.length > 1) {
+    return {
+      ok: false,
+      changed: false,
+      message: `Multiple models match "${query}". Disambiguate with provider:id.`,
+      matches: candidates.map(summarizeModel),
+    };
+  }
+
+  const target = candidates[0];
+  await session.setModel(target);
+  return {
+    ok: true,
+    changed: true,
+    message: `Model switched to ${target.provider}:${target.id} (${target.name}).`,
+    current: summarizeModel(target),
+  };
+}
+
+async function handleModelSlashCommand(input: string, session: AgentSession): Promise<ModelCommandResult> {
+  const arg = input.slice(2).trim();
+  const current = session.model;
+  const currentSummary = current ? summarizeModel(current) : undefined;
+
+  if (!arg) {
+    const available = session.modelRegistry.getAvailable().map(summarizeModel);
+    return {
+      ok: true,
+      changed: false,
+      message: currentSummary
+        ? `Current model: ${currentSummary.provider}:${currentSummary.id} (${currentSummary.name}). ${available.length} models available.`
+        : `No model selected. ${available.length} models available.`,
+      current: currentSummary,
+      available,
+    };
+  }
+
+  try {
+    return await applyModelSelection(session, arg);
+  } catch (err) {
+    return {
+      ok: false,
+      changed: false,
+      message: `Failed to set model: ${err instanceof Error ? err.message : String(err)}`,
+      current: currentSummary,
+    };
+  }
+}
+
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 
 export function startHost(ctx: HostContext = {}): HostServer {
@@ -655,12 +749,31 @@ const server = http.createServer((req, res) => {
             sendJson(res, 400, { error: "Missing non-empty input" });
             return;
           }
+
+          const session = ctx.runtime.session;
+
+          // Intercept /m model-switch slash command (mirrors TUI /m UX)
+          const trimmed = input.trim();
+          if (trimmed === "/m" || trimmed.startsWith("/m ")) {
+            const result = await handleModelSlashCommand(trimmed, session as AgentSession);
+            if (result.changed) {
+              const state = getAgentState(ctx);
+              if (state) {
+                broadcastAgentWsMessage({
+                  type: "agent_state",
+                  state,
+                  receivedAt: new Date().toISOString(),
+                });
+              }
+            }
+            sendJson(res, result.ok ? 200 : 400, result);
+            return;
+          }
+
           if (promptInFlight || ctx.runtime.session.isStreaming) {
             sendJson(res, 409, { error: "Agent is already processing a prompt" });
             return;
           }
-
-          const session = ctx.runtime.session;
           promptInFlight = true;
           void Promise.resolve()
             .then(() => session.prompt(input))

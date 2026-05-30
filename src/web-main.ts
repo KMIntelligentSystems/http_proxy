@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { createArtifactStore } from "./artifacts.js";
 import { loadProjectEnv } from "./env.js";
-import { startHost } from "./host.js";
+import { applyModelSelection, startHost } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
 import { createVisualizationTools } from "./visualization-tools.js";
 
@@ -171,6 +171,14 @@ for (const methodName of ["newSession", "switchSession", "fork", "importFromJson
 }
 
 const host = startHost({ runtime, artifactStore });
+
+const startupModel = process.env["MODEL"]?.trim();
+if (startupModel) {
+  const result = await applyModelSelection(runtime.session, startupModel);
+  if (result.ok) console.log(`[web-main] ${result.message}`);
+  else console.warn(`[web-main] MODEL=${startupModel}: ${result.message}`);
+}
+
 startProxy();
 
 const proxyPort = process.env["PORT"] ?? "8080";

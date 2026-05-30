@@ -25,6 +25,27 @@ body {
   height: 100vh;
 }
 
+/* Notice banner — overlays at top, dismissible */
+.notice {
+  position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px; color: var(--text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  max-width: 70%;
+}
+.notice-info { border-color: var(--accent); }
+.notice-error { border-color: #f78166; color: #f78166; }
+.notice-close {
+  background: none; border: none; color: inherit;
+  cursor: pointer; font-size: 18px; line-height: 1;
+  padding: 0 4px;
+}
+
 /* Navbar */
 .navbar {
   grid-column: 1 / -1;

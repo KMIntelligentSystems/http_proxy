@@ -9,9 +9,12 @@ import {
 
 export type { ArtifactRecord };
 
+export type Notice = { kind: "info" | "error"; message: string };
+
 export function useAgent() {
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([]);
   const [working, setWorking] = useState(isWorking);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   useEffect(() => {
     const unsubWorking = onWorkingChange(setWorking);
@@ -40,9 +43,13 @@ export function useAgent() {
     };
   }, []);
 
-  const submit = useCallback((prompt: string) => {
-    sendPrompt(prompt);
+  const submit = useCallback(async (prompt: string) => {
+    const result = await sendPrompt(prompt);
+    if (result.kind === "info") setNotice({ kind: "info", message: result.message });
+    else if (result.kind === "error") setNotice({ kind: "error", message: result.message });
   }, []);
+
+  const dismissNotice = useCallback(() => setNotice(null), []);
 
   const saveArtifact = useCallback(async (id: string) => {
     const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/save`, { method: "POST" });
@@ -56,5 +63,5 @@ export function useAgent() {
     setArtifacts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  return { artifacts, working, submit, saveArtifact, discardArtifact };
+  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice };
 }

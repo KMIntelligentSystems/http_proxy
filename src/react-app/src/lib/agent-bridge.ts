@@ -26,6 +26,11 @@ export type ArtifactRecord = {
 
 export const artifactEvents = new EventTarget();
 
+export type PromptResponse =
+  | { kind: "queued" }
+  | { kind: "info"; message: string }
+  | { kind: "error"; message: string };
+
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let working = false;
@@ -75,10 +80,12 @@ function connect(): void {
 
 /**
  * Send a user prompt to the server-side agent runtime.
- * Returns true if the prompt was accepted (HTTP 202).
+ * - 202: prompt queued, agent will stream events (working stays true)
+ * - 200: synchronous command result (e.g. /m), no turn started (working returns to false)
+ * - !ok: error response
  */
-export async function sendPrompt(text: string): Promise<boolean> {
-  if (!text.trim() || working) return false;
+export async function sendPrompt(text: string): Promise<PromptResponse> {
+  if (!text.trim() || working) return { kind: "error", message: "Busy or empty input" };
 
   setWorking(true);
   try {
@@ -88,14 +95,20 @@ export async function sendPrompt(text: string): Promise<boolean> {
       body: JSON.stringify({ input: text }),
     });
 
-    if (!res.ok) {
-      setWorking(false);
-      return false;
-    }
-    return true;
-  } catch {
+    const body = await res.json().catch(() => ({}));
+
+    if (res.status === 202) return { kind: "queued" };
+
     setWorking(false);
-    return false;
+    const message = typeof body?.message === "string"
+      ? body.message
+      : typeof body?.error === "string"
+      ? body.error
+      : `HTTP ${res.status}`;
+    return res.ok ? { kind: "info", message } : { kind: "error", message };
+  } catch (err) {
+    setWorking(false);
+    return { kind: "error", message: err instanceof Error ? err.message : String(err) };
   }
 }
 
