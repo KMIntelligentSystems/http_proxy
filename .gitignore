@@ -30,4 +30,5 @@ data/artifacts/*
 *.xlsx
 *.pdf
 *.html
+!src/react-app/index.html
 *.png
