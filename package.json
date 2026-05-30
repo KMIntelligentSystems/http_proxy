@@ -1,7 +1,8 @@
 {
 	"type": "module",
 	"scripts": {
-		"build": "tsc",
+		"build": "tsc && vite build --config src/react-app/vite.config.ts",
+		"start": "node dist/web-main.js",
 		"start:proxy": "node dist/proxy.js",
 		"start:host": "node dist/host.js",
 		"dev:proxy": "tsc && node dist/proxy.js",
