@@ -76,11 +76,17 @@ const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artif
 const MCP_PLAYWRIGHT_URL = process.env["MCP_PLAYWRIGHT_URL"] ?? "http://localhost:3000/mcp";
 const MCP_SEARCH_URL = process.env["MCP_SEARCH_URL"] ?? "http://localhost:3004/mcp";
 const MCP_CODEGEN_URL = process.env["MCP_CODEGEN_URL"] ?? "http://localhost:3003/mcp";
+// Shared secret the codegen MCP server requires. Sending it as a Bearer header
+// avoids the 401 that makes mcporter fall back to a (headless-incompatible) OAuth flow.
+const MCP_CODEGEN_TOKEN = process.env["AUTH_TOKEN"];
 
 const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
   {
     name: "codegen",
     url: MCP_CODEGEN_URL,
+    ...(MCP_CODEGEN_TOKEN
+      ? { headers: { Authorization: `Bearer ${MCP_CODEGEN_TOKEN}` } }
+      : {}),
     skillPath: ".pi/skills/codegen-mcp/SKILL.md",
     promptGuidelines: [
       "Use these tools when asked to generate, scaffold, or transform code via the codegen service.",

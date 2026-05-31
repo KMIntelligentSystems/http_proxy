@@ -26,6 +26,12 @@ export interface McpServerConfig {
   /** HTTP URL the MCP server listens on. */
   url: string;
   /**
+   * Optional HTTP headers sent on every request to this server (e.g. a static
+   * `Authorization: Bearer <token>`). Sending a valid token avoids the 401 that
+   * would otherwise make mcporter fall back to an OAuth browser flow.
+   */
+  headers?: Record<string, string>;
+  /**
    * Optional path to a SKILL.md whose content is injected as `promptSnippet`
    * on every tool from this server, giving the agent usage context.
    */
@@ -64,7 +70,11 @@ export async function createMcpTools(
   for (const server of servers) {
     const definition: ServerDefinition = {
       name: server.name,
-      command: { kind: "http", url: new URL(server.url) },
+      command: {
+        kind: "http",
+        url: new URL(server.url),
+        ...(server.headers ? { headers: server.headers } : {}),
+      },
     };
 
     await runtime.registerDefinition(definition);
