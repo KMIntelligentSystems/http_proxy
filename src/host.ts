@@ -512,6 +512,14 @@ const server = http.createServer((req, res) => {
     const requestUrl = new URL(req.url ?? "/", "http://host.local");
     const pathname = requestUrl.pathname;
 
+    // The app lives under /ui. Redirect the bare root so visiting the public
+    // URL lands on the app instead of the "Invalid static path" fallthrough.
+    if (pathname === "/" || pathname === "") {
+      res.writeHead(302, { Location: "/ui/" });
+      res.end();
+      return;
+    }
+
     // Phase W2 web shell at /ui. If dist/web is not built yet, fall back to
     // the legacy portal so standalone dev:host remains useful.
     if (pathname === "/ui" || pathname === "/ui/") {
