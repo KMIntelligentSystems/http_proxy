@@ -10,6 +10,12 @@
 
 export type AgentState = "idle" | "working";
 
+export type ModelInfo = {
+  provider: string;
+  id: string;
+  name: string;
+};
+
 export type ArtifactRecord = {
   id: string;
   sessionId?: string;
@@ -36,9 +42,17 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let working = false;
 let workingListeners = new Set<(w: boolean) => void>();
 
+let currentModel: ModelInfo | null = null;
+let modelListeners = new Set<(m: ModelInfo | null) => void>();
+
 function setWorking(w: boolean) {
   working = w;
   for (const fn of workingListeners) fn(w);
+}
+
+function setCurrentModel(m: ModelInfo | null) {
+  currentModel = m;
+  for (const fn of modelListeners) fn(m);
 }
 
 function connect(): void {
@@ -55,6 +69,11 @@ function connect(): void {
             detail: data.artifact,
           })
         );
+        return;
+      }
+
+      if (data.type === "agent_state" && data.state?.model) {
+        setCurrentModel(data.state.model);
         return;
       }
 
@@ -123,6 +142,39 @@ export function onWorkingChange(fn: (w: boolean) => void): () => void {
 /** Returns the current working state synchronously. */
 export function isWorking(): boolean {
   return working;
+}
+
+/** Fetch the list of available models and current selection. */
+export async function fetchModels(): Promise<{ current: ModelInfo | null; available: ModelInfo[] }> {
+  const res = await fetch("/ui/api/agent/models");
+  if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
+  const data = await res.json();
+  setCurrentModel(data.current ?? null);
+  return data;
+}
+
+/**
+ * Switch model via the /m handler (POST /ui/api/agent/prompt with "/m provider:id").
+ * Returns the server response body.
+ */
+export async function switchModel(providerColonId: string): Promise<any> {
+  const res = await fetch("/ui/api/agent/prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ input: `/m ${providerColonId}` }),
+  });
+  return res.json();
+}
+
+/** Subscribe to current-model changes. Returns unsubscribe. */
+export function onModelChange(fn: (m: ModelInfo | null) => void): () => void {
+  modelListeners.add(fn);
+  return () => modelListeners.delete(fn);
+}
+
+/** Returns the current model synchronously. */
+export function getCurrentModel(): ModelInfo | null {
+  return currentModel;
 }
 
 // Connect immediately on module load

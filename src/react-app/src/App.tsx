@@ -4,6 +4,7 @@ import { useLookupConfig } from "./hooks/useLookupConfig";
 import { LookupPanel } from "./components/LookupPanel";
 import { DocumentViewer, type DocumentManifest } from "./components/DocumentViewer";
 import { SavedDocs } from "./components/SavedDocs";
+import { ModelSelector } from "./components/ModelSelector";
 
 export function App() {
   const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice } = useAgent();
@@ -94,6 +95,7 @@ export function App() {
       )}
       <nav className="navbar">
         <span className="brand">DVA</span>
+        <ModelSelector />
         <input
           ref={inputRef}
           className="prompt-bar"

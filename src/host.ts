@@ -717,6 +717,24 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // GET /ui/api/agent/models — list available models and current selection
+    if (pathname === "/ui/api/agent/models" && req.method === "GET") {
+      try {
+        const session = ctx.runtime?.session;
+        const registry = session?.modelRegistry;
+        if (!registry) {
+          sendJson(res, 503, { error: "Model registry not available" });
+          return;
+        }
+        const available = registry.getAvailable().map(summarizeModel);
+        const current = session.model ? summarizeModel(session.model) : null;
+        sendJson(res, 200, { current, available });
+      } catch (err) {
+        sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      }
+      return;
+    }
+
     // GET /ui/api/agent/state — expose current server-side agent state
     if (pathname === "/ui/api/agent/state" && req.method === "GET") {
       const state = getAgentState(ctx);
