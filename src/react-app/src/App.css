@@ -36,7 +36,11 @@ body {
   background: var(--surface);
   font-size: 13px; color: var(--text);
   box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-  max-width: 70%;
+  max-width: min(760px, 82vw);
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  line-height: 1.45;
 }
 .notice-info { border-color: var(--accent); }
 .notice-error { border-color: #f78166; color: #f78166; }

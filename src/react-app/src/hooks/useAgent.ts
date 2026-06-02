@@ -5,6 +5,7 @@ import {
   onWorkingChange,
   isWorking,
   type ArtifactRecord,
+  type AssistantResponse,
 } from "../lib/agent-bridge";
 
 export type { ArtifactRecord };
@@ -27,7 +28,13 @@ export function useAgent() {
       });
     };
 
+    const onAssistantResponse = (e: Event) => {
+      const detail = (e as CustomEvent<AssistantResponse>).detail;
+      if (detail.message.trim()) setNotice({ kind: "info", message: detail.message.trim() });
+    };
+
     artifactEvents.addEventListener("artifact_created", onArtifact);
+    artifactEvents.addEventListener("assistant_response", onAssistantResponse as EventListener);
 
     // Load existing artifacts from the server on mount
     fetch("/ui/api/artifacts")
@@ -40,6 +47,7 @@ export function useAgent() {
     return () => {
       unsubWorking();
       artifactEvents.removeEventListener("artifact_created", onArtifact);
+      artifactEvents.removeEventListener("assistant_response", onAssistantResponse as EventListener);
     };
   }, []);
 

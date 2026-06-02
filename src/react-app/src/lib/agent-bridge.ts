@@ -40,6 +40,13 @@ export type UserQuestionResolved = {
   runId?: string | null;
 };
 
+export type AssistantResponse = {
+  type: "assistant_response";
+  message: string;
+  receivedAt?: string;
+  sessionId?: string | null;
+};
+
 export type ArtifactRecord = {
   id: string;
   sessionId?: string;
@@ -77,6 +84,46 @@ function setWorking(w: boolean) {
 function setCurrentModel(m: ModelInfo | null) {
   currentModel = m;
   for (const fn of modelListeners) fn(m);
+}
+
+function extractTextPart(part: any): string {
+  if (!part) return "";
+  if (typeof part === "string") return part;
+  if (typeof part.text === "string") return part.text;
+  if (typeof part.content === "string") return part.content;
+  return "";
+}
+
+function latestAssistantText(messages: any): string | null {
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i];
+    if (message?.role !== "assistant") continue;
+    const content = message.content;
+    const text = Array.isArray(content)
+      ? content.map(extractTextPart).filter(Boolean).join("\n")
+      : typeof content === "string"
+        ? content
+        : "";
+    const trimmed = text.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
+function dispatchAssistantResponse(data: any) {
+  const message = latestAssistantText(data?.state?.messages);
+  if (!message) return;
+  artifactEvents.dispatchEvent(
+    new CustomEvent<AssistantResponse>("assistant_response", {
+      detail: {
+        type: "assistant_response",
+        message,
+        receivedAt: data.receivedAt,
+        sessionId: data.sessionId ?? data.state?.sessionId ?? null,
+      },
+    })
+  );
 }
 
 function connect(): void {
@@ -121,6 +168,7 @@ function connect(): void {
 
       if (data.type === "agent_prompt_complete") {
         setWorking(false);
+        dispatchAssistantResponse(data);
         return;
       }
 
