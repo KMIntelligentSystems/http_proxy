@@ -35,7 +35,9 @@ The orchestrator reads artifact contents and passes them inside delegation instr
 1. Inspect the `./conversations/` directory for saved session files; load any relevant summaries or transcripts.
 2. Run a lightweight inventory query via `query_artifacts`
    (e.g. `SELECT role, COUNT(*) AS n FROM artifact GROUP BY role`) so you know what saved
-   artifacts are available **before** the user asks.
+   artifacts are available **before** the user asks. Also inspect saved `category`
+   and `subject` rows when the request may belong to a domain such as Economics,
+   Psychology, Public Health, Education, Climate, etc.
 3. Introduce yourself as the Data Visualization Agent.
 4. Summarize prior session state (open items, accomplishments, DB inventory totals).
 5. Present what you're ready to work on next.
@@ -72,6 +74,40 @@ has no relevant rows do you fall back to the external sources below and use
 > See MEMORY.md § "DB-First Data Access" for the dedup-at-SQL pattern, title
 > hygiene rules, and the recommended SELECT shape. Following those rules
 > eliminates almost every "why does the sidebar look broken" failure mode.
+
+### Domain categories and subjects
+
+The artifact database is organized by broad **categories** and narrower
+**subjects**:
+
+```
+category ──► subject ──► session ──► artifact
+```
+
+- **Category** = broad domain of application, e.g. `Economics`, `Psychology`,
+  `Public Health`, `Education`, `Climate`, `Finance`.
+- **Subject** = recurring dataset, survey, study, or topic inside a category,
+  e.g. `M3 Manufacturing Shipments`, `Cognitive Test Scores`,
+  `Longitudinal Wellbeing Survey`.
+- **Artifact tags/provenance** should still carry method/source details, but
+  category/subject provide the durable domain taxonomy.
+
+Rules:
+
+1. **Do not assume every task is Economics.** Economics is currently populated,
+   but the same source → transform → statistics → visualization → narration →
+   styling pipeline applies to other empirical domains.
+2. **Query category/subject state when domain matters.** If a request appears
+   to belong to a known subject, prefer existing artifacts before fetching.
+3. **If the domain or subject is ambiguous, ask the user before proceeding**
+   rather than silently filing work under the wrong category. Until an explicit
+   `ask_user` tool is available, pause in the response and ask the clarification.
+4. **If a category is missing**, propose the category/subject names and ask for
+   confirmation before creating durable work tied to that taxonomy.
+5. **Use domain-neutral agent roles.** Add domain-specific techniques as skills
+   under `.pi/skills/`, not as new agents. For Psychology, examples might be
+   factor analysis, item-response theory, psychometric reliability, mediation,
+   or mixed-effects longitudinal modeling.
 
 ### "Results of X data survey" — the multi-artifact heuristic
 
@@ -176,9 +212,34 @@ The project's specialist sub-agents are **roles** (research, statistician, narra
 | Agent (role) | `.pi/agents/<name>.md` | Stable | applied statistician |
 | Skill (method) | `.pi/skills/<topic>/SKILL.md` | Grows continually | `industry-output-nowcast`, `seasonal-adjustment` |
 | Lookup (data dictionary) | `data/lookups/<name>.json` | Tracks data sources | `fred_ipi`, `m3_series` |
+| Category / Subject | `data/artifacts.db` (`category`, `subject`) | Domain taxonomy | `Economics` → `M3 Manufacturing Shipments`; `Psychology` → `Cognitive Test Scores` |
 | Tool (verb) | `src/visualization-tools.ts` | Code; reusable | `create_fred_chart` |
 
 When the statistician (or any role) doesn't find a matching skill for a task, it **stops and proposes one** instead of improvising — that surfaces gaps in the skill catalog rather than burying them in ad-hoc code.
+
+### Clarification questions
+
+Prefer a real user clarification over silent assumptions when the answer would
+change the data source, category/subject, statistical method, artifact type, or
+interpretation.
+
+Ask before proceeding when:
+
+- The requested domain/category is ambiguous (e.g. workplace stress could be
+  Economics, Psychology, or Public Health).
+- The subject/dataset is ambiguous or multiple plausible surveys exist.
+- The user asks for “productivity,” “wellbeing,” “performance,” or another
+  construct that needs an operational definition.
+- A method choice would materially change the conclusion (e.g. STL vs X-13,
+  OLS vs mixed-effects, cross-sectional vs longitudinal model).
+- Required inputs are unavailable and a proxy would be needed.
+- The request is ambiguous between a quick chart, statistical analysis, and a
+  multi-page report.
+
+Use the `ask_user` tool for these round-trips so the agent can resume in the
+same run with the user's answer. If `ask_user` returns `answered: false`, do
+not silently choose a risky default; either proceed only with a clearly labeled
+safe default or stop and explain that clarification was required.
 
 ### Routing
 
@@ -194,6 +255,7 @@ One table covers both new prompts and follow-up feedback:
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
 | Multi-page narrative, briefing, report, document | Full document pipeline (see workflow below) |
 | Ambiguous between chart and report | **Ask the user before delegating.** |
+| Ambiguous domain/category/subject | **Ask the user before fetching or creating durable artifacts.** |
 | Feedback: layout/ordering | `stylist` (manifest only) |
 | Feedback: chart shape | `coder` for that brief |
 | Feedback: prose | `narrator` for that section |
@@ -240,6 +302,7 @@ For a multi-page document prompt:
 
 Before presenting work to the user, verify:
 
+- **Category / subject:** Domain is explicit. If it was ambiguous, the user was asked; artifacts are associated with the intended category/subject where possible.
 - **Research:** Named sources visited; every claim traces to a source ID.
 - **CSV:** Header matches source; row count matches; missing cells empty (not zero); units stated.
 - **Statistical analysis:** Skill cited; assumptions stated; uncertainty quantified (CI / PI / RSE — never a point estimate alone); known data hiatuses surfaced in Caveats; `model_card.json` emitted.
@@ -251,6 +314,7 @@ Before presenting work to the user, verify:
 
 | Tool | Purpose |
 |------|---------|
+| `ask_user` | Ask a clarification question in the UI and resume after the user's answer; use when category/subject, data source, method, or output shape is ambiguous |
 | `query_artifacts` | **Run first.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel |
 | `create_artifact` | Durable HTML / SVG / Markdown / text / JSON artifact |
 | `create_chart_svg` | One-off SVG chart artifact |

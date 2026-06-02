@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
+import type { UserQuestionManager } from "./user-questions.js";
 
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
@@ -259,6 +260,7 @@ function renderPortalHtml(): string {
 export type HostContext = {
   runtime?: any;
   artifactStore?: ArtifactStore;
+  userQuestionManager?: UserQuestionManager;
 };
 
 export type HostServer = {
@@ -495,6 +497,13 @@ export function startHost(ctx: HostContext = {}): HostServer {
 let promptInFlight = false;
 const artifactStore = ctx.artifactStore ?? createArtifactStore(path.resolve(PROJECT_ROOT, "data", "artifacts"));
 ctx.artifactStore = artifactStore;
+ctx.userQuestionManager?.setTransport({
+  broadcast: (event) => broadcastAgentWsMessage({
+    ...event,
+    receivedAt: new Date().toISOString(),
+  }),
+  getClientCount: () => agentClients.size,
+});
 const detachArtifactEvents = artifactStore.onCreated((artifact) => {
   broadcastAgentWsMessage({
     type: "artifact_created",
@@ -833,6 +842,27 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // POST /ui/api/agent/answer — answer a pending ask_user question
+    if (pathname === "/ui/api/agent/answer" && req.method === "POST") {
+      if (!ctx.userQuestionManager) {
+        sendJson(res, 503, { error: "User-question manager is not available" });
+        return;
+      }
+      readJsonBody(req)
+        .then((body) => {
+          const id = typeof body?.id === "string" ? body.id : "";
+          const response = typeof body?.response === "string" ? body.response : "";
+          const result = ctx.userQuestionManager!.answer(id, response);
+          if (!result.ok) {
+            sendJson(res, result.status, { error: result.error });
+            return;
+          }
+          sendJson(res, 200, { ok: true, result: result.result });
+        })
+        .catch((err) => sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
+
     // POST /ui/api/agent/abort — abort the active agent turn if supported
     if (pathname === "/ui/api/agent/abort" && req.method === "POST") {
       const abort = ctx.runtime?.session?.abort;
@@ -840,6 +870,7 @@ const server = http.createServer((req, res) => {
         sendJson(res, 503, { error: "Agent abort is not available" });
         return;
       }
+      ctx.userQuestionManager?.cancelAll("agent_aborted");
       Promise.resolve(abort.call(ctx.runtime.session))
         .then(() => sendJson(res, 200, { ok: true }))
         .catch((err) => sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) }));
@@ -980,7 +1011,14 @@ wss.on("connection", (clientSocket, req) => {
         state,
         receivedAt: new Date().toISOString(),
       });
-    } else {
+    }
+    for (const question of ctx.userQuestionManager?.getPending() ?? []) {
+      sendAgentWsMessage(clientSocket, {
+        ...question,
+        receivedAt: new Date().toISOString(),
+      });
+    }
+    if (!state) {
       sendAgentWsMessage(clientSocket, {
         type: "agent_bridge_status",
         status: "no_runtime",
@@ -1038,6 +1076,7 @@ return {
   close: () => new Promise<void>((resolve, reject) => {
     detachAgentEventBridge();
     detachArtifactEvents();
+    ctx.userQuestionManager?.cancelAll("server_shutdown");
     for (const client of agentClients) client.close();
     wss.close((wsErr) => {
       if (wsErr) {

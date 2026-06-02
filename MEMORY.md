@@ -84,6 +84,21 @@ model(id, provider, display_name, created_at)
 - Include at minimum: `id`, `title`, `filename`, `mime_type`, `content`.
 - Recommended: `SELECT id, title, filename, mime_type, role, description, content, tags FROM artifact WHERE … ORDER BY created_at DESC`.
 - Only `SELECT` is permitted. Any other statement is rejected.
+- To inspect categories or subjects with `query_artifacts`, alias fields into the artifact-shaped columns the tool expects, e.g.:
+
+```sql
+SELECT id, name AS title, 'category.txt' AS filename,
+       'text/plain' AS mime_type, description AS content
+FROM category
+ORDER BY name;
+```
+
+```sql
+SELECT id, name AS title, 'subject.txt' AS filename,
+       'text/plain' AS mime_type, description AS content, category_id
+FROM subject
+ORDER BY name;
+```
 
 ### Recommended SELECT pattern (dedup + HTML-only)
 
@@ -115,6 +130,46 @@ If the query returns 0 rows (or only rows that don't actually answer the questio
 then and only then fall back to external APIs / web-search and write the result
 with `create_artifact`.
 
+### Category / subject registry
+
+The DB has a durable taxonomy layer:
+
+```
+category(id, name, description, created_at, updated_at)
+subject(id, category_id, name, description, tags, created_at, updated_at)
+session(id, subject_id, ...)
+artifact(session_id, ...)
+```
+
+Current known registry state:
+
+| Category | Subjects |
+|----------|----------|
+| Economics | `M3 Manufacturing Shipments`; `M3 Series Inventory` |
+
+Operational rules:
+
+1. **DB-first includes taxonomy.** For domain-specific requests, inspect
+   `category` and `subject` before assuming the task belongs to Economics.
+2. **Missing category.** If the user asks for a domain not in `category`
+   (e.g. Psychology), ask whether to create/use that category before producing
+   durable artifacts organized under it.
+3. **Missing subject.** If the category exists but the dataset/study/survey does
+   not, propose a concise subject name and ask for confirmation when the name
+   affects future retrieval.
+4. **Ambiguous domain.** Some topics cross categories (e.g. labor stress could be
+   Economics, Psychology, or Public Health). Ask the user to choose the primary
+   category when classification affects source choice, methods, or persistence.
+5. **Artifacts still need tags.** Category/subject is not a substitute for tags
+   like `"m3"`, `"nsa"`, `"x13"`, `"psychometrics"`, or source-specific codes.
+6. **Skills remain method-level.** Add domain-specific statistical techniques as
+   `.pi/skills/<method>/SKILL.md`; do not encode methods in category names.
+
+Candidate future categories include Psychology, Public Health, Education,
+Climate, Finance, Demography, and Sociology. Candidate Psychology subjects might
+include `Cognitive Test Scores`, `Longitudinal Wellbeing Survey`,
+`Psychometric Scale Validation`, or a named study/survey.
+
 ### Title hygiene
 
 Every `text/html` artifact — whether created via `create_artifact` or persisted
@@ -129,6 +184,32 @@ Examples:
 
 Bad: three rows all titled `"Total Manufacturing Shipments — NSA (Jan 2002 – Mar 2026)"`.
 The sidebar will hide two of them and surface a near-random survivor.
+
+### Agent clarification round-trip (`ask_user`)
+
+The app supports a UI-backed clarification tool:
+
+1. Agent calls `ask_user` with `prompt`, optional `choices`, optional
+   `defaultChoice`, optional `timeoutMs`, and optional `allowFreeText`.
+2. The host creates a pending question ID and broadcasts `user_question` over
+   `/ui/ws/agent`.
+3. React shows a modal and POSTs the answer to `/ui/api/agent/answer`.
+4. The pending Promise resolves and the tool returns structured JSON:
+
+```json
+{
+  "answered": true,
+  "response": "Psychology",
+  "reason": null,
+  "id": "q_...",
+  "prompt": "Which category should this use?",
+  "createdAt": "...",
+  "resolvedAt": "..."
+}
+```
+
+Timeout/no-client returns `answered: false` with `reason` such as `timeout` or
+`no_active_client`. Agents must not treat those strings as user answers.
 
 ### Discard/save asymmetry across browser tabs
 
@@ -152,7 +233,7 @@ Check these before fetching fresh data:
 
 ## Statistical Methods Inventory
 
-The statistician sub-agent is **method-agnostic**; specific techniques live as skills under `.pi/skills/`. Index:
+The statistician sub-agent is **method-agnostic**; specific techniques live as skills under `.pi/skills/`. Categories such as Economics or Psychology describe where a method is applied; they do not define the method. Index:
 
 | Skill | Family | Status |
 |-------|--------|--------|
@@ -164,6 +245,11 @@ The statistician sub-agent is **method-agnostic**; specific techniques live as s
 | `regime-dummies` | Structural breaks / data hiatuses | Stub |
 
 New technique = new skill folder under `.pi/skills/`. Do not put methods in the agent prompts.
+
+Examples of future non-economic skills that would fit the same architecture:
+`factor-analysis`, `item-response-theory`, `psychometric-reliability`,
+`mixed-effects-longitudinal`, `mediation-analysis`, `survey-weighting`,
+`clinical-trial-meta-analysis`.
 
 ## Data Hiatuses & Structural Breaks
 

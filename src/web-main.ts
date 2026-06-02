@@ -19,6 +19,7 @@ import { loadProjectEnv } from "./env.js";
 import { applyModelSelection, startHost } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
 import { createVisualizationTools } from "./visualization-tools.js";
+import { UserQuestionManager } from "./user-questions.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "..");
@@ -72,6 +73,7 @@ function stopProxy() {
 
 let activeRuntime: any;
 const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
+const userQuestionManager = new UserQuestionManager();
 
 const MCP_PLAYWRIGHT_URL = process.env["MCP_PLAYWRIGHT_URL"] ?? "http://localhost:3000/mcp";
 const MCP_SEARCH_URL = process.env["MCP_SEARCH_URL"] ?? "http://localhost:3004/mcp";
@@ -102,6 +104,38 @@ const { tools: mcpTools, runtime: mcpRuntime } = await createMcpTools([
   },
 ]);
 
+const askUserTool = defineTool({
+  name: "ask_user",
+  label: "Ask User",
+  description: "Ask the user a clarification question in the UI and wait for their answer. Use when a missing choice would change the data source, category/subject, statistical method, artifact type, or interpretation. Returns structured JSON with answered/response/reason.",
+  parameters: Type.Object({
+    prompt: Type.String({ description: "Concise question to show the user." }),
+    choices: Type.Optional(Type.Array(Type.String(), { description: "Optional list of answer choices to render as quick options." })),
+    defaultChoice: Type.Optional(Type.String({ description: "Optional default choice to prefill or highlight." })),
+    timeoutMs: Type.Optional(Type.Number({ description: "Timeout in milliseconds. Defaults to 300000; clamped to 5000–1800000." })),
+    allowFreeText: Type.Optional(Type.Boolean({ description: "Whether the user can type a custom response. Defaults to true." })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const result = await userQuestionManager.ask(
+      {
+        prompt: params.prompt,
+        choices: params.choices,
+        defaultChoice: params.defaultChoice,
+        timeoutMs: params.timeoutMs,
+        allowFreeText: params.allowFreeText,
+      },
+      {
+        sessionId: activeRuntime?.session?.sessionId ?? null,
+        runId: _toolCallId ?? null,
+      },
+    );
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      details: result,
+    };
+  },
+});
+
 const helloTool = defineTool({
   name: "hello",
   label: "Hello",
@@ -121,7 +155,7 @@ const visualizationTools = createVisualizationTools({
   getSessionId: () => activeRuntime?.session?.sessionId,
 });
 
-const customTools = [...mcpTools, helloTool, ...visualizationTools];
+const customTools = [...mcpTools, askUserTool, helloTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 
@@ -176,7 +210,7 @@ for (const methodName of ["newSession", "switchSession", "fork", "importFromJson
   };
 }
 
-const host = startHost({ runtime, artifactStore });
+const host = startHost({ runtime, artifactStore, userQuestionManager });
 
 const startupModel = process.env["MODEL"]?.trim();
 if (startupModel) {

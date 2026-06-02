@@ -5,9 +5,11 @@ import {
   createAgentSessionFromServices,
   SessionManager,
   getAgentDir,
+  defineTool,
   type CreateAgentSessionRuntimeFactory,
   type SessionStartEvent,
 } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
 import { spawn, ChildProcess } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +20,7 @@ import { loadProjectEnv } from "./env.js";
 import { createArtifactStore } from "./artifacts.js";
 import { createVisualizationTools } from "./visualization-tools.js";
 import { startHost } from "./host.js";
+import { UserQuestionManager } from "./user-questions.js";
 
 loadProjectEnv(process.cwd());
 
@@ -85,6 +88,7 @@ function stopProxy() {
 
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
+const userQuestionManager = new UserQuestionManager();
 
 // Mutable ref so visualizationTools can resolve the session ID
 // after the runtime is created (below).
@@ -96,7 +100,39 @@ const visualizationTools = createVisualizationTools({
   cwd: process.cwd(),
 });
 
-const customTools = [...mcpTools, ...visualizationTools];
+const askUserTool = defineTool({
+  name: "ask_user",
+  label: "Ask User",
+  description: "Ask the user a clarification question in the UI and wait for their answer. Use when a missing choice would change the data source, category/subject, statistical method, artifact type, or interpretation. Returns structured JSON with answered/response/reason.",
+  parameters: Type.Object({
+    prompt: Type.String({ description: "Concise question to show the user." }),
+    choices: Type.Optional(Type.Array(Type.String(), { description: "Optional list of answer choices to render as quick options." })),
+    defaultChoice: Type.Optional(Type.String({ description: "Optional default choice to prefill or highlight." })),
+    timeoutMs: Type.Optional(Type.Number({ description: "Timeout in milliseconds. Defaults to 300000; clamped to 5000–1800000." })),
+    allowFreeText: Type.Optional(Type.Boolean({ description: "Whether the user can type a custom response. Defaults to true." })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const result = await userQuestionManager.ask(
+      {
+        prompt: params.prompt,
+        choices: params.choices,
+        defaultChoice: params.defaultChoice,
+        timeoutMs: params.timeoutMs,
+        allowFreeText: params.allowFreeText,
+      },
+      {
+        sessionId: sessionIdRef.current(),
+        runId: _toolCallId ?? null,
+      },
+    );
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      details: result,
+    };
+  },
+});
+
+const customTools = [...mcpTools, askUserTool, ...visualizationTools];
 
 // ─── Agent session factory ────────────────────────────────────────────────────
 
@@ -140,7 +176,7 @@ sessionIdRef.current = () => runtime.session?.sessionId ?? null;
 // Start the host in-process so it shares the artifact store.
 // artifact_created events are broadcast to browser WebSocket clients
 // via artifactStore.onCreated() inside startHost().
-const host = startHost({ runtime, artifactStore });
+const host = startHost({ runtime, artifactStore, userQuestionManager });
 
 // Start the proxy as a child process.
 startProxy();

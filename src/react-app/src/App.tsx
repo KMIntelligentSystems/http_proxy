@@ -5,6 +5,7 @@ import { LookupPanel } from "./components/LookupPanel";
 import { DocumentViewer, type DocumentManifest } from "./components/DocumentViewer";
 import { SavedDocs } from "./components/SavedDocs";
 import { ModelSelector } from "./components/ModelSelector";
+import { answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
   const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice } = useAgent();
@@ -25,6 +26,11 @@ export function App() {
 
   const [prompt, setPrompt] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [questionQueue, setQuestionQueue] = useState<UserQuestion[]>([]);
+  const [questionResponse, setQuestionResponse] = useState("");
+  const [questionError, setQuestionError] = useState<string | null>(null);
+  const [answeringQuestion, setAnsweringQuestion] = useState(false);
+  const activeQuestion = questionQueue[0] ?? null;
 
   // --- Artifact display ---
   // Show only HTML artifacts in the sidebar, deduped by title (newest kept).
@@ -72,6 +78,52 @@ export function App() {
     }
   }, [artifacts, activeArtifactId]);
 
+  useEffect(() => {
+    const onQuestion = (event: Event) => {
+      const question = (event as CustomEvent<UserQuestion>).detail;
+      setQuestionQueue((prev) => prev.some((q) => q.id === question.id) ? prev : [...prev, question]);
+      setQuestionError(null);
+    };
+    const onResolved = (event: Event) => {
+      const resolved = (event as CustomEvent<{ id: string }>).detail;
+      setQuestionQueue((prev) => prev.filter((q) => q.id !== resolved.id));
+      setQuestionError(null);
+      setAnsweringQuestion(false);
+    };
+    artifactEvents.addEventListener("user_question", onQuestion as EventListener);
+    artifactEvents.addEventListener("user_question_resolved", onResolved as EventListener);
+    return () => {
+      artifactEvents.removeEventListener("user_question", onQuestion as EventListener);
+      artifactEvents.removeEventListener("user_question_resolved", onResolved as EventListener);
+    };
+  }, []);
+
+  useEffect(() => {
+    setQuestionResponse(activeQuestion?.defaultChoice ?? "");
+    setQuestionError(null);
+    setAnsweringQuestion(false);
+  }, [activeQuestion?.id]);
+
+  const submitQuestionAnswer = async (response: string) => {
+    if (!activeQuestion || answeringQuestion) return;
+    const trimmed = response.trim();
+    if (!trimmed) {
+      setQuestionError("Please enter an answer before submitting.");
+      return;
+    }
+    setAnsweringQuestion(true);
+    setQuestionError(null);
+    try {
+      await answerUserQuestion(activeQuestion.id, trimmed);
+      setQuestionQueue((prev) => prev.filter((q) => q.id !== activeQuestion.id));
+      setQuestionResponse("");
+    } catch (err) {
+      setQuestionError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAnsweringQuestion(false);
+    }
+  };
+
   const handleSubmit = () => {
     if (!prompt.trim() || working) return;
     const ctx = buildLookupContext();
@@ -87,6 +139,54 @@ export function App() {
 
   return (
     <div className="app-shell">
+      {activeQuestion && (
+        <div className="question-modal-backdrop" role="presentation">
+          <div className="question-modal" role="dialog" aria-modal="true" aria-labelledby="agent-question-title">
+            <div className="question-modal-kicker">Agent needs clarification</div>
+            <h2 id="agent-question-title">Question</h2>
+            <p className="question-modal-prompt">{activeQuestion.prompt}</p>
+            {activeQuestion.choices && activeQuestion.choices.length > 0 && (
+              <div className="question-choice-list" aria-label="Answer choices">
+                {activeQuestion.choices.map((choice) => (
+                  <button
+                    key={choice}
+                    type="button"
+                    className="question-choice-btn"
+                    disabled={answeringQuestion}
+                    onClick={() => submitQuestionAnswer(choice)}
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+            )}
+            {activeQuestion.allowFreeText !== false && (
+              <textarea
+                className="question-response"
+                value={questionResponse}
+                onChange={(e) => setQuestionResponse(e.target.value)}
+                placeholder="Type your answer…"
+                disabled={answeringQuestion}
+                autoFocus
+              />
+            )}
+            {questionError && <div className="question-error" role="alert">{questionError}</div>}
+            <div className="question-modal-actions">
+              <span className="question-timeout">Timeout: {Math.round(activeQuestion.timeoutMs / 1000)}s</span>
+              {activeQuestion.allowFreeText !== false && (
+                <button
+                  type="button"
+                  className="question-submit-btn"
+                  disabled={answeringQuestion || !questionResponse.trim()}
+                  onClick={() => submitQuestionAnswer(questionResponse)}
+                >
+                  {answeringQuestion ? "Sending…" : "Send answer"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       {notice && (
         <div className={`notice notice-${notice.kind}`} role="status">
           <span>{notice.message}</span>

@@ -16,6 +16,30 @@ export type ModelInfo = {
   name: string;
 };
 
+export type UserQuestion = {
+  type: "user_question";
+  id: string;
+  prompt: string;
+  choices?: string[];
+  defaultChoice?: string;
+  allowFreeText: boolean;
+  timeoutMs: number;
+  createdAt: string;
+  sessionId?: string | null;
+  runId?: string | null;
+};
+
+export type UserQuestionResolved = {
+  type: "user_question_resolved";
+  id: string;
+  answered: boolean;
+  reason?: string;
+  response?: string | null;
+  resolvedAt: string;
+  sessionId?: string | null;
+  runId?: string | null;
+};
+
 export type ArtifactRecord = {
   id: string;
   sessionId?: string;
@@ -67,6 +91,24 @@ function connect(): void {
         artifactEvents.dispatchEvent(
           new CustomEvent<ArtifactRecord>("artifact_created", {
             detail: data.artifact,
+          })
+        );
+        return;
+      }
+
+      if (data.type === "user_question" && data.id && data.prompt) {
+        artifactEvents.dispatchEvent(
+          new CustomEvent<UserQuestion>("user_question", {
+            detail: data,
+          })
+        );
+        return;
+      }
+
+      if (data.type === "user_question_resolved" && data.id) {
+        artifactEvents.dispatchEvent(
+          new CustomEvent<UserQuestionResolved>("user_question_resolved", {
+            detail: data,
           })
         );
         return;
@@ -128,6 +170,18 @@ export async function sendPrompt(text: string): Promise<PromptResponse> {
   } catch (err) {
     setWorking(false);
     return { kind: "error", message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function answerUserQuestion(id: string, response: string): Promise<void> {
+  const res = await fetch("/ui/api/agent/answer", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, response }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(typeof body?.error === "string" ? body.error : `HTTP ${res.status}`);
   }
 }
 
