@@ -32,3 +32,6 @@ data/artifacts/*
 *.html
 !src/react-app/index.html
 *.png
+
+# agent session intermediates
+tmp*/

@@ -5,7 +5,6 @@ import {
   onWorkingChange,
   isWorking,
   type ArtifactRecord,
-  type AssistantResponse,
 } from "../lib/agent-bridge";
 
 export type { ArtifactRecord };
@@ -28,13 +27,11 @@ export function useAgent() {
       });
     };
 
-    const onAssistantResponse = (e: Event) => {
-      const detail = (e as CustomEvent<AssistantResponse>).detail;
-      if (detail.message.trim()) setNotice({ kind: "info", message: detail.message.trim() });
-    };
+    // NOTE: assistant_response events are intentionally NOT routed to the
+    // notice toast — the ConversationPanel owns assistant replies. The
+    // notice toast is reserved for app-level info/error feedback.
 
     artifactEvents.addEventListener("artifact_created", onArtifact);
-    artifactEvents.addEventListener("assistant_response", onAssistantResponse as EventListener);
 
     // Load existing artifacts from the server on mount
     fetch("/ui/api/artifacts")
@@ -47,7 +44,6 @@ export function useAgent() {
     return () => {
       unsubWorking();
       artifactEvents.removeEventListener("artifact_created", onArtifact);
-      artifactEvents.removeEventListener("assistant_response", onAssistantResponse as EventListener);
     };
   }, []);
 
@@ -71,5 +67,5 @@ export function useAgent() {
     setArtifacts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice };
+  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice };
 }

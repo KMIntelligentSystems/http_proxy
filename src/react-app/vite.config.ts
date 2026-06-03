@@ -13,9 +13,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/ui/api": "http://localhost:3100",
-      "/ui/ws": { target: "ws://localhost:3100", ws: true },
-      "/ui/data": "http://localhost:3100",
+      "/ui/api": "http://localhost:8080",
+      "/ui/ws": { target: "ws://localhost:8080", ws: true },
+      "/ui/data": "http://localhost:8080",
     },
   },
   // Copy data/lookups/ tree into dist/web/data/ so the built app can fetch

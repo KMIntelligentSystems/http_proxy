@@ -11,6 +11,7 @@
 		"start:tui": "node dist/cli.js",
 		"build:web": "vite build --config src/react-app/vite.config.ts",
 		"dev:web": "tsc && vite build --config src/web/vite.config.ts && node dist/web-main.js",
+		"dev:react": "tsc && node dist/web-main.js",
 		"start:web": "node dist/web-main.js"
 	},
 	"dependencies": {

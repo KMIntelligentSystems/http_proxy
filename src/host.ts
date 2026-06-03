@@ -30,6 +30,147 @@ else console.warn(`[host] BLS_API_KEY not set in env or data/.env`);
 // Browser WS clients connected to /ui/ws/agent — receive server-side runtime events.
 const agentClients = new Set<WebSocket>();
 
+// Per-client liveness tracking for the keepalive loop. The `isAlive` flag is
+// set on each pong; if it's still false at the next interval tick the socket
+// is presumed dead and terminated so the browser can reconnect.
+const agentClientLiveness = new WeakMap<WebSocket, boolean>();
+
+// Keepalive cadence. Railway/Cloudflare-style edge proxies idle WebSockets out
+// at ~60s–100s of no traffic; 30s is the conventional safe choice.
+const WS_KEEPALIVE_INTERVAL_MS = 30_000;
+
+// ─── Server-side per-prompt stall watchdog ─────────────────────────────────
+//
+// If no agent_event has been broadcast for PROMPT_STALL_MS while a prompt is
+// in flight, we presume the agent loop is stuck (model provider hung the
+// stream, tool wrapper blocked indefinitely, host bug, etc.) and emit a
+// synthetic agent_prompt_stalled event so the React UI can un-spin.
+//
+// We do NOT forcibly abort the underlying session — the user has a manual
+// Abort button — because doing so could race with a turn that's actually
+// about to make progress. We just inform the client.
+//
+// State is at module scope because attachAgentEventBridge() (also module
+// scope) needs to update lastAgentEventAt on every broadcast.
+const PROMPT_STALL_MS = 240_000; // 4 minutes of agent silence ⇒ declare stalled
+let promptInFlight = false;
+let lastAgentEventAt = 0;
+let promptStartedAt = 0;
+let promptStallTimer: ReturnType<typeof setInterval> | null = null;
+let lastStallSessionId: string | null = null;
+
+// ─── Empty-turn auto-nudge ─────────────────────────────────────────────────
+//
+// Some lesser models complete a turn after emitting only reasoning text:
+// they describe a plan in the thinking channel, then stop without ever
+// calling a tool or producing assistant text. From the user's perspective
+// the UI shows "Turn completed — no assistant text" and nothing happened.
+//
+// We detect this server-side by counting, per prompt, how many assistant
+// text characters were streamed and how many tool calls were dispatched.
+// If session.prompt() resolves with both counters at zero we send ONE
+// follow-up nudge prompt ("Your previous turn produced no output. Continue
+// with the next tool call from your plan.") and continue the same
+// agent_prompt lifecycle. Cap at one nudge so a permanently empty model
+// can't enter an infinite nudge loop.
+const NUDGE_TEXT =
+  "Your previous turn produced no assistant message and no tool calls. " +
+  "If you described a plan, continue by actually executing the next step " +
+  "as a tool call. If the task is done, send a brief summary message. " +
+  "Do not end another turn with empty output.";
+let turnAssistantTextChars = 0;
+let turnToolCalls = 0;
+let turnNudgedOnce = false;
+
+function resetTurnCounters(): void {
+  turnAssistantTextChars = 0;
+  turnToolCalls = 0;
+}
+
+// Inspect a session.subscribe event and update the empty-turn counters.
+// Mirrors the event shape consumed by src/react-app/src/lib/agent-bridge.ts
+// (message_update with assistantMessageEvent.type in text_*, plus
+// tool_execution_start). Defensive about unknown shapes — anything we don't
+// recognise is silently ignored.
+function observeTurnActivity(event: unknown): void {
+  if (!event || typeof event !== "object") return;
+  const ev = event as { type?: unknown; assistantMessageEvent?: any };
+  if (ev.type === "tool_execution_start") {
+    turnToolCalls += 1;
+    return;
+  }
+  if (ev.type !== "message_update") return;
+  const ame = ev.assistantMessageEvent;
+  if (!ame || typeof ame !== "object") return;
+  const ameType = (ame as { type?: unknown }).type;
+  if (ameType === "text_delta") {
+    // Cheap approximation: each delta event represents some streamed text.
+    // We don't have to be exact — non-zero is all the empty-turn check
+    // cares about. Read `partial` length if available, fall back to 1.
+    const partial = (ame as { partial?: unknown }).partial;
+    const idx = (ame as { contentIndex?: unknown }).contentIndex;
+    if (Array.isArray(partial) && typeof idx === "number") {
+      const block = partial[idx];
+      const text = block && typeof block === "object" && typeof (block as any).text === "string"
+        ? (block as any).text
+        : "";
+      turnAssistantTextChars += text.length || 1;
+    } else {
+      turnAssistantTextChars += 1;
+    }
+    return;
+  }
+  if (ameType === "text_end") {
+    const content = (ame as { content?: unknown }).content;
+    if (typeof content === "string") turnAssistantTextChars += content.length;
+    return;
+  }
+}
+
+function clearPromptStallTimer(): void {
+  if (promptStallTimer) {
+    clearInterval(promptStallTimer);
+    promptStallTimer = null;
+  }
+}
+
+function startPromptStallTimer(sessionId: string | null): void {
+  clearPromptStallTimer();
+  promptStartedAt = Date.now();
+  lastAgentEventAt = Date.now();
+  lastStallSessionId = sessionId;
+  resetTurnCounters();
+  turnNudgedOnce = false;
+  const handle = setInterval(() => {
+    if (!promptInFlight) {
+      clearPromptStallTimer();
+      return;
+    }
+    const silentMs = Date.now() - lastAgentEventAt;
+    if (silentMs > PROMPT_STALL_MS) {
+      const totalMs = Date.now() - promptStartedAt;
+      const reason = `No agent activity for ${Math.round(silentMs / 1000)}s (turn age ${Math.round(totalMs / 1000)}s). Server-side stall watchdog fired.`;
+      console.error(`[agent prompt stalled] sessionId=${lastStallSessionId} ${reason}`);
+      clearPromptStallTimer();
+      broadcastAgentWsMessage({
+        type: "agent_prompt_stalled",
+        sessionId: lastStallSessionId,
+        reason,
+        silentMs,
+        turnAgeMs: totalMs,
+        receivedAt: new Date().toISOString(),
+      });
+      // promptInFlight stays true until session.prompt() actually settles —
+      // we don't want a second prompt to clobber an in-flight (possibly slow
+      // but still-alive) turn. The 409 in POST /prompt protects against that.
+      // If/when the turn genuinely resolves later, agent_prompt_complete or
+      // agent_prompt_error will still fire normally.
+    }
+  }, 15_000);
+  if (typeof (handle as any).unref === "function") (handle as any).unref();
+  promptStallTimer = handle;
+}
+
 type AgentWsMessage = {
   type: string;
   receivedAt?: string;
@@ -333,6 +474,11 @@ function attachAgentEventBridge(ctx: HostContext): () => void {
     unsubscribe?.();
     activeSession = session;
     unsubscribe = session.subscribe((event) => {
+      // Stall-watchdog liveness: any event proves the agent loop is making
+      // forward progress, so reset the silence timer.
+      lastAgentEventAt = Date.now();
+      // Empty-turn detection: count assistant text + tool calls in this turn.
+      observeTurnActivity(event);
       broadcastAgentWsMessage({
         type: "agent_event",
         sessionId: session.sessionId ?? null,
@@ -494,7 +640,6 @@ async function handleModelSlashCommand(input: string, session: AgentSession): Pr
 // ─── HTTP server ─────────────────────────────────────────────────────────────
 
 export function startHost(ctx: HostContext = {}): HostServer {
-let promptInFlight = false;
 const artifactStore = ctx.artifactStore ?? createArtifactStore(path.resolve(PROJECT_ROOT, "data", "artifacts"));
 ctx.artifactStore = artifactStore;
 ctx.userQuestionManager?.setTransport({
@@ -810,13 +955,56 @@ const server = http.createServer((req, res) => {
             return;
           }
           promptInFlight = true;
-          void Promise.resolve()
-            .then(() => session.prompt(input))
+          startPromptStallTimer(session.sessionId ?? null);
+
+          // Run session.prompt(input). If it resolves with an empty turn
+          // (no assistant text, no tool calls) and we haven't nudged yet,
+          // send ONE follow-up nudge prompt and await that instead before
+          // declaring the turn complete. See NUDGE_TEXT above.
+          const runWithEmptyTurnNudge = async (): Promise<void> => {
+            await session.prompt(input);
+            if (
+              turnAssistantTextChars === 0 &&
+              turnToolCalls === 0 &&
+              !turnNudgedOnce
+            ) {
+              turnNudgedOnce = true;
+              const detail = `assistantTextChars=${turnAssistantTextChars} toolCalls=${turnToolCalls}`;
+              console.warn(
+                `[agent prompt empty-turn nudge] sessionId=${session.sessionId ?? null} ${detail} — sending follow-up nudge`,
+              );
+              broadcastAgentWsMessage({
+                type: "agent_empty_turn_nudge",
+                sessionId: session.sessionId ?? null,
+                detail,
+                nudgeText: NUDGE_TEXT,
+                receivedAt: new Date().toISOString(),
+              });
+              // Reset counters so the nudged turn is evaluated independently,
+              // but leave turnNudgedOnce = true so a second empty completion
+              // falls through to the normal terminal event.
+              resetTurnCounters();
+              // Keep the stall watchdog alive across the nudge —
+              // lastAgentEventAt is updated by the subscribe callback as
+              // soon as the second prompt produces any event.
+              lastAgentEventAt = Date.now();
+              await session.prompt(NUDGE_TEXT);
+            }
+          };
+
+          void runWithEmptyTurnNudge()
             .then(() => {
+              // Defensive: getAgentState can in principle throw if the runtime
+              // is torn down mid-turn. Capture state best-effort and ALWAYS
+              // emit a terminal event so the client un-spins.
+              let state: unknown = null;
+              try { state = getAgentState(ctx); } catch (e) {
+                console.error(`[agent state snapshot failed] ${e instanceof Error ? e.message : String(e)}`);
+              }
               broadcastAgentWsMessage({
                 type: "agent_prompt_complete",
                 sessionId: session.sessionId ?? null,
-                state: getAgentState(ctx),
+                state,
                 receivedAt: new Date().toISOString(),
               });
             })
@@ -831,6 +1019,7 @@ const server = http.createServer((req, res) => {
             })
             .finally(() => {
               promptInFlight = false;
+              clearPromptStallTimer();
             });
 
           sendJson(res, 202, { ok: true, accepted: true, sessionId: session.sessionId ?? null });
@@ -989,6 +1178,34 @@ const server = http.createServer((req, res) => {
 
 const wss = new WebSocketServer({ server });
 
+// Keepalive loop for /ui/ws/agent clients.
+//
+// On every tick:
+//   1. Drop any client that failed to respond to the previous ping (isAlive
+//      is still false). This is our backstop against half-open TCP sockets.
+//   2. For survivors, mark them not-yet-alive and emit BOTH a WS ping frame
+//      (cheap, browser auto-pongs without app code) AND a JSON heartbeat
+//      message (guarantees application-layer bytes cross any edge proxy
+//      that doesn't relay control frames as "activity").
+const keepaliveTimer = setInterval(() => {
+  if (agentClients.size === 0) return;
+  const now = new Date().toISOString();
+  for (const client of agentClients) {
+    if (client.readyState !== WebSocket.OPEN) continue;
+    if (agentClientLiveness.get(client) === false) {
+      // Missed the previous round-trip — assume the connection is gone.
+      try { client.terminate(); } catch {}
+      continue;
+    }
+    agentClientLiveness.set(client, false);
+    try { client.ping(); } catch {}
+    sendAgentWsMessage(client, { type: "heartbeat", receivedAt: now });
+  }
+}, WS_KEEPALIVE_INTERVAL_MS);
+// Don't keep the Node event loop alive solely for the keepalive timer; the
+// HTTP/WS servers are the real liveness anchors.
+if (typeof keepaliveTimer.unref === "function") keepaliveTimer.unref();
+
 wss.on("connection", (clientSocket, req) => {
   const clientId = `${req.socket.remoteAddress}:${req.socket.remotePort}`;
   const wsPathname = new URL(req.url ?? "/", "http://host.local").pathname;
@@ -998,7 +1215,14 @@ wss.on("connection", (clientSocket, req) => {
   // second hop that has passed through the proxy.
   if (wsPathname === "/ui/ws/agent" && req.headers["x-loopback"] === "1") {
     agentClients.add(clientSocket);
-    clientSocket.on("close", () => agentClients.delete(clientSocket));
+    agentClientLiveness.set(clientSocket, true);
+    clientSocket.on("pong", () => {
+      agentClientLiveness.set(clientSocket, true);
+    });
+    clientSocket.on("close", () => {
+      agentClients.delete(clientSocket);
+      agentClientLiveness.delete(clientSocket);
+    });
     sendAgentWsMessage(clientSocket, {
       type: "agent_bridge_ready",
       clientCount: agentClients.size,
@@ -1074,6 +1298,7 @@ return {
   server,
   wss,
   close: () => new Promise<void>((resolve, reject) => {
+    clearInterval(keepaliveTimer);
     detachAgentEventBridge();
     detachArtifactEvents();
     ctx.userQuestionManager?.cancelAll("server_shutdown");

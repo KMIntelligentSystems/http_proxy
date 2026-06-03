@@ -1,14 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAgent, type ArtifactRecord } from "./hooks/useAgent";
+import { useConversation } from "./hooks/useConversation";
+import { useThinking } from "./hooks/useThinking";
 import { useLookupConfig } from "./hooks/useLookupConfig";
 import { LookupPanel } from "./components/LookupPanel";
 import { DocumentViewer, type DocumentManifest } from "./components/DocumentViewer";
 import { SavedDocs } from "./components/SavedDocs";
 import { ModelSelector } from "./components/ModelSelector";
-import { answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
+import { ConversationPanel } from "./components/ConversationPanel";
+import { ThinkingPanel } from "./components/ThinkingPanel";
+import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
-  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice } = useAgent();
+  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice } = useAgent();
+  const conversation = useConversation();
+  const thinking = useThinking();
+  const [aborting, setAborting] = useState(false);
   const {
     config,
     lookupData,
@@ -128,9 +135,26 @@ export function App() {
     if (!prompt.trim() || working) return;
     const ctx = buildLookupContext();
     const finalPrompt = ctx ? `${prompt}\n\n[lookup selections: ${ctx}]` : prompt;
+    // Echo the user's prompt into the conversation panel immediately so the
+    // chat reads as a real exchange (the assistant response arrives later via
+    // the `assistant_response` event).
+    conversation.addUserPrompt(prompt);
     submit(finalPrompt);
     setPrompt("");
     inputRef.current?.focus();
+  };
+
+  const handleAbort = async () => {
+    if (!working || aborting) return;
+    setAborting(true);
+    try {
+      await abortAgent();
+      setNotice({ kind: "info", message: "Abort requested. The agent will stop after the current step." });
+    } catch (err) {
+      setNotice({ kind: "error", message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setAborting(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -212,6 +236,31 @@ export function App() {
         >
           {working ? "Working…" : "Submit"}
         </button>
+        {working && (
+          <button
+            className="abort-btn"
+            onClick={handleAbort}
+            disabled={aborting}
+            title="Stop the current agent turn"
+          >
+            {aborting ? "Aborting…" : "Abort"}
+          </button>
+        )}
+        <ConversationPanel
+          messages={conversation.messages}
+          open={conversation.open}
+          unread={conversation.unread}
+          working={working}
+          onClose={conversation.togglePanel}
+        />
+        <ThinkingPanel
+          entries={thinking.entries}
+          open={thinking.open}
+          unread={thinking.unread}
+          working={working}
+          onToggle={thinking.togglePanel}
+          onClose={thinking.closePanel}
+        />
       </nav>
       <aside className="sidebar">
         <SavedDocs
