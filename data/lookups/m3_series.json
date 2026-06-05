@@ -2,104 +2,1794 @@
   {
     "code": "total_mfg_shipments",
     "label": "Total Manufacturing Shipments",
-    "sa": { "source": "FRED", "series_id": "AMTMVS" },
-    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "VS" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMTMVS"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MTM",
+      "data_type_code": "VS"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "total_mfg_new_orders",
     "label": "Total Manufacturing New Orders",
-    "sa": { "source": "FRED", "series_id": "AMTMNO" },
-    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "NO" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMTMNO"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MTM",
+      "data_type_code": "NO"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "total_mfg_unfilled_orders",
     "label": "Total Manufacturing Unfilled Orders",
-    "sa": { "source": "FRED", "series_id": "AMTMUO" },
-    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "UO" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMTMUO"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MTM",
+      "data_type_code": "UO"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": null, "full": 6 },
+    "release_lag_weeks": {
+      "advance": null,
+      "full": 6
+    },
     "note": "Unfilled orders not in Advance Report; Full Report only."
   },
   {
     "code": "total_mfg_inventories",
     "label": "Total Manufacturing Inventories",
-    "sa": { "source": "FRED", "series_id": "AMTMTI" },
-    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "TI" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMTMTI"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MTM",
+      "data_type_code": "TI"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "durable_shipments",
     "label": "Durable Goods Shipments",
-    "sa": { "source": "FRED", "series_id": "AMDMVS" },
-    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "VS" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMDMVS"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MDM",
+      "data_type_code": "VS"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "durable_new_orders",
     "label": "Durable Goods New Orders",
-    "sa": { "source": "FRED", "series_id": "DGORDER" },
-    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "NO" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "DGORDER"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MDM",
+      "data_type_code": "NO"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "durable_unfilled_orders",
     "label": "Durable Goods Unfilled Orders",
-    "sa": { "source": "FRED", "series_id": "AMDMUO" },
-    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "UO" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMDMUO"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MDM",
+      "data_type_code": "UO"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": null, "full": 6 }
+    "release_lag_weeks": {
+      "advance": null,
+      "full": 6
+    }
   },
   {
     "code": "durable_inventories",
     "label": "Durable Goods Inventories",
-    "sa": { "source": "FRED", "series_id": "AMDMTI" },
-    "nsa": { "source": "Census", "category_code": "MDM", "data_type_code": "TI" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "AMDMTI"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MDM",
+      "data_type_code": "TI"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "nondurable_shipments",
     "label": "Nondurable Goods Shipments",
-    "sa": { "source": "FRED", "series_id": "ANXAVS" },
-    "nsa": { "source": "Census", "category_code": "MNM", "data_type_code": "VS" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "ANXAVS"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MNM",
+      "data_type_code": "VS"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 },
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    },
     "note": "Detailed nondurable industries added to Advance Report starting Jun-2025 release (Jul-25-2025); prior Advance vintages have total nondurable only."
   },
   {
     "code": "nondurable_inventories",
     "label": "Nondurable Goods Inventories",
-    "sa": { "source": "FRED", "series_id": "ANXATI" },
-    "nsa": { "source": "Census", "category_code": "MNM", "data_type_code": "TI" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "ANXATI"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MNM",
+      "data_type_code": "TI"
+    },
     "unit": "Millions of $",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": 4, "full": 6 }
+    "release_lag_weeks": {
+      "advance": 4,
+      "full": 6
+    }
   },
   {
     "code": "inventories_to_shipments_ratio",
     "label": "Total Manufacturing Inventories-to-Shipments Ratio",
-    "sa": { "source": "FRED", "series_id": "MNFCTRIRSA" },
-    "nsa": { "source": "Census", "category_code": "MTM", "data_type_code": "IS" },
+    "sa": {
+      "source": "FRED",
+      "series_id": "MNFCTRIRSA"
+    },
+    "nsa": {
+      "source": "Census",
+      "category_code": "MTM",
+      "data_type_code": "IS"
+    },
     "unit": "Ratio",
     "frequency": "Monthly",
-    "release_lag_weeks": { "advance": null, "full": 6 },
+    "release_lag_weeks": {
+      "advance": null,
+      "full": 6
+    },
     "note": "Derived ratio; published in Full Report only."
+  },
+  {
+    "_detailed": {
+      "source_pdf": "https://www2.census.gov/programs-surveys/m3/technical-documentation/code-lists/naicshist.pdf",
+      "extracted_at": "2026-06-05",
+      "extraction_method": "parse_pdf tool (pdf-parse engine) + data/scripts/build_m3_detailed_lookup.py",
+      "schema": {
+        "code": "3-char M3 series identifier (positions 2-4 of the 6-char ID)",
+        "label": "Industry label as printed in the Census M3 NAICS-based documentation",
+        "kind": "aggregate | subsector | sub_aggregate | detail | detail_unpublished",
+        "parent_code": "immediate parent grouping (subsector for details; MDM/MNM for subsectors; current subsector for sub_aggregates)",
+        "included_in": "for sub_aggregates and details under sub_aggregates, the umbrella code",
+        "naics3": "3-digit NAICS subsector (M3 drops the leading '3'; durable 21->321; nondurable 11->311, 22->322)",
+        "published": "true if queryable via the Census EITS API; false for 'Not published, but included in XS' rows",
+        "also_in": "(optional) other parent groupings this code rolls up into"
+      },
+      "counts_by_kind": {
+        "aggregate": 21,
+        "subsector": 21,
+        "detail": 68,
+        "sub_aggregate": 6,
+        "detail_unpublished": 18
+      },
+      "records": [
+        {
+          "code": "MTM",
+          "label": "Total Manufacturing",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "MXT",
+          "label": "Manufacturing Excluding Transportation",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "MXD",
+          "label": "Manufacturing Excluding Defense",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "MTU",
+          "label": "Manufacturing with Unfilled Orders",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "MDM",
+          "label": "Durable Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "21S",
+          "label": "Wood Products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "321",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "21A",
+          "label": "Wood building and mobile home manufacturing",
+          "kind": "detail",
+          "parent_code": "21S",
+          "included_in": "21S",
+          "naics3": "321",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "21B",
+          "label": "Other wood product manufacturing",
+          "kind": "detail",
+          "parent_code": "21S",
+          "included_in": "21S",
+          "naics3": "321",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "27S",
+          "label": "Nonmetallic Mineral Products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "327",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "31S",
+          "label": "Primary Metals",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "331",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "31A",
+          "label": "Iron and steel mills and ferroalloy and steel product manufacturing from",
+          "kind": "detail",
+          "parent_code": "31S",
+          "included_in": "31S",
+          "naics3": "331",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "ANM",
+          "label": "Aluminum and Nonferrous Metal Products",
+          "kind": "sub_aggregate",
+          "parent_code": "31S",
+          "included_in": "31S",
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "31B",
+          "label": "Alumina and aluminum and nonferrous metal (except",
+          "kind": "detail",
+          "parent_code": "ANM",
+          "included_in": "ANM",
+          "naics3": "331",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "31D",
+          "label": "Nonferrous metal foundries",
+          "kind": "detail",
+          "parent_code": "ANM",
+          "included_in": "ANM",
+          "naics3": "331",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "31C",
+          "label": "Ferrous metal foundries",
+          "kind": "detail",
+          "parent_code": "ANM",
+          "included_in": "ANM",
+          "naics3": "331",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "32S",
+          "label": "Fabricated Metal Products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "332",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "32A",
+          "label": "Forging and stamping",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32B",
+          "label": "Cutlery and handtool manufacturing",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32C",
+          "label": "Boiler, tank, and shipping container manufacturing",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32D",
+          "label": "Metal valve manufacturing",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32E",
+          "label": "Small arms and ordnance manufacturing, nondefense",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32F",
+          "label": "Small arms and ordnance manufacturing, defense",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "32G",
+          "label": "Other fabricated metal product manufacturing",
+          "kind": "detail",
+          "parent_code": "32S",
+          "included_in": "32S",
+          "naics3": "332",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "33S",
+          "label": "Machinery",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33A",
+          "label": "Farm machinery and equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33C",
+          "label": "Construction machinery manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33D",
+          "label": "Mining and oil and gas field machinery manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33E",
+          "label": "Industrial machinery manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33G",
+          "label": "Photographic equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33H",
+          "label": "Ventilation, heating, air-conditioning, and commercial refrigeration",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33I",
+          "label": "Metalworking machinery manufacturing",
+          "kind": "detail",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "TGP",
+          "label": "Turbines, Generators, and Other Power Transmission Equipment",
+          "kind": "sub_aggregate",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33J",
+          "label": "Turbine and generator set units manufacturing",
+          "kind": "detail",
+          "parent_code": "TGP",
+          "included_in": "TGP",
+          "naics3": "333",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "33K",
+          "label": "Other power transmission equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "TGP",
+          "included_in": "TGP",
+          "naics3": "333",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "33M",
+          "label": "Material handling equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "TGP",
+          "included_in": "TGP",
+          "naics3": "333",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "33B",
+          "label": "Lawn and garden tractor and home lawn and garden equipment",
+          "kind": "detail_unpublished",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": false
+        },
+        {
+          "code": "33F",
+          "label": "Commercial and service industry machinery manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": false
+        },
+        {
+          "code": "33L",
+          "label": "Pump and compressor manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": false
+        },
+        {
+          "code": "33N",
+          "label": "All other general purpose machinery manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "33S",
+          "included_in": "33S",
+          "naics3": "333",
+          "published": false
+        },
+        {
+          "code": "34S",
+          "label": "Computers and Electronic Products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34A",
+          "label": "Electronic computer manufacturing",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34B",
+          "label": "Computer storage device manufacturing",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34C",
+          "label": "Computer terminal and other computer peripheral equipment",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34D",
+          "label": "Communications equipment manufacturing, nondefense",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34E",
+          "label": "Communications equipment manufacturing, defense",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34F",
+          "label": "Audio and video equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34H",
+          "label": "Other electronic component manufacturing",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34I",
+          "label": "Search, detection, navigation, guidance, aeronautical, and nautical",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34J",
+          "label": "Search, detection, navigation, guidance, aeronautical, and nautical",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34K",
+          "label": "Measuring, electromedical, and control instruments manufacturing",
+          "kind": "detail",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34G",
+          "label": "Semiconductor and other electronic component manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": false
+        },
+        {
+          "code": "34L",
+          "label": "Manufacturing and reproducing magnetic and optical media",
+          "kind": "detail_unpublished",
+          "parent_code": "34S",
+          "included_in": "34S",
+          "naics3": "334",
+          "published": false
+        },
+        {
+          "code": "35S",
+          "label": "Electrical Equipment, Appliances, and Components",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "335",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "35A",
+          "label": "Electric lighting equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "35S",
+          "included_in": "35S",
+          "naics3": "335",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "35B",
+          "label": "Household appliance manufacturing",
+          "kind": "detail",
+          "parent_code": "35S",
+          "included_in": "35S",
+          "naics3": "335",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "35C",
+          "label": "Electrical equipment manufacturing",
+          "kind": "detail",
+          "parent_code": "35S",
+          "included_in": "35S",
+          "naics3": "335",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "35D",
+          "label": "Battery manufacturing",
+          "kind": "detail",
+          "parent_code": "35S",
+          "included_in": "35S",
+          "naics3": "335",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "35E",
+          "label": "Other electrical equipment and component manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "35S",
+          "included_in": "35S",
+          "naics3": "335",
+          "published": false
+        },
+        {
+          "code": "36S",
+          "label": "Transportation Equipment",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "336",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36A",
+          "label": "Automobile manufacturing",
+          "kind": "detail",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36B",
+          "label": "Light truck and utility vehicle manufacturing",
+          "kind": "detail",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36C",
+          "label": "Heavy duty truck manufacturing",
+          "kind": "detail",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "BTP",
+          "label": "Motor Vehicle Bodies, Trailers, and Parts",
+          "kind": "sub_aggregate",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36D",
+          "label": "Motor vehicle body and trailer manufacturing",
+          "kind": "detail",
+          "parent_code": "BTP",
+          "included_in": "BTP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36E",
+          "label": "Motor vehicle parts manufacturing",
+          "kind": "detail",
+          "parent_code": "BTP",
+          "included_in": "BTP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "NAP",
+          "label": "Nondefense Aircraft and Parts",
+          "kind": "sub_aggregate",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36F",
+          "label": "Aircraft manufacturing, nondefense",
+          "kind": "detail",
+          "parent_code": "NAP",
+          "included_in": "NAP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36H",
+          "label": "Aircraft engine and engine parts manufacturing, nondefense",
+          "kind": "detail",
+          "parent_code": "NAP",
+          "included_in": "NAP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "DAP",
+          "label": "Defense Aircraft and Parts",
+          "kind": "sub_aggregate",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36G",
+          "label": "Aircraft manufacturing, defense",
+          "kind": "detail",
+          "parent_code": "DAP",
+          "included_in": "DAP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36I",
+          "label": "Aircraft engine and engine parts manufacturing, defense",
+          "kind": "detail",
+          "parent_code": "DAP",
+          "included_in": "DAP",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36Z",
+          "label": "Ships and Boats",
+          "kind": "sub_aggregate",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "36L",
+          "label": "Ship and boat building, nondefense",
+          "kind": "detail",
+          "parent_code": "36Z",
+          "included_in": "36Z",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36M",
+          "label": "Ship and boat building, defense",
+          "kind": "detail",
+          "parent_code": "36Z",
+          "included_in": "36Z",
+          "naics3": "336",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "36K",
+          "label": "Railroad rolling stock manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "36P",
+          "label": "Guided Missile, space vehicle, and parts manufacturing,",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "36Q",
+          "label": "Guided Missile, space vehicle, and parts manufacturing, defense",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "36R",
+          "label": "Military armored vehicle, tank, and tank component manufacturing,",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "36T",
+          "label": "Military armored vehicle, tank, and tank component manufacturing,",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "36U",
+          "label": "Other transportation equipment manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "36S",
+          "included_in": "36S",
+          "naics3": "336",
+          "published": false
+        },
+        {
+          "code": "37S",
+          "label": "Furniture and Related Products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "337",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "37A",
+          "label": "Household and kitchen cabinet manufacturing",
+          "kind": "detail",
+          "parent_code": "37S",
+          "included_in": "37S",
+          "naics3": "337",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "37B",
+          "label": "Office furniture (including fixtures) and institutional furniture",
+          "kind": "detail",
+          "parent_code": "37S",
+          "included_in": "37S",
+          "naics3": "337",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "37C",
+          "label": "Other furniture related product manufacturing",
+          "kind": "detail",
+          "parent_code": "37S",
+          "included_in": "37S",
+          "naics3": "337",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "39S",
+          "label": "Miscellaneous products",
+          "kind": "subsector",
+          "parent_code": "MDM",
+          "included_in": null,
+          "naics3": "339",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "39A",
+          "label": "Medical equipment and supplies manufacturing",
+          "kind": "detail",
+          "parent_code": "39S",
+          "included_in": "39S",
+          "naics3": "339",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "39B",
+          "label": "Sporting and athletic goods, doll, toy, and game manufacturing",
+          "kind": "detail",
+          "parent_code": "39S",
+          "included_in": "39S",
+          "naics3": "339",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "39C",
+          "label": "Office supplies (except paper) manufacturing",
+          "kind": "detail",
+          "parent_code": "39S",
+          "included_in": "39S",
+          "naics3": "339",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "39D",
+          "label": "Other miscellaneous manufacturing",
+          "kind": "detail",
+          "parent_code": "39S",
+          "included_in": "39S",
+          "naics3": "339",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "MNM",
+          "label": "Nondurable Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "11S",
+          "label": "Food Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "311",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "11A",
+          "label": "Grain and oilseed milling",
+          "kind": "detail",
+          "parent_code": "11S",
+          "included_in": "11S",
+          "naics3": "311",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "11B",
+          "label": "Dairy product manufacturing",
+          "kind": "detail",
+          "parent_code": "11S",
+          "included_in": "11S",
+          "naics3": "311",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "11C",
+          "label": "Animal slaughtering and processing, seafood product preparation and",
+          "kind": "detail",
+          "parent_code": "11S",
+          "included_in": "11S",
+          "naics3": "311",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "11D",
+          "label": "Other food manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "11S",
+          "included_in": "11S",
+          "naics3": "311",
+          "published": false
+        },
+        {
+          "code": "12S",
+          "label": "Beverage and Tobacco Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "312",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "12A",
+          "label": "Beverage manufacturing",
+          "kind": "detail",
+          "parent_code": "12S",
+          "included_in": "12S",
+          "naics3": "312",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "12B",
+          "label": "Tobacco manufacturing",
+          "kind": "detail",
+          "parent_code": "12S",
+          "included_in": "12S",
+          "naics3": "312",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "13S",
+          "label": "Textile Mills",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "313",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "14S",
+          "label": "Textile Product Mills",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "314",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "15S",
+          "label": "Apparel",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "315",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "16S",
+          "label": "Leather and Allied Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "316",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "22S",
+          "label": "Paper Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "322",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "22A",
+          "label": "Pulp, paper, and paperboard mills",
+          "kind": "detail",
+          "parent_code": "22S",
+          "included_in": "22S",
+          "naics3": "322",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "22B",
+          "label": "Paperboard container manufacturing",
+          "kind": "detail",
+          "parent_code": "22S",
+          "included_in": "22S",
+          "naics3": "322",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "22C",
+          "label": "Other paper manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "22S",
+          "included_in": "22S",
+          "naics3": "322",
+          "published": false
+        },
+        {
+          "code": "23S",
+          "label": "Printing and Related Support Activities",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "323",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "24S",
+          "label": "Petroleum and Coal Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "324",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "24A",
+          "label": "Petroleum refineries",
+          "kind": "detail",
+          "parent_code": "24S",
+          "included_in": "24S",
+          "naics3": "324",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "24B",
+          "label": "Asphalt paving, roofing, and saturated materials manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "24S",
+          "included_in": "24S",
+          "naics3": "324",
+          "published": false
+        },
+        {
+          "code": "24C",
+          "label": "Other petroleum and coal products manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "24S",
+          "included_in": "24S",
+          "naics3": "324",
+          "published": false
+        },
+        {
+          "code": "25S",
+          "label": "Chemical Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "325",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "25A",
+          "label": "Pesticide, fertilizer, and other agricultural chemical manufacturing",
+          "kind": "detail",
+          "parent_code": "25S",
+          "included_in": "25S",
+          "naics3": "325",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "25B",
+          "label": "Pharmaceutical and medicine manufacturing",
+          "kind": "detail",
+          "parent_code": "25S",
+          "included_in": "25S",
+          "naics3": "325",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "25C",
+          "label": "Paint, coating, and adhesive manufacturing",
+          "kind": "detail",
+          "parent_code": "25S",
+          "included_in": "25S",
+          "naics3": "325",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "25D",
+          "label": "Other chemical manufacturing",
+          "kind": "detail_unpublished",
+          "parent_code": "25S",
+          "included_in": "25S",
+          "naics3": "325",
+          "published": false
+        },
+        {
+          "code": "26S",
+          "label": "Plastic and Rubber Products",
+          "kind": "subsector",
+          "parent_code": "MNM",
+          "included_in": null,
+          "naics3": "326",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "26A",
+          "label": "Tire manufacturing",
+          "kind": "detail",
+          "parent_code": "26S",
+          "included_in": "26S",
+          "naics3": "326",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "26B",
+          "label": "Other plastics and rubber products manufacturing",
+          "kind": "detail",
+          "parent_code": "26S",
+          "included_in": "26S",
+          "naics3": "326",
+          "published": true,
+          "api_verified": false,
+          "api_sample_year": 2023,
+          "api_row_count": 0
+        },
+        {
+          "code": "CMS",
+          "label": "Construction Materials and Supplies",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "ITI",
+          "label": "Information Technology Industries",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "CRP",
+          "label": "Computers and Related Products",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "MVP",
+          "label": "Motor Vehicles and Parts",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "TCG",
+          "label": "Capital Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "NDE",
+          "label": "Nondefense Capital Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "NXA",
+          "label": "Nondefense Capital Goods Excluding Aircraft",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "DEF",
+          "label": "Defense Capital Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "COG",
+          "label": "Consumer Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "CDG",
+          "label": "Consumer Durable Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "CNG",
+          "label": "Consumer Nondurable Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "DXT",
+          "label": "Durable Goods Excluding Transportation",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "DXD",
+          "label": "Durable Goods Excluding Defense",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "34X",
+          "label": "Communication Equipment",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": "334",
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        },
+        {
+          "code": "ODG",
+          "label": "Other Durable Goods",
+          "kind": "aggregate",
+          "parent_code": null,
+          "included_in": null,
+          "naics3": null,
+          "published": true,
+          "api_verified": true,
+          "api_sample_year": 2023,
+          "api_row_count": 12
+        }
+      ]
+    }
   },
   {
     "_meta": {

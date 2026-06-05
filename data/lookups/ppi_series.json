@@ -1,0 +1,335 @@
+{
+  "_meta": {
+    "source": "BLS Producer Price Index industry data (pc database)",
+    "endpoint_series_catalog": "https://download.bls.gov/pub/time.series/pc/pc.series",
+    "endpoint_industry_catalog": "https://download.bls.gov/pub/time.series/pc/pc.industry",
+    "endpoint_api": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+    "extraction_date": "2026-06-05",
+    "rules": "NSA only (seasonal=U). One industry-group series per NAICS-3, product_code='---' (the all-products PPI for that industry). Picked by longest begin_year history.",
+    "m3_link": "M3 detailed codes share a NAICS-3 prefix; durable M3 prefix XY -> NAICS 3XY; nondurable XYS preserves digits.",
+    "usage": "For Tornqvist deflation: nominal_real = nominal_M3 / (PPI_index / 100). Both monthly NSA. Take period-average for monthly Tornqvist.",
+    "bls_api_quota": "25 series/year per request without key, 50 with registered key. Set BLS_API_KEY env var."
+  },
+  "by_naics3": {
+    "311": {
+      "naics3": "311",
+      "label": "Food mfg",
+      "ppi_industry_group": "PCU311---311---",
+      "ppi_label": "PPI industry sub-sector data for Food mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "11S",
+      "m3_subsector_label": "Food Products",
+      "m3_detail_codes": [
+        "11A",
+        "11B",
+        "11C"
+      ]
+    },
+    "312": {
+      "naics3": "312",
+      "label": "Beverage & tobacco mfg",
+      "ppi_industry_group": "PCU312---312---",
+      "ppi_label": "PPI industry sub-sector data for Beverage & tobacco mfg, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "12S",
+      "m3_subsector_label": "Beverage and Tobacco Products",
+      "m3_detail_codes": [
+        "12A",
+        "12B"
+      ]
+    },
+    "313": {
+      "naics3": "313",
+      "label": "Textile mills",
+      "ppi_industry_group": "PCU313---313---",
+      "ppi_label": "PPI industry sub-sector data for Textile mills, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "13S",
+      "m3_subsector_label": "Textile Mills",
+      "m3_detail_codes": []
+    },
+    "314": {
+      "naics3": "314",
+      "label": "Textile product mills",
+      "ppi_industry_group": "PCU314---314---",
+      "ppi_label": "PPI industry sub-sector data for Textile product mills, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "14S",
+      "m3_subsector_label": "Textile Product Mills",
+      "m3_detail_codes": []
+    },
+    "315": {
+      "naics3": "315",
+      "label": "Apparel manufacturing",
+      "ppi_industry_group": "PCU315---315---",
+      "ppi_label": "PPI industry sub-sector data for Apparel manufacturing, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "15S",
+      "m3_subsector_label": "Apparel",
+      "m3_detail_codes": []
+    },
+    "321": {
+      "naics3": "321",
+      "label": "Wood product manufacturing",
+      "ppi_industry_group": "PCU321---321---",
+      "ppi_label": "PPI industry sub-sector data for Wood product manufacturing, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "21S",
+      "m3_subsector_label": "Wood Products",
+      "m3_detail_codes": [
+        "21A",
+        "21B"
+      ]
+    },
+    "322": {
+      "naics3": "322",
+      "label": "Paper manufacturing",
+      "ppi_industry_group": "PCU322---322---",
+      "ppi_label": "PPI industry sub-sector data for Paper manufacturing, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "22S",
+      "m3_subsector_label": "Paper Products",
+      "m3_detail_codes": [
+        "22A",
+        "22B"
+      ]
+    },
+    "323": {
+      "naics3": "323",
+      "label": "Printing and related support activities",
+      "ppi_industry_group": "PCU323---323---",
+      "ppi_label": "PPI industry sub-sector data for Printing and related support activities, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "23S",
+      "m3_subsector_label": "Printing and Related Support Activities",
+      "m3_detail_codes": []
+    },
+    "324": {
+      "naics3": "324",
+      "label": "Petroleum and coal products manufacturing",
+      "ppi_industry_group": "PCU324---324---",
+      "ppi_label": "PPI industry sub-sector data for Petroleum and coal products manufacturing, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "24S",
+      "m3_subsector_label": "Petroleum and Coal Products",
+      "m3_detail_codes": [
+        "24A"
+      ]
+    },
+    "325": {
+      "naics3": "325",
+      "label": "Chemical mfg",
+      "ppi_industry_group": "PCU325---325---",
+      "ppi_label": "PPI industry sub-sector data for Chemical mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "25S",
+      "m3_subsector_label": "Chemical Products",
+      "m3_detail_codes": [
+        "25A",
+        "25B",
+        "25C"
+      ]
+    },
+    "326": {
+      "naics3": "326",
+      "label": "Plastics and rubber products mfg",
+      "ppi_industry_group": "PCU326---326---",
+      "ppi_label": "PPI industry sub-sector data for Plastics and rubber products mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "26S",
+      "m3_subsector_label": "Plastic and Rubber Products",
+      "m3_detail_codes": [
+        "26A",
+        "26B"
+      ]
+    },
+    "327": {
+      "naics3": "327",
+      "label": "Nonmetallic mineral product manufacturing",
+      "ppi_industry_group": "PCU327---327---",
+      "ppi_label": "PPI industry sub-sector data for Nonmetallic mineral product manufacturing, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "27S",
+      "m3_subsector_label": "Nonmetallic Mineral Products",
+      "m3_detail_codes": []
+    },
+    "331": {
+      "naics3": "331",
+      "label": "Primary metal mfg",
+      "ppi_industry_group": "PCU331---331---",
+      "ppi_label": "PPI industry sub-sector data for Primary metal mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "31S",
+      "m3_subsector_label": "Primary Metals",
+      "m3_detail_codes": [
+        "31A",
+        "31B",
+        "31C",
+        "31D"
+      ]
+    },
+    "332": {
+      "naics3": "332",
+      "label": "Fabricated metal product mfg",
+      "ppi_industry_group": "PCU332---332---",
+      "ppi_label": "PPI industry sub-sector data for Fabricated metal product mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "32S",
+      "m3_subsector_label": "Fabricated Metal Products",
+      "m3_detail_codes": [
+        "32A",
+        "32B",
+        "32C",
+        "32D",
+        "32E",
+        "32F",
+        "32G"
+      ]
+    },
+    "333": {
+      "naics3": "333",
+      "label": "Machinery manufacturing",
+      "ppi_industry_group": "PCU333---333---",
+      "ppi_label": "PPI industry sub-sector data for Machinery manufacturing, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "33S",
+      "m3_subsector_label": "Machinery",
+      "m3_detail_codes": [
+        "33A",
+        "33C",
+        "33D",
+        "33E",
+        "33G",
+        "33H",
+        "33I",
+        "33J",
+        "33K",
+        "33M"
+      ]
+    },
+    "334": {
+      "naics3": "334",
+      "label": "Computer & electronic product mfg",
+      "ppi_industry_group": "PCU334---334---",
+      "ppi_label": "PPI industry sub-sector data for Computer & electronic product mfg, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "34S",
+      "m3_subsector_label": "Computers and Electronic Products",
+      "m3_detail_codes": [
+        "34A",
+        "34B",
+        "34C",
+        "34D",
+        "34E",
+        "34F",
+        "34H",
+        "34I",
+        "34J",
+        "34K"
+      ]
+    },
+    "335": {
+      "naics3": "335",
+      "label": "Electrical equipment  and appliance mfg",
+      "ppi_industry_group": "PCU335---335---",
+      "ppi_label": "PPI industry sub-sector data for Electrical equipment  and appliance mfg, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "35S",
+      "m3_subsector_label": "Electrical Equipment, Appliances, and Components",
+      "m3_detail_codes": [
+        "35A",
+        "35B",
+        "35C",
+        "35D"
+      ]
+    },
+    "336": {
+      "naics3": "336",
+      "label": "Transportation equipment manufacturing",
+      "ppi_industry_group": "PCU336---336---",
+      "ppi_label": "PPI industry sub-sector data for Transportation equipment manufacturing, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "36S",
+      "m3_subsector_label": "Transportation Equipment",
+      "m3_detail_codes": [
+        "36A",
+        "36B",
+        "36C",
+        "36D",
+        "36E",
+        "36F",
+        "36G",
+        "36H",
+        "36I",
+        "36L",
+        "36M"
+      ]
+    },
+    "337": {
+      "naics3": "337",
+      "label": "Furniture & related product mfg",
+      "ppi_industry_group": "PCU337---337---",
+      "ppi_label": "PPI industry sub-sector data for Furniture & related product mfg, not seasonally adjusted",
+      "begin_year": 1984,
+      "end_year_known": 2026,
+      "m3_subsector_code": "37S",
+      "m3_subsector_label": "Furniture and Related Products",
+      "m3_detail_codes": [
+        "37A",
+        "37B",
+        "37C"
+      ]
+    },
+    "339": {
+      "naics3": "339",
+      "label": "Miscellaneous mfg",
+      "ppi_industry_group": "PCU339---339---",
+      "ppi_label": "PPI industry sub-sector data for Miscellaneous mfg, not seasonally adjusted",
+      "begin_year": 2003,
+      "end_year_known": 2026,
+      "m3_subsector_code": "39S",
+      "m3_subsector_label": "Miscellaneous products",
+      "m3_detail_codes": [
+        "39A",
+        "39B",
+        "39C",
+        "39D"
+      ]
+    },
+    "316": {
+      "naics3": "316",
+      "label": "Leather and Allied Products (proxy: Footwear only)",
+      "ppi_industry_group": "PCU3162--3162--",
+      "ppi_label": "PPI industry data for Footwear manufacturing, not seasonally adjusted (proxy for full 316 subsector; BLS does not publish a 316--- rollup)",
+      "begin_year": 1985,
+      "end_year_known": 2026,
+      "m3_subsector_code": "16S",
+      "m3_subsector_label": "Leather and Allied Products",
+      "m3_detail_codes": [],
+      "proxy_note": "No PCU316---316--- exists. Footwear (NAICS 3162) is the only published 4-digit. Total NAICS 316 share of mfg shipments is ~0.1%, so substitution error is negligible."
+    }
+  },
+  "missing_naics3": [],
+  "fallback_commodity_series": {
+    "comment": "If an industry-group PPI is unavailable or thin, use a commodity-level WPU series. We did not build a WPU index in this lookup.",
+    "endpoint_catalog": "https://download.bls.gov/pub/time.series/wp/wp.series"
+  }
+}

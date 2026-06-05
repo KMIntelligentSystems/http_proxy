@@ -296,6 +296,45 @@ Endpoint: `https://api.census.gov/data/timeseries/eits/m3`
 
 See `data/lookups/m3_series.json` (`_meta.census_api`) for the full taxonomy.
 
+## Tooling: `parse_pdf` (in-process)
+
+In-process visualization tool (`src/visualization-tools.ts`) for extracting text
+from PDFs. Primary engine: `pdf-parse` v2 (which wraps a recent `pdfjs-dist`).
+Fallback: shells out to the local `pdftotext` binary (poppler-utils) if the JS
+engine returns empty text.
+
+**Verified working (2026-06-05) on:**
+
+- `data/oe_wage_intervals.pdf` — OEWS interval schema
+- `data/OEWS Density Estimator.pdf` — BLS methodology paper
+- Census M3 `sichist.pdf` (SIC-based code list, 10 pages) — fetched fresh from `www2.census.gov`
+- Census M3 `naicshist.pdf` (NAICS-based code list, 7 pages) — same
+
+**Important correction to earlier memory:** the prior session reported that the
+Census M3 code-list PDFs were undecodable due to Type0/Identity-H fonts. That
+was wrong — `pdf-parse` v2 handles them natively. No Playwright scraping needed
+for M3 code extraction.
+
+**Calling convention:**
+```
+parse_pdf({ filePath: "data/m3_sichist.pdf" })           // local file
+parse_pdf({ url: "https://...sichist.pdf" })             // fetch + parse
+parse_pdf({ filePath: "...", pages: "1-3" })             // page range
+parse_pdf({ filePath: "...", saveAs: "m3_sichist.txt" }) // persist as artifact
+parse_pdf({ filePath: "...", mode: "info" })             // metadata only
+parse_pdf({ filePath: "...", engine: "pdftotext" })      // force fallback
+```
+
+Returns extracted text plus per-page character counts. If both engines return
+empty, the tool surfaces a clear message recommending Playwright as a rescue
+path.
+
+The two Census M3 code-list PDFs are now cached locally as `data/m3_sichist.pdf`
+and `data/m3_naicshist.pdf`, with extracted text in `data/m3_sichist.txt` and
+`data/m3_naicshist.txt`. The NAICS-based file contains the full detailed
+industry-code taxonomy (codes like `34A`, `34B`, ..., `11S`, `12A`, ..., `NXA`)
+needed to extend `data/lookups/m3_series.json` with a detailed section.
+
 ## Tooling: X-13ARIMA-SEATS
 
 - **Binary installed:** `C:\Program Files\x13as\x13as.exe` (Win32 build, gfortran runtime).

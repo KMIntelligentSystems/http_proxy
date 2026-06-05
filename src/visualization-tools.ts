@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { defineTool } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import type { ArtifactStore, ArtifactRecord } from "./artifacts.js";
+import { PDFParse } from "pdf-parse";
 
 const DB_ALLOWED_MIME_TYPES = new Set([
   "image/svg+xml",
@@ -980,6 +982,247 @@ if (isTimeSeries) {
   // then surfaces every renderable matching row to the frontend Documents panel
   // via artifactStore.create() (which triggers the artifact_created WS broadcast).
   //
+  // ─── parse_pdf ────────────────────────────────────────────────────────────
+  // In-process PDF text extraction. Primary engine: pdf-parse (pdfjs-dist v4
+  // under the hood). Fallback engine: the `pdftotext` binary from poppler-utils
+  // if it is on PATH — this is the rescue path for PDFs with Type0/Identity-H
+  // font encoding (e.g. Census M3 code-list PDFs) where pdfjs alone returns
+  // empty strings.
+  //
+  // The tool returns the extracted text directly. If `saveAs` is provided, it
+  // also persists the text as a `text/plain` artifact for downstream sessions.
+
+  const parsePdfTool = defineTool({
+    name: "parse_pdf",
+    label: "Parse PDF",
+    description: `Extract text from a PDF file or URL using pdf-parse, with an automatic fallback to the local 'pdftotext' binary if the PDF has fonts that the JS parser cannot decode (the typical failure mode for Census M3 code-list PDFs).
+
+Returns the extracted text plus per-page byte counts. Set 'saveAs' to also persist the result as a text/plain artifact.
+
+Typical uses:
+  - extract code lists from Census / BLS methodology PDFs into a parseable form
+  - convert OEWS / M3 / methods PDFs already in data/ to text for further processing
+  - dump a single page range for inspection
+
+If both engines yield empty text, the response will say so explicitly — fall back to Playwright scraping in that case.`,
+    parameters: Type.Object({
+      filePath: Type.Optional(Type.String({ description: "Path to a local PDF (absolute, or relative to project root). Provide either filePath or url." })),
+      url: Type.Optional(Type.String({ description: "HTTPS URL of the PDF. The tool will fetch the bytes and parse in memory." })),
+      pages: Type.Optional(Type.String({ description: "Page selection. 'all' (default), a single page like '3', or a range like '1-10'." })),
+      mode: Type.Optional(Type.Union([
+        Type.Literal("text"),
+        Type.Literal("info"),
+      ], { description: "'text' returns extracted text (default). 'info' returns document metadata only (page count, title, producer)." })),
+      engine: Type.Optional(Type.Union([
+        Type.Literal("auto"),
+        Type.Literal("pdf-parse"),
+        Type.Literal("pdftotext"),
+      ], { description: "'auto' (default) tries pdf-parse then pdftotext. Force one engine by name for debugging." })),
+      saveAs: Type.Optional(Type.String({ description: "If set, persist the extracted text as a text/plain artifact with this filename (e.g. 'm3_sichist.txt'). The artifact appears in the Documents panel." })),
+      title: Type.Optional(Type.String({ description: "Artifact title when saveAs is used. Defaults to a path-derived title." })),
+    }),
+    execute: async (_toolCallId, params): Promise<{ content: { type: "text"; text: string }[]; details: Record<string, unknown>; isError?: boolean }> => {
+      // ─── Resolve source bytes ────────────────────────────────────────────
+      let bytes: Uint8Array;
+      let sourceLabel: string;
+      let localPath: string | null = null;
+
+      if (params.filePath && params.url) {
+        return { content: [{ type: "text" as const, text: "Provide exactly one of filePath or url, not both." }], details: {}, isError: true };
+      }
+      if (!params.filePath && !params.url) {
+        return { content: [{ type: "text" as const, text: "Must provide filePath or url." }], details: {}, isError: true };
+      }
+
+      if (params.filePath) {
+        const resolved = path.isAbsolute(params.filePath) ? params.filePath : path.resolve(cwd, params.filePath);
+        if (!fs.existsSync(resolved)) {
+          return { content: [{ type: "text" as const, text: `File not found: ${resolved}` }], details: {}, isError: true };
+        }
+        bytes = new Uint8Array(fs.readFileSync(resolved));
+        sourceLabel = resolved;
+        localPath = resolved;
+      } else {
+        try {
+          const res = await fetch(params.url!);
+          if (!res.ok) {
+            return { content: [{ type: "text" as const, text: `Fetch failed: ${res.status} ${res.statusText} for ${params.url}` }], details: {}, isError: true };
+          }
+          const buf = await res.arrayBuffer();
+          bytes = new Uint8Array(buf);
+          sourceLabel = params.url!;
+        } catch (err) {
+          return { content: [{ type: "text" as const, text: `Fetch error: ${err instanceof Error ? err.message : String(err)}` }], details: {}, isError: true };
+        }
+      }
+
+      // ─── Parse page selection ────────────────────────────────────────────
+      const pagesSpec = (params.pages ?? "all").trim().toLowerCase();
+      let pageFilter: { first?: number; last?: number; partial?: number[] } = {};
+      if (pagesSpec !== "all") {
+        const rangeMatch = pagesSpec.match(/^(\d+)\s*-\s*(\d+)$/);
+        const singleMatch = pagesSpec.match(/^\d+$/);
+        if (rangeMatch) {
+          const a = parseInt(rangeMatch[1]!, 10);
+          const b = parseInt(rangeMatch[2]!, 10);
+          pageFilter = { first: Math.min(a, b), last: Math.max(a, b) };
+        } else if (singleMatch) {
+          const n = parseInt(pagesSpec, 10);
+          pageFilter = { partial: [n] };
+        } else {
+          return { content: [{ type: "text" as const, text: `Invalid pages spec: "${params.pages}". Use 'all', '3', or '1-10'.` }], details: {}, isError: true };
+        }
+      }
+
+      const mode = params.mode ?? "text";
+      const engine = params.engine ?? "auto";
+      const enginesTried: string[] = [];
+      let extractedText = "";
+      let perPage: { num: number; chars: number }[] = [];
+      let totalPages = 0;
+      let infoBlob: Record<string, unknown> = {};
+
+      // ─── Engine 1: pdf-parse (pdfjs-dist) ─────────────────────────────────
+      const tryPdfParse = engine === "auto" || engine === "pdf-parse";
+      if (tryPdfParse) {
+        enginesTried.push("pdf-parse");
+        try {
+          const parser = new PDFParse({ data: bytes });
+          try {
+            if (mode === "info") {
+              const info = await parser.getInfo();
+              infoBlob = {
+                pageCount: (info as any).numPages ?? (info as any).total ?? null,
+                metadata: (info as any).info ?? null,
+                metadataRaw: (info as any).metadata ?? null,
+              };
+              totalPages = Number(infoBlob.pageCount ?? 0);
+            } else {
+              const result = await parser.getText(pageFilter);
+              const pages = (result.pages ?? []).filter((p: any) => {
+                if (pageFilter.first != null && p.num < pageFilter.first) return false;
+                if (pageFilter.last != null && p.num > pageFilter.last) return false;
+                if (pageFilter.partial && !pageFilter.partial.includes(p.num)) return false;
+                return true;
+              });
+              extractedText = pages.map((p: any) => `--- page ${p.num} ---\n${p.text ?? ""}`).join("\n\n");
+              perPage = pages.map((p: any) => ({ num: p.num, chars: (p.text ?? "").length }));
+              totalPages = result.total ?? pages.length;
+            }
+          } finally {
+            await parser.destroy().catch(() => {});
+          }
+        } catch (err) {
+          // Swallow — we may still try pdftotext below.
+          if (engine === "pdf-parse") {
+            return { content: [{ type: "text" as const, text: `pdf-parse failed: ${err instanceof Error ? err.message : String(err)}` }], details: {}, isError: true };
+          }
+        }
+      }
+
+      // ─── Engine 2: pdftotext (poppler) fallback ───────────────────────────
+      const stripped = extractedText.replace(/--- page \d+ ---/g, "").trim();
+      const looksEmpty = mode === "text" && stripped.length === 0;
+      const tryPdftotext = engine === "pdftotext" || (engine === "auto" && looksEmpty);
+      if (tryPdftotext) {
+        enginesTried.push("pdftotext");
+        // pdftotext can read stdin with '-' and write to stdout with '-'.
+        const args: string[] = ["-layout"];
+        if (pageFilter.first != null) { args.push("-f", String(pageFilter.first)); }
+        if (pageFilter.last != null) { args.push("-l", String(pageFilter.last)); }
+        if (pageFilter.partial && pageFilter.partial.length === 1) {
+          args.push("-f", String(pageFilter.partial[0]), "-l", String(pageFilter.partial[0]));
+        }
+        args.push(localPath ?? "-", "-");
+        const result = spawnSync("pdftotext", args, {
+          input: localPath ? undefined : Buffer.from(bytes),
+          encoding: "utf-8",
+          maxBuffer: 64 * 1024 * 1024,
+        });
+        if (result.error) {
+          // ENOENT means the binary isn't on PATH; report the situation clearly.
+          const msg = (result.error as any).code === "ENOENT"
+            ? "pdftotext binary not found on PATH. Install poppler-utils (provides 'pdftotext') or use Playwright scraping as a rescue path."
+            : `pdftotext error: ${result.error.message}`;
+          if (engine === "pdftotext" || looksEmpty) {
+            return {
+              content: [{ type: "text" as const, text: msg + (looksEmpty ? "\n\nNote: pdf-parse returned empty text first — the PDF likely uses non-decodable embedded fonts. Recommended next step: Playwright scrape of the source page." : "") }],
+              details: { enginesTried, sourceLabel, pdfParseEmpty: looksEmpty },
+              isError: true,
+            };
+          }
+        } else if (result.status !== 0) {
+          if (engine === "pdftotext") {
+            return {
+              content: [{ type: "text" as const, text: `pdftotext exited with status ${result.status}: ${result.stderr ?? ""}` }],
+              details: { enginesTried, sourceLabel },
+              isError: true,
+            };
+          }
+        } else {
+          extractedText = result.stdout ?? "";
+          // pdftotext doesn't emit page numbers in -layout mode; report a single block.
+          perPage = [{ num: 0, chars: extractedText.length }];
+        }
+      }
+
+      // ─── Compose response ─────────────────────────────────────────────────
+      const finalStripped = extractedText.replace(/--- page \d+ ---/g, "").trim();
+      const isEmpty = mode === "text" && finalStripped.length === 0;
+
+      const header: string[] = [];
+      header.push(`Source: ${sourceLabel}`);
+      header.push(`Engines tried: ${enginesTried.join(", ") || "(none)"}`);
+      if (totalPages) header.push(`Total pages in document: ${totalPages}`);
+      if (perPage.length) header.push(`Pages returned: ${perPage.length}, total chars: ${perPage.reduce((s, p) => s + p.chars, 0)}`);
+      if (mode === "info") {
+        return {
+          content: [{ type: "text" as const, text: `${header.join("\n")}\n\n${JSON.stringify(infoBlob, null, 2)}` }],
+          details: { sourceLabel, enginesTried, info: infoBlob },
+        };
+      }
+
+      if (isEmpty) {
+        return {
+          content: [{ type: "text" as const, text: `${header.join("\n")}\n\nBoth engines returned empty text. The PDF likely uses embedded fonts without a usable ToUnicode CMap (the Census M3 code-list pattern). Recommended fallback: use Playwright to scrape the equivalent web page (e.g. census.gov/econ/currentdata for M3 codes).` }],
+          details: { sourceLabel, enginesTried, empty: true },
+          isError: true,
+        };
+      }
+
+      // ─── Optional persistence ─────────────────────────────────────────────
+      if (params.saveAs) {
+        const title = params.title ?? `PDF text — ${path.basename(sourceLabel)}`;
+        const record = await options.artifactStore.create({
+          sessionId: options.getSessionId(),
+          title,
+          filename: params.saveAs,
+          mimeType: "text/plain",
+          content: extractedText,
+          description: `Text extracted from ${sourceLabel} using ${enginesTried.join(" → ")}.`,
+          role: "dataset-meta",
+        });
+        return {
+          content: [{ type: "text" as const, text: `${header.join("\n")}\n\nSaved as artifact: ${record.title} (${record.url})\n\n--- preview (first 1200 chars) ---\n${extractedText.slice(0, 1200)}` }],
+          details: {
+            artifactId: record.id,
+            url: record.url,
+            sourceLabel,
+            enginesTried,
+            totalPages,
+            perPage,
+          },
+        };
+      }
+
+      return {
+        content: [{ type: "text" as const, text: `${header.join("\n")}\n\n${extractedText}` }],
+        details: { sourceLabel, enginesTried, totalPages, perPage },
+      };
+    },
+  });
+
+  // ─── query_artifacts ──────────────────────────────────────────────────────
   // This is the agent's DEFAULT data-access path. Only fall back to external
   // APIs / web search when this tool returns 0 rows or only irrelevant rows.
 
@@ -1114,5 +1357,5 @@ Example — "Provide the results of M3 NSA data surveys":
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool, queryArtifactsTool];
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool, parsePdfTool, queryArtifactsTool];
 }

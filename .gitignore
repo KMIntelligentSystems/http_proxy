@@ -35,3 +35,7 @@ data/artifacts/*
 
 # agent session intermediates
 tmp*/
+
+# python
+__pycache__/
+*.pyc

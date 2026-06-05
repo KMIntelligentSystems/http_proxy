@@ -1,0 +1,239 @@
+--- page 1 ---
+MANUFACTURERS' SHIPMENTS, INVENTORIES, AND ORDERS
+HISTORICAL TIME SERIES DOCUMENTATION (NAICS Based)
+NOTE: Data are expressed in millions of dollars (at current market) except when
+an "IS" or "US" appears. In these cases, data contain two decimals. Where data
+do not exist for all years/months, the appropriate rows/fields will be missing or
+N/A. Data are right justified.
+FILE LAYOUT:
+Column A 	ID code (See technical documentation section "M3 Series
+Identification Code" for each breakdown.)
+Column B 	Year of Data Series
+Column C 	January Data
+Column D 	February Data
+Column E 	March Data
+Column F 	April Data
+Column G 	May Data
+Column H 	June Data
+Column I 	July Data
+Column J 	August Data
+Column K 	September Data
+Column L 	October Data
+Column M 	November Data
+Column N 	December Data
+M3 SERIES IDENTIFICATION CODE (COLUMN A):
+The M3 series identification code is a 6-digit field. The structure of the code
+within the field is as follows:
+Position Codes
+Position 1 	U - Unadjusted (Seasonally)
+A - Seasonally Adjusted
+Position 2-4 	M3 Series (more detail below)
+This field contains aggregate level data series, 2-digit NAICS subsector series
+and M3 industry categories.
+Position 5-6 Indicates the Data Item
+
+--- page 2 ---
+VS – Value of Shipments
+NO – New Orders
+UO – Unfilled Orders
+TI – Total Inventories
+MI – Materials and Supplies Inventories
+WI – Work in Process Inventories
+FI – Finished Goods Inventories
+IS – Inventories to Shipments Ratios
+US – Unfilled Orders to Shipments Ratios
+Position 2 – 4 (M3 SERIES – detail information)
+Note: The series identification codes are listed here in the order they appear in
+the historical data files.
+Aggregate series Totals:
+MTM 	Total Manufacturing
+MXT 	Manufacturing Excluding Transportation
+MXD 	Manufacturing Excluding Defense
+MTU 	Manufacturing with Unfilled Orders
+MDM 	Durable Goods
+Note: Estimates for new orders and unfilled orders exclude semiconductor
+industry data.
+Durable Subsector series:
+21S 	Wood Products
+Includes:
+21A Wood building and mobile home manufacturing
+21B Other wood product manufacturing
+27S 	Nonmetallic Mineral Products
+31S 	Primary Metals
+31A 	Iron and steel mills and ferroalloy and steel product manufacturing from
+purchased steel
+ANM 	Aluminum and Nonferrous Metal Products
+Includes:
+31B Alumina and aluminum and nonferrous metal (except
+aluminum) production and processing
+31D Nonferrous metal foundries
+31C 	Ferrous metal foundries
+
+--- page 3 ---
+32S 	Fabricated Metal Products
+Includes:
+32A Forging and stamping
+32B Cutlery and handtool manufacturing
+32C Boiler, tank, and shipping container manufacturing
+32D Metal valve manufacturing
+32E Small arms and ordnance manufacturing, nondefense
+32F Small arms and ordnance manufacturing, defense
+32G Other fabricated metal product manufacturing
+33S 	Machinery
+33A 	Farm machinery and equipment manufacturing
+33C 	Construction machinery manufacturing
+33D 	Mining and oil and gas field machinery manufacturing
+33E 	Industrial machinery manufacturing
+33G 	Photographic equipment manufacturing
+33H 	Ventilation, heating, air-conditioning, and commercial refrigeration
+equipment manufacturing
+33I 	Metalworking machinery manufacturing
+TGP 	Turbines, Generators, and Other Power Transmission Equipment
+Includes:
+33J Turbine and generator set units manufacturing
+33K Other power transmission equipment manufacturing
+33M 	Material handling equipment manufacturing
+Not published, but included in 33S:
+33B Lawn and garden tractor and home lawn and garden equipment
+manufacturing
+33F Commercial and service industry machinery manufacturing
+33L Pump and compressor manufacturing
+33N All other general purpose machinery manufacturing
+34S 	Computers and Electronic Products
+34A 	Electronic computer manufacturing
+34B 	Computer storage device manufacturing
+34C 	Computer terminal and other computer peripheral equipment
+manufacturing
+34D 	Communications equipment manufacturing, nondefense
+34E 	Communications equipment manufacturing, defense
+34F 	Audio and video equipment manufacturing
+34H 	Other electronic component manufacturing
+34I 	Search, detection, navigation, guidance, aeronautical, and nautical
+system and instrument manufacturing, nondefense
+34J 	Search, detection, navigation, guidance, aeronautical, and nautical
+system and instrument manufacturing, defense
+34K 	Measuring, electromedical, and control instruments manufacturing
+
+--- page 4 ---
+Not published, but included in 34S:
+34G Semiconductor and other electronic component manufacturing
+34L Manufacturing and reproducing magnetic and optical media
+Note: Estimates for new orders and unfilled orders exclude
+semiconductor industry data.
+35S 	Electrical Equipment, Appliances, and Components
+35A 	Electric lighting equipment manufacturing
+35B 	Household appliance manufacturing
+35C 	Electrical equipment manufacturing
+35D 	Battery manufacturing
+Not published, but included in 35S:
+35E Other electrical equipment and component manufacturing
+36S 	Transportation Equipment
+36A 	Automobile manufacturing
+36B 	Light truck and utility vehicle manufacturing
+36C 	Heavy duty truck manufacturing
+BTP 	Motor Vehicle Bodies, Trailers, and Parts
+Includes:
+36D Motor vehicle body and trailer manufacturing
+36E Motor vehicle parts manufacturing
+NAP 	Nondefense Aircraft and Parts
+Includes:
+36F Aircraft manufacturing, nondefense
+36H Aircraft engine and engine parts manufacturing, nondefense
+DAP 	Defense Aircraft and Parts
+Includes:
+36G Aircraft manufacturing, defense
+36I Aircraft engine and engine parts manufacturing, defense
+36Z 	Ships and Boats
+Includes:
+36L Ship and boat building, nondefense
+36M Ship and boat building, defense
+Not published, but included in 36S:
+36K Railroad rolling stock manufacturing
+36P Guided Missile, space vehicle, and parts manufacturing,
+nondefense
+36Q Guided Missile, space vehicle, and parts manufacturing, defense
+
+--- page 5 ---
+Not published, but included in 36S (cont.):
+36R Military armored vehicle, tank, and tank component manufacturing,
+nondefense
+36T Military armored vehicle, tank, and tank component manufacturing,
+defense
+36U Other transportation equipment manufacturing
+37S 	Furniture and Related Products
+Includes:
+37A Household and kitchen cabinet manufacturing
+37B Office furniture (including fixtures) and institutional furniture
+manufacturing
+37C Other furniture related product manufacturing
+39S 	Miscellaneous products
+Includes:
+39A Medical equipment and supplies manufacturing
+39B Sporting and athletic goods, doll, toy, and game manufacturing
+39C Office supplies (except paper) manufacturing
+39D Other miscellaneous manufacturing
+Aggregate series:
+MNM 	Nondurable Goods
+Nondurable Subsector series:
+11S 	Food Products
+11A 	Grain and oilseed milling
+11B 	Dairy product manufacturing
+11C 	Animal slaughtering and processing, seafood product preparation and
+packaging
+Not published, but included in 11S:
+11D Other food manufacturing
+12S 	Beverage and Tobacco Products
+12A 	Beverage manufacturing
+12B 	Tobacco manufacturing
+13S 	Textile Mills
+14S 	Textile Product Mills
+15S 	Apparel
+
+--- page 6 ---
+16S 	Leather and Allied Products
+22S 	Paper Products
+22A 	Pulp, paper, and paperboard mills
+22B 	Paperboard container manufacturing
+Not published, but included in 22S:
+22C Other paper manufacturing
+23S 	Printing and Related Support Activities
+24S 	Petroleum and Coal Products
+24A 	Petroleum refineries
+Not published, but included in 24S:
+24B Asphalt paving, roofing, and saturated materials manufacturing
+24C Other petroleum and coal products manufacturing
+25S 	Chemical Products
+25A 	Pesticide, fertilizer, and other agricultural chemical manufacturing
+25B 	Pharmaceutical and medicine manufacturing
+25C 	Paint, coating, and adhesive manufacturing
+Not published, but included in 25S:
+25D Other chemical manufacturing
+26S 	Plastic and Rubber Products
+Includes:
+26A Tire manufacturing
+26B Other plastics and rubber products manufacturing
+Aggregate series:
+CMS 	Construction Materials and Supplies
+ITI 	Information Technology Industries
+CRP 	Computers and Related Products
+MVP 	Motor Vehicles and Parts
+TCG 	Capital Goods
+NDE 	Nondefense Capital Goods
+NXA 	Nondefense Capital Goods Excluding Aircraft
+
+--- page 7 ---
+DEF 	Defense Capital Goods
+COG 	Consumer Goods
+CDG 	Consumer Durable Goods
+CNG 	Consumer Nondurable Goods
+DXT 	Durable Goods Excluding Transportation
+DXD 	Durable Goods Excluding Defense
+34X 	Communication Equipment
+Includes:
+34D Communications equipment manufacturing, nondefense
+34E Communications equipment manufacturing, defense
+ODG 	Other Durable Goods
+NOTE: Data are expressed in millions of dollars (at current market) except when
+an "IS" or "US" appears. In these cases, data contain two decimals. Where data
+do not exist for all years/months, the appropriate rows/fields will be missing or
+N/A. Data are right justified.

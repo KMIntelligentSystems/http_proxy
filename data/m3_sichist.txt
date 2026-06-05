@@ -1,0 +1,243 @@
+--- page 1 ---
+MANUFACTURERS' SHIPMENTS, INVENTORIES, AND ORDERS
+TECHNICAL DOCUMENTATION (SIC Based)
+M3 SERIES IDENTIFICATION CODE:
+The M3 series identification code is a 6-digit field. The structure of
+the code within the field is as follows:
+Position Codes
+Position 1 	U- Unadjusted (Seasonally)
+A- Seasonally Adjusted
+Position 2-4 	M3 Series (* see footnote)
+This field contains aggregate level data series, 2-digit SIC major
+group series and M3 industry categories.
+Aggregate series:
+MTM 	Total Manufacturing
+MXT 	Manufacturing Excluding Transportation
+MTU 	All Manufacturing with Unfilled Orders
+MXD 	Manufacturing Excluding Defense
+DXD 	Durable Excluding Defense
+MDM 	Durable Goods Total
+MDU 	Durable Goods with Unfilled Orders
+MNM 	Nondurable Goods Total
+MNU 	Nondurable Goods with Unfilled Orders
+AUE 	Automotive Equipment
+HGA 	Home Goods and Apparel
+
+--- page 2 ---
+COS 	Consumer Staples
+MAE 	Machinery and Equipment
+BUS 	Business Supplies
+CMS 	Construction Supplies
+DEP 	Defense Products
+OMP 	Other Materials, Supplies and Intermediate Products
+TCG 	Total Capital Goods
+NDE 	Nondefense Capital Goods
+NXA 	Nondefense Capital Goods Excluding Aircraft and Parts
+DEF 	Defense Capital Goods
+DXC 	Durables Excluding Capital Goods
+DXA 	Durables Excluding Aircraft and Parts
+N4X 	Nondefense Aircraft, Missiles, Space Vehicles and Parts
+N5X 	Nondefense Shipbuilding, Tank Components, and
+Ordnance
+D4X 	Defense Aircraft, Missiles, Space Vehicles and Parts
+D5X 	Defense Shipbuilding, Tanks, and Ordnance
+SX4 	Aircraft, Missiles, Space Vehicles and Parts
+SX5 	Shipbuilding, Tanks, Tank Components, and Ordnance
+TPD 	Producers' Durable Equipment
+HDG 	Household Durable Goods
+ATP 	Advanced Technology Product Industries(not published)
+ITI 	Information Technology Industries
+HCP 	Health Care Products
+
+--- page 3 ---
+MX1 	All Other Durable
+MX2 	All Other Nondurable
+Major Group series:
+Durable Goods Industries
+24M 	Lumber and Wood Products
+25M 	Furniture and Fixtures
+32M 	Stone, Clay, and Glass Products
+33M 	Primary Metals Industries
+34M 	Fabricated Metal Products
+35M 	Industrial Machinery and Equipment
+36M 	Electronic and Other Electrical Equipment
+37M 	Transportation Equipment
+38M 	Instruments and Related Products
+39M 	Other Durable Goods
+Nondurable Goods Industries
+20M 	Food and Kindred Products
+21M 	Tobacco Products
+22M 	Textile Mill Products
+23M 	Apparel and Other Finished Textile Products
+26M 	Paper and Allied Products
+27M 	Printing, Publishing, and Allied Industries
+28M 	Chemicals and Allied Products
+29M 	Petroleum and Coal Products
+
+--- page 4 ---
+30M 	Rubber and Miscellaneous Plastics Products
+31M 	Leather and Leather Products
+M3 Industry Categories:
+Lumber and Wood Products
+24A 	Wood Containers, Pallets, and Skids
+24B 	Wood Buildings and Mobile Homes
+24C 	All Other Wood Products
+Furniture and Fixtures
+25A 	Household Furniture
+25B 	All Other Furniture
+Stone, Clay, and Glass Products
+32A 	Glass Containers
+32B 	Kitchen Articles and Pottery
+32C 	Other Stone, Clay, and Glass Products
+Primary Metals Industries
+33A 	Blast Furnaces, Steel Mills
+33B 	Iron and Steel Foundries
+33C 	Nonferrous Metals
+Fabricated Metal Products
+34A 	Metal Cans and Shipping Containers
+34B 	Cutlery and Handtools
+34C 	Building Materials and Wire Products
+34D 	Ordnance and Accessories, except for the Department of
+Defense
+
+--- page 5 ---
+34E 	Ordnance and Accessories, for the Department of Defense
+34X 	Ordnance and Accessories
+34F 	Other Fabricated Metal Products
+Industrial Machinery and Equipment
+SX1 	Engines and Turbines
+35A 	Steam Engines and Turbines
+35B 	Internal Combustion Engines
+35C 	Farm and Garden Machinery
+35D 	Construction, Mining, Material Handling Equipment
+35E 	Metalworking Machinery
+35F 	Special Industry Machinery
+35G 	General Industrial Machinery
+35H 	Computer and Office Equipment
+35I 	Refrigeration, Heating, and Service Industry Machinery
+35J 	Industrial Machinery, N.E.C.
+Electronic and Other Electrical Equipment
+SX2 	Electrical Transmission and Distribution Equipment and
+Industrial Apparatus
+36A 	Electrical Transmission and Distribution Equipment
+36B 	Electrical Industrial Apparatus
+36C 	Household Appliances
+36D 	Electric Lighting and Wiring Equipment
+36E 	Household Audio and Video Equipment
+
+--- page 6 ---
+36F 	Communication Equipment, except for the Department of
+Defense
+36G 	Communication Equipment, for the Department of Defense
+36X 	Communication Equipment
+36H 	Electronic Components and Accessories
+36I 	Miscellaneous Electrical Equipment and Supplies
+Transportation Equipment
+SX3 	Motor Vehicles and Parts
+37C 	Complete Aircraft, Missiles, and Space Vehicles, except for
+the Department of Defense
+37D 	Complete Aircraft, Missiles, and Space Vehicles, for the
+Department of Defense
+37X 	Complete Aircraft, Missiles, and Space Vehicles
+37E 	Aircraft, Missile, and Space Vehicle Engines and Parts,
+except for the Department of Defense
+37F 	Aircraft, Missile, and Space Vehicle Engines and Parts, for
+the Department of Defense
+37Y 	Aircraft, Missile, and Space Vehicle Engines and Parts
+37G 	Ships and Tank Components, except for the Department of
+Defense
+37H 	Ships, Tanks, and Tank Components, for the Department of
+Defense
+37Z 	Ships, Tanks, and Tank Components
+37I 	Railroad Equipment
+37J 	Other Transportation Equipment
+Instruments and Related Products
+
+--- page 7 ---
+38A 	Search and Navigation Equipment, except for the
+Department of Defense
+38B 	Search and Navigation Equipment, for the Department of
+Defense
+38X 	Search and Navigation Equipment
+38C 	Measuring and Controlling Devices
+38D 	Medical Instruments and Supplies
+38E 	Ophthalmic Goods, Watches, and Clocks
+38F 	Photographic Goods
+Miscellaneous Manufacturing Industries
+39A 	Miscellaneous Personal Goods
+39B 	Miscellaneous Manufactures
+Food and Kindred Products
+20A 	Meat Products
+20B 	Dairy Products
+20C 	Fats and Oils
+20D 	Beverages
+20E 	All Other Food and Kindred Products
+Tobacco Products
+21A 	Tobacco Products
+Textile Mill Products
+22A 	Broadwoven Fabrics and Other Textiles
+22B 	Knitting Mills
+22C 	Carpets and Rugs
+
+--- page 8 ---
+Apparel and Other Finished Textile Products
+23A 	Apparel and Other Finished Textile Products
+Paper and Allied Products
+26A 	Pulp, Paper, and Paperboard Mill Products
+26B 	Paperboard Containers and Boxes
+26C 	Miscellaneous Converted Paper Products
+Printing, Publishing, and Allied Industries
+27A 	Newspapers, Periodicals, and Books
+27B 	Other Printing and Publishing
+Chemicals and Allied Products
+28A 	Industrial Chemicals
+28B 	Paints and Related Products
+28C 	Drugs, Soaps, and Toiletries
+28D 	Agricultural Chemicals
+Petroleum and Coal Products
+29A 	Asphalt Paving and Roofing Materials
+29B 	Other Petroleum Refining Products
+Rubber and Miscellaneous Plastics Products
+30A 	Tires and Tubes
+30B 	Rubber and Plastics Footwear, Hose, Belting, Gaskets, and
+Other Rubber Products, N.E.C.
+30C 	Miscellaneous Plastics Products, N.E.C.
+Leather and Leather Products
+31A 	Leather Tanning and Finishing, and Footwear Cut Stock
+
+--- page 9 ---
+31B 	Other Leather Products
+* Some of the data series listed are not published and can not
+be provided.
+Position 5-6 Indicates the Data Item
+VS 	Value of Shipments
+NO 	New Orders
+UO 	Unfilled Orders
+TI 	Total Inventories
+MI 	Materials and Supplies Inventories
+WI 	Work in Process Inventories
+FI 	Finished Goods Inventories
+IS 	Inventories to Shipments Ratios
+US 	Unfilled Orders to Shipments Ratios
+FILE LAYOUT:
+Column 1 	ID code (See technical documentation section "M3
+Series Identification Code" for each breakdown.)
+Column 2 	Year of Data Series
+Column 3 	January Data
+Column 4 	February Data
+Column 5 	March Data
+Column 6 	April Data
+Column 7 	May Data
+Column 8 	June Data
+Column 9 	July Data
+
+--- page 10 ---
+Column 10 	August Data
+Column 11 	September Data
+Column 12 	October Data
+Column 13 	November Data
+Column 14 	December Data
+NOTE: Data are expressed in millions of dollars except when
+an "IS" or "US" appears. In these cases, data contain two
+decimals. Where data do not exist for all years, the appropriate
+fields will be blank. Data are right justified.
