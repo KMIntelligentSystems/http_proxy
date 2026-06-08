@@ -269,6 +269,7 @@ export function App() {
           onSelect={loadItem}
           onSave={saveArtifact}
           onDiscard={discardArtifact}
+          onError={(msg) => setNotice({ kind: "error", message: msg })}
         />
         <LookupPanel
           config={config}

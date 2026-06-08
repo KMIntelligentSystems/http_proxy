@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import type { ArtifactRecord } from "../hooks/useAgent";
 
 type DocSummary = Pick<ArtifactRecord, "id" | "title" | "createdAt">;
@@ -7,12 +7,40 @@ type Props = {
   docs: DocSummary[];
   activeId: string | null;
   onSelect: (id: string) => void;
-  onSave: (id: string) => void;
-  onDiscard: (id: string) => void;
+  onSave: (id: string) => Promise<void>;
+  onDiscard: (id: string) => Promise<void>;
+  onError?: (message: string) => void;
 };
 
-export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard }: Props) {
+export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard, onError }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
+  const [discarding, setDiscarding] = useState<string | null>(null);
+
+  const handleSave = useCallback(async (id: string) => {
+    setSaving(id);
+    try {
+      await onSave(id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[SavedDocs] Save failed for ${id}:`, msg);
+      onError?.(`Save failed: ${msg}`);
+    } finally {
+      setSaving(null);
+    }
+  }, [onSave, onError]);
+
+  const handleDiscard = useCallback(async (id: string) => {
+    setDiscarding(id);
+    try {
+      await onDiscard(id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[SavedDocs] Discard failed for ${id}:`, msg);
+      onError?.(`Discard failed: ${msg}`);
+    } finally {
+      setDiscarding(null);
+    }
+  }, [onDiscard, onError]);
 
   return (
     <div className="saved-docs">
@@ -38,11 +66,10 @@ export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard }: Props
                 <button
                   className="doc-btn doc-btn-save"
                   title="Save to database"
-                  disabled={saving === doc.id}
+                  disabled={saving === doc.id || discarding === doc.id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSaving(doc.id);
-                    onSave(doc.id);
+                    handleSave(doc.id);
                   }}
                 >
                   {saving === doc.id ? "…" : "Save"}
@@ -50,12 +77,13 @@ export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard }: Props
                 <button
                   className="doc-btn doc-btn-discard"
                   title="Discard"
+                  disabled={discarding === doc.id || saving === doc.id}
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDiscard(doc.id);
+                    handleDiscard(doc.id);
                   }}
                 >
-                  ✕
+                  {discarding === doc.id ? "…" : "✕"}
                 </button>
               </div>
             </li>

@@ -796,12 +796,21 @@ const server = http.createServer((req, res) => {
           const now = new Date().toISOString();
           const role = record.role || "chart";
           const tags = JSON.stringify(record.role ? [record.role] : []);
-          const esc = (s: string) => s.replace(/'/g, "''");
-          // Ensure session exists
-          sqldb.exec(`INSERT OR IGNORE INTO session (id, model_id, title, started_at, prompt_count) VALUES ('${record.sessionId}', NULL, '${esc(record.title)}', '${record.createdAt}', 1)`);
-          // Insert artifact
-          const desc = record.description ? `'${esc(record.description)}'` : "NULL";
-          sqldb.exec(`INSERT OR REPLACE INTO artifact (id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, provenance, tags) VALUES ('${record.id}', '${record.sessionId}', '${esc(record.title)}', '${record.filename}', '${record.mimeType}', '${role}', ${desc}, '${esc(content)}', ${record.size}, '${record.createdAt}', '${now}', '{}', '${tags}')`);
+
+          // Ensure session exists (parameterized)
+          sqldb.prepare(
+            "INSERT OR IGNORE INTO session (id, model_id, title, started_at, prompt_count) VALUES (?, NULL, ?, ?, 1)"
+          ).run(record.sessionId, record.title, record.createdAt);
+
+          // Insert artifact (parameterized — no SQL injection via content)
+          sqldb.prepare(
+            "INSERT OR REPLACE INTO artifact (id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, provenance, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+          ).run(
+            record.id, record.sessionId, record.title, record.filename,
+            record.mimeType, role, record.description ?? null, content,
+            record.size, record.createdAt, now, "{}", tags,
+          );
+
           artifactStore.delete(id);
           sendJson(res, 200, { ok: true, id });
         } finally {
