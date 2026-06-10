@@ -22,17 +22,25 @@ server at `:5173`. The `/ui/ws/agent` WebSocket requires the `x-loopback: 1`
 header that only the proxy injects; via Vite the WS connection is a brittle
 4-hop relay.
 
-## Python MCP: `\n` in print strings
+## Python execution: prefer write+bash over `execute_python`
 
-`execute_python` chokes on escaped newlines inside string literals — produces
-`SyntaxError: unterminated string literal`.
+`execute_python` has two failure modes that make it unreliable for anything beyond
+a trivial one-liner:
 
-**Workaround for any non-trivial script:** write to a temp file with `write`,
-execute via `bash`, delete immediately.
+1. **MCP protocol timeout (60s).** Every `execute_python` call goes through
+   `mcporter → MCP SDK`, which enforces `DEFAULT_REQUEST_TIMEOUT_MSEC = 60000`
+   at the protocol level. Serial API calls or any script running >60s will fail
+   with `MCP error -32001: Request timed out`.
+2. **`\n` in string literals.** Escaped newlines inside Python strings produce
+   `SyntaxError: unterminated string literal`.
+
+**Default: write+bash for everything except one-liners.** Write the script to a
+temp file, execute directly, delete. Same Python venv — no MCP timeout, no `\n`
+choking:
 ```bash
 "C:\repos\codeGen-mcp-server\venv\Scripts\python.exe" data/_tmp.py && rm data/_tmp.py
 ```
-Keep only the script's *output* (CSV, JSON) — the script itself is ephemeral.
+Keep only the script's *output* (CSV, JSON) — the script itself is ephemeral. **Do not persist Python scripts** to `data/` or a `scripts/` directory. A stale fetch script is worse than useless: it misleads future runs into thinking it still works. When the CSV needs refreshing, write a new script.
 
 ## BLS API v2 — OEWS limitation
 
@@ -52,6 +60,22 @@ OEWS data (e.g. May 2024) is available via flat file download.
 `data/artifacts.db` first** via the `query_artifacts` tool. Saved artifacts from prior
 sessions (charts, CSVs, dataset metadata, document pages) frequently already contain
 the data the user is asking for.
+
+**Freshness guard for forecasts, nowcasts, and edge-of-data requests.** When the
+task involves a forecast, nowcast, prediction, or the *latest available observation*
+(e.g. "what's the most recent M3 figure?"), **do not trust a local CSV or DB artifact
+blindly**. Local data snapshots are potentially stale vintages. Before using cached
+data for a forward-looking task:
+
+1. Check the artifact's `created_at` or provenance field — is it plausibly current?
+2. If the data source publishes on a known schedule (e.g. Census M3 monthly),
+   verify whether a newer release has dropped since the artifact was created.
+3. When in doubt, **re-fetch a single recent observation from the live API**
+   and compare against the cached value. If they differ, refresh the local data.
+
+This guard prevented the April 2026 M3 staleness bug: the agent checked the local
+CSV, found rows through March 2026, assumed April was unavailable, and never hit
+`api.census.gov` — which *did* have April data.
 
 The tool takes a single `sql` string (SELECT-only). It runs the query, then for each
 matching row that has `content` + a renderable `mime_type`, it surfaces the row to the

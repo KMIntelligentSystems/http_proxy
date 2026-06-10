@@ -39,3 +39,6 @@ tmp*/
 # python
 __pycache__/
 *.pyc
+
+# ephemeral scripts
+/scripts/

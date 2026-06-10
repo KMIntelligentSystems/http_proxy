@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/ui/api": "http://localhost:8080",
-      "/ui/ws": { target: "ws://localhost:8080", ws: true },
+      "/ui/ws": { target: "http://localhost:8080", ws: true },
       "/ui/data": "http://localhost:8080",
     },
   },
