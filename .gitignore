@@ -25,6 +25,8 @@ Thumbs.db
 .idea/
 *.suo
 *.user
+*.csv
+data/*.csv
 data/.env
 data/artifacts/*
 *.xlsx

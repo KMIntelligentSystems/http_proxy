@@ -15,6 +15,25 @@ export function useAgent() {
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([]);
   const [working, setWorking] = useState(isWorking);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [persistedIds, setPersistedIds] = useState<Set<string>>(new Set());
+  const [dbArtifacts, setDbArtifacts] = useState<ArtifactRecord[]>([]);
+
+  // Re-fetch DB artifacts after save so the DB section stays current
+  const fetchDbArtifacts = useCallback(async () => {
+    try {
+      const res = await fetch("/ui/api/artifacts/db", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setDbArtifacts(data.artifacts ?? []);
+      }
+    } catch {
+      // DB endpoint may not be available yet
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDbArtifacts();
+  }, [fetchDbArtifacts]);
 
   useEffect(() => {
     const unsubWorking = onWorkingChange(setWorking);
@@ -58,8 +77,11 @@ export function useAgent() {
   const saveArtifact = useCallback(async (id: string) => {
     const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/save`, { method: "POST" });
     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-    setArtifacts((prev) => prev.filter((a) => a.id !== id));
-  }, []);
+    // Mark as persisted instead of removing — keeps it visible in sidebar
+    setPersistedIds((prev) => new Set(prev).add(id));
+    // Re-fetch DB list so the DB section updates
+    fetchDbArtifacts();
+  }, [fetchDbArtifacts]);
 
   const discardArtifact = useCallback(async (id: string) => {
     const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/discard`, { method: "POST" });
@@ -67,5 +89,5 @@ export function useAgent() {
     setArtifacts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice };
+  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice, persistedIds, dbArtifacts, fetchDbArtifacts };
 }

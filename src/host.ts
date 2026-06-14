@@ -837,6 +837,30 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // GET /ui/api/artifacts/db — list all artifacts persisted in SQLite
+    if (pathname === "/ui/api/artifacts/db" && req.method === "GET") {
+      try {
+        const category = requestUrl.searchParams.get("category")?.trim() ?? undefined;
+        const subject = requestUrl.searchParams.get("subject")?.trim() ?? undefined;
+        const role = requestUrl.searchParams.get("role")?.trim() ?? undefined;
+        let records = artifactStore.dbList();
+        if (category) {
+          records = records.filter((r) => r.category === category);
+        }
+        if (subject) {
+          records = records.filter((r) => r.subject === subject);
+        }
+        if (role) {
+          records = records.filter((r) => r.role === role);
+        }
+        sendJson(res, 200, { artifacts: records });
+      } catch (err) {
+        console.error(`[host] db artifact list error: ${err instanceof Error ? err.message : String(err)}`);
+        sendJson(res, 500, { error: "Failed to list DB artifacts" });
+      }
+      return;
+    }
+
     const artifactMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)(?:\/metadata)?$/);
     if (artifactMatch && req.method === "GET") {
       const id = decodeURIComponent(artifactMatch[1]);

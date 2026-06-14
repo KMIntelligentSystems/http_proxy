@@ -25,6 +25,8 @@ export type ArtifactRecord = {
   url: string;
   description?: string;
   role?: string;        // semantic tag, e.g. "memory", "dataset-csv", "chart", "page", "document-manifest"
+  category?: string;    // domain category (from DB JOIN)
+  subject?: string;     // domain subject (from DB JOIN)
 };
 
 export type CreateArtifactInput = {
@@ -173,7 +175,16 @@ export class ArtifactStore {
     if (!fs.existsSync(dbPath)) return [];
     const sqldb = new DatabaseSync(dbPath);
     try {
-      const rows = sqldb.prepare("SELECT id, session_id, title, filename, mime_type, role, description, size_bytes, created_at, updated_at FROM artifact ORDER BY created_at DESC").all() as Record<string, unknown>[];
+      const rows = sqldb.prepare(
+        `SELECT a.id, a.session_id, a.title, a.filename, a.mime_type, a.role,
+                a.description, a.size_bytes, a.created_at, a.updated_at,
+                c.name AS category, s.name AS subject
+         FROM artifact a
+         LEFT JOIN session sess ON a.session_id = sess.id
+         LEFT JOIN subject s ON sess.subject_id = s.id
+         LEFT JOIN category c ON s.category_id = c.id
+         ORDER BY a.created_at DESC`
+      ).all() as Record<string, unknown>[];
       return rows.map((rec) => ({
         id: rec.id as string,
         sessionId: rec.session_id as string,
@@ -186,6 +197,8 @@ export class ArtifactStore {
         createdAt: rec.created_at as string,
         updatedAt: rec.updated_at as string,
         url: `/ui/api/artifacts/${rec.id}`,
+        category: (rec.category as string) || undefined,
+        subject: (rec.subject as string) || undefined,
       }));
     } finally {
       sqldb.close();

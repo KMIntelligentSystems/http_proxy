@@ -12,7 +12,7 @@ import { ThinkingPanel } from "./components/ThinkingPanel";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
-  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice } = useAgent();
+  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice, persistedIds, dbArtifacts } = useAgent();
   const conversation = useConversation();
   const thinking = useThinking();
   const [aborting, setAborting] = useState(false);
@@ -41,9 +41,11 @@ export function App() {
 
   // --- Artifact display ---
   // Show only HTML artifacts in the sidebar, deduped by title (newest kept).
+  // Augment with persisted flag so SavedDocs can show save state.
   const displayArtifacts = artifacts
     .filter((a) => a.role !== "memory" && a.mimeType === "text/html")
-    .filter((a, i, arr) => arr.findIndex((x) => x.title === a.title) === i);
+    .filter((a, i, arr) => arr.findIndex((x) => x.title === a.title) === i)
+    .map((a) => ({ ...a, persisted: persistedIds.has(a.id) }));
 
   // Track what's selected and rendered
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
@@ -53,7 +55,8 @@ export function App() {
   const loadItem = useCallback(
     (artifactId: string) => {
       setActiveArtifactId(artifactId);
-      const a = artifacts.find((x) => x.id === artifactId);
+      const a = artifacts.find((x) => x.id === artifactId)
+             || dbArtifacts.find((x) => x.id === artifactId);
       if (!a) return;
       if (a.mimeType === "application/vnd.dva.document+json") {
         fetch(a.url)
@@ -66,7 +69,7 @@ export function App() {
         setViewArtifact(a);
       }
     },
-    [artifacts]
+    [artifacts, dbArtifacts]
   );
 
   // Auto-select the newest artifact when nothing is selected
@@ -78,12 +81,12 @@ export function App() {
 
   // Clear view when active artifact is removed (saved/discarded)
   useEffect(() => {
-    if (activeArtifactId && !artifacts.find((a) => a.id === activeArtifactId)) {
+    if (activeArtifactId && !artifacts.find((a) => a.id === activeArtifactId) && !dbArtifacts.find((a) => a.id === activeArtifactId)) {
       setActiveArtifactId(null);
       setManifest(null);
       setViewArtifact(null);
     }
-  }, [artifacts, activeArtifactId]);
+  }, [artifacts, dbArtifacts, activeArtifactId]);
 
   useEffect(() => {
     const onQuestion = (event: Event) => {
@@ -271,6 +274,32 @@ export function App() {
           onDiscard={discardArtifact}
           onError={(msg) => setNotice({ kind: "error", message: msg })}
         />
+        {dbArtifacts.length > 0 && (
+          <div className="saved-docs db-section">
+            <h3>Database</h3>
+            <ul className="saved-docs-list">
+              {dbArtifacts.map((doc) => (
+                <li
+                  key={doc.id}
+                  className={doc.id === activeArtifactId ? "active" : ""}
+                >
+                  <span className="doc-title" onClick={() => loadItem(doc.id)}>
+                    {doc.title || "Untitled"}
+                  </span>
+                  <span className="doc-meta">
+                    {doc.role && <span className="role-tag">{doc.role}</span>}
+                    {doc.category && <span className="role-tag category-tag">{doc.category}</span>}
+                    {doc.createdAt && (
+                      <span className="doc-date">
+                        {new Date(doc.createdAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <LookupPanel
           config={config}
           lookupData={lookupData}

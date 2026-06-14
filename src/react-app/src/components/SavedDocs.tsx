@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import type { ArtifactRecord } from "../hooks/useAgent";
 
-type DocSummary = Pick<ArtifactRecord, "id" | "title" | "createdAt">;
+type DocSummary = Pick<ArtifactRecord, "id" | "title" | "createdAt"> & { persisted?: boolean };
 
 type Props = {
   docs: DocSummary[];
@@ -46,7 +46,7 @@ export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard, onError
     <div className="saved-docs">
       <h3>Documents</h3>
       {docs.length === 0 ? (
-        <p className="dim">No saved documents yet.</p>
+        <p className="dim">No documents yet.</p>
       ) : (
         <ul className="saved-docs-list">
           {docs.map((doc) => (
@@ -56,6 +56,7 @@ export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard, onError
             >
               <span className="doc-title" onClick={() => onSelect(doc.id)}>
                 {doc.title || "Untitled"}
+                {doc.persisted && <span className="persisted-badge">Saved ✓</span>}
               </span>
               {doc.createdAt && (
                 <span className="doc-date">
@@ -63,20 +64,22 @@ export function SavedDocs({ docs, activeId, onSelect, onSave, onDiscard, onError
                 </span>
               )}
               <div className="doc-actions">
-                <button
-                  className="doc-btn doc-btn-save"
-                  title="Save to database"
-                  disabled={saving === doc.id || discarding === doc.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleSave(doc.id);
-                  }}
-                >
-                  {saving === doc.id ? "…" : "Save"}
-                </button>
+                {!doc.persisted && (
+                  <button
+                    className="doc-btn doc-btn-save"
+                    title="Save to database"
+                    disabled={saving === doc.id || discarding === doc.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSave(doc.id);
+                    }}
+                  >
+                    {saving === doc.id ? "…" : "Save"}
+                  </button>
+                )}
                 <button
                   className="doc-btn doc-btn-discard"
-                  title="Discard"
+                  title={doc.persisted ? "Discard (already saved to DB)" : "Discard"}
                   disabled={discarding === doc.id || saving === doc.id}
                   onClick={(e) => {
                     e.stopPropagation();

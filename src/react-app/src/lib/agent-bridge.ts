@@ -94,6 +94,8 @@ export type ArtifactRecord = {
   url: string;
   role: string;
   description?: string;
+  category?: string;
+  subject?: string;
 };
 
 export const artifactEvents = new EventTarget();

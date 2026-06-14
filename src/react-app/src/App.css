@@ -440,6 +440,61 @@ body {
   color: #f78166;
 }
 
+.persisted-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #3fb950;
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.25);
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.db-section {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.db-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  margin-bottom: 6px;
+}
+
+.doc-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.role-tag {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(88, 166, 255, 0.1);
+  border: 1px solid rgba(88, 166, 255, 0.2);
+  border-radius: 3px;
+  color: var(--accent);
+  line-height: 1.5;
+}
+
+.category-tag {
+  background: rgba(210, 168, 255, 0.1);
+  border-color: rgba(210, 168, 255, 0.25);
+  color: #d2a8ff;
+}
+
 /* ===== Lookup Panel ===== */
 .lookup-loading {
   font-size: 13px; color: var(--text-dim);
