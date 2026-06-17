@@ -656,6 +656,12 @@ function connect(): void {
       // already updated lastInboundAt above, so nothing else to do.
       if (data.type === "heartbeat") return;
 
+      // Catalog updated — re-fetch via GET /ui/api/catalog
+      if (data.type === "catalog_updated") {
+        artifactEvents.dispatchEvent(new Event("catalog_updated"));
+        return;
+      }
+
       if (data.type === "artifact_created" && data.artifact) {
         artifactEvents.dispatchEvent(
           new CustomEvent<ArtifactRecord>("artifact_created", {

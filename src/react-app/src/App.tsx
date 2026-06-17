@@ -5,14 +5,14 @@ import { useThinking } from "./hooks/useThinking";
 import { useLookupConfig } from "./hooks/useLookupConfig";
 import { LookupPanel } from "./components/LookupPanel";
 import { DocumentViewer, type DocumentManifest } from "./components/DocumentViewer";
-import { SavedDocs } from "./components/SavedDocs";
+import { CatalogTree } from "./components/CatalogTree";
 import { ModelSelector } from "./components/ModelSelector";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { ThinkingPanel } from "./components/ThinkingPanel";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
-  const { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice, persistedIds, dbArtifacts } = useAgent();
+  const { artifacts, working, submit, notice, dismissNotice, setNotice, catalog } = useAgent();
   const conversation = useConversation();
   const thinking = useThinking();
   const [aborting, setAborting] = useState(false);
@@ -40,17 +40,11 @@ export function App() {
   const activeQuestion = questionQueue[0] ?? null;
 
   // --- Artifact display ---
-  // Show only HTML artifacts in the sidebar, deduped by title (newest kept).
-  // Augment with persisted flag so SavedDocs can show save state.
-  const displayArtifacts = artifacts
-    .filter((a) => a.role !== "memory" && a.mimeType === "text/html")
-    .filter((a, i, arr) => arr.findIndex((x) => x.title === a.title) === i)
-    .map((a) => ({ ...a, persisted: persistedIds.has(a.id) }));
-
   // Track what's selected and rendered
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [manifest, setManifest] = useState<DocumentManifest | null>(null);
   const [viewArtifact, setViewArtifact] = useState<ArtifactRecord | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadItem = useCallback(
     (artifactId: string) => {
@@ -74,10 +68,10 @@ export function App() {
 
   // Auto-select the newest artifact when nothing is selected
   useEffect(() => {
-    if (activeArtifactId || displayArtifacts.length === 0) return;
-    const latest = displayArtifacts[0];
+    if (activeArtifactId || artifacts.length === 0) return;
+    const latest = artifacts[0];
     loadItem(latest.id);
-  }, [displayArtifacts, activeArtifactId, loadItem]);
+  }, [artifacts, activeArtifactId, loadItem]);
 
   // Clear view when active artifact is removed (saved/discarded)
   useEffect(() => {
@@ -266,40 +260,14 @@ export function App() {
         />
       </nav>
       <aside className="sidebar">
-        <SavedDocs
-          docs={displayArtifacts}
-          activeId={activeArtifactId}
+        <CatalogTree
+          catalog={catalog}
+          selectedIds={selectedIds}
+          onSelectionChange={setSelectedIds}
+          activeArtifactId={activeArtifactId}
           onSelect={loadItem}
-          onSave={saveArtifact}
-          onDiscard={discardArtifact}
-          onError={(msg) => setNotice({ kind: "error", message: msg })}
+          onNotice={(kind, message) => setNotice({ kind, message })}
         />
-        {dbArtifacts.length > 0 && (
-          <div className="saved-docs db-section">
-            <h3>Database</h3>
-            <ul className="saved-docs-list">
-              {dbArtifacts.map((doc) => (
-                <li
-                  key={doc.id}
-                  className={doc.id === activeArtifactId ? "active" : ""}
-                >
-                  <span className="doc-title" onClick={() => loadItem(doc.id)}>
-                    {doc.title || "Untitled"}
-                  </span>
-                  <span className="doc-meta">
-                    {doc.role && <span className="role-tag">{doc.role}</span>}
-                    {doc.category && <span className="role-tag category-tag">{doc.category}</span>}
-                    {doc.createdAt && (
-                      <span className="doc-date">
-                        {new Date(doc.createdAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
         <LookupPanel
           config={config}
           lookupData={lookupData}

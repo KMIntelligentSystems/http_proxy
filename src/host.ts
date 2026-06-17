@@ -656,6 +656,12 @@ const detachArtifactEvents = artifactStore.onCreated((artifact) => {
     artifact,
     receivedAt: new Date().toISOString(),
   });
+  // Broadcast a lightweight nudge so the client refreshes the catalog.
+  // Don't inline the full catalog — the client will re-fetch GET /ui/api/catalog.
+  broadcastAgentWsMessage({
+    type: "catalog_updated",
+    receivedAt: new Date().toISOString(),
+  });
 });
 const detachAgentEventBridge = attachAgentEventBridge(ctx);
 const server = http.createServer((req, res) => {
@@ -834,6 +840,152 @@ const server = http.createServer((req, res) => {
         return;
       }
       sendJson(res, 200, { ok: true, id });
+      return;
+    }
+
+    // GET /ui/api/catalog — build and return the catalog tree.
+    //
+    // Side-effect: persistCatalogIfChanged() writes a new role='catalog'
+    // artifact (with replaces_id pointing at the previous head) whenever the
+    // structural payload — buckets[] + collections[] — has actually changed.
+    // No-ops when the catalog is byte-identical to the head, so routine
+    // browse-mode GETs stay cheap.
+    if (pathname === "/ui/api/catalog" && req.method === "GET") {
+      try {
+        const catalog = ctx.artifactStore!.buildCatalog();
+        const newId = ctx.artifactStore!.persistCatalogIfChanged(catalog);
+        if (newId) {
+          broadcastAgentWsMessage({
+            type: "catalog_persisted",
+            artifactId: newId,
+            receivedAt: new Date().toISOString(),
+          });
+        }
+        sendJson(res, 200, catalog);
+      } catch (err) {
+        console.error(`[host] catalog error: ${err instanceof Error ? err.message : String(err)}`);
+        sendJson(res, 500, { error: "Failed to build catalog" });
+      }
+      return;
+    }
+
+    // POST /ui/api/catalog/collections — upsert a collection on the latest
+    // catalog head and persist a new catalog row (chained via replaces_id).
+    if (pathname === "/ui/api/catalog/collections" && req.method === "POST") {
+      readJsonBody(req)
+        .then((body) => {
+          const name = typeof body?.name === "string" ? body.name : "";
+          const summary = typeof body?.summary === "string" ? body.summary : "";
+          const memberIds = Array.isArray(body?.memberIds) ? body.memberIds : [];
+          const id = typeof body?.id === "string" && body.id.trim() ? body.id.trim() : undefined;
+          try {
+            const catalog = ctx.artifactStore!.saveCollection({ id, name, summary, memberIds });
+            // Refresh the React side via the same nudge we already use.
+            broadcastAgentWsMessage({ type: "catalog_updated", receivedAt: new Date().toISOString() });
+            sendJson(res, 200, catalog);
+          } catch (err) {
+            sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) });
+          }
+        })
+        .catch((err) => sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
+
+    // DELETE /ui/api/catalog/collections/<id> — remove a saved collection.
+    const colDeleteMatch = pathname.match(/^\/ui\/api\/catalog\/collections\/([^/]+)$/);
+    if (colDeleteMatch && req.method === "DELETE") {
+      const id = decodeURIComponent(colDeleteMatch[1]);
+      try {
+        const catalog = ctx.artifactStore!.deleteCollection(id);
+        broadcastAgentWsMessage({ type: "catalog_updated", receivedAt: new Date().toISOString() });
+        sendJson(res, 200, catalog);
+      } catch (err) {
+        sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
+      }
+      return;
+    }
+
+    // POST /ui/api/catalog/compose — ask the orchestrator to compose a
+    // document out of a typed-slot bundle (or, for now, a flat member list).
+    // We do not invent template slot mappings server-side; we synthesize a
+    // user-style prompt that the existing document pipeline can consume.
+    if (pathname === "/ui/api/catalog/compose" && req.method === "POST") {
+      if (!ctx.runtime?.session?.prompt) {
+        sendJson(res, 503, { error: "Agent runtime is not available in this host process" });
+        return;
+      }
+      readJsonBody(req)
+        .then(async (body) => {
+          const memberIds: string[] = Array.isArray(body?.memberIds)
+            ? body.memberIds.filter((m: unknown) => typeof m === "string" && m.length > 0)
+            : [];
+          const collectionId = typeof body?.collectionId === "string" ? body.collectionId : undefined;
+          const name = typeof body?.name === "string" && body.name.trim() ? body.name.trim() : undefined;
+          if (memberIds.length === 0) {
+            sendJson(res, 400, { error: "memberIds must be a non-empty string array" });
+            return;
+          }
+          if (promptInFlight || ctx.runtime.session.isStreaming) {
+            sendJson(res, 409, { error: "Agent is already processing a prompt" });
+            return;
+          }
+
+          // Resolve each member's title/role from the DB so the prompt is
+          // self-describing — the orchestrator doesn't need to JOIN again.
+          const lines: string[] = [];
+          for (const memberId of memberIds) {
+            const hit = ctx.artifactStore!.dbGet(memberId);
+            if (hit) {
+              lines.push(`  - ${memberId} — [${hit.record.role || "other"}] ${hit.record.title}`);
+            } else {
+              lines.push(`  - ${memberId} — (artifact not found in DB)`);
+            }
+          }
+          const heading = name || (collectionId ? `Collection ${collectionId}` : "User-selected artifact bundle");
+          const promptText = [
+            `Compose a multi-page document from the following selected artifacts.`,
+            ``,
+            `Bundle: ${heading}`,
+            `Members:`,
+            ...lines,
+            ``,
+            `Use the document pipeline: hand off to narrator (for prose sections and chart`,
+            `briefs around these artifacts), then stylist (to compose pages and write the`,
+            `document manifest). Do not re-generate charts that already exist — reuse the`,
+            `listed artifact ids verbatim. Surface the final document manifest artifact at`,
+            `the end.`,
+          ].join("\n");
+
+          const session = ctx.runtime.session;
+          promptInFlight = true;
+          startPromptStallTimer(session.sessionId ?? null);
+          void Promise.resolve(session.prompt(promptText))
+            .then(() => {
+              let state: unknown = null;
+              try { state = getAgentState(ctx); } catch {}
+              broadcastAgentWsMessage({
+                type: "agent_prompt_complete",
+                sessionId: session.sessionId ?? null,
+                state,
+                receivedAt: new Date().toISOString(),
+              });
+            })
+            .catch((err: unknown) => {
+              console.error(`[catalog compose error] ${err instanceof Error ? err.message : String(err)}`);
+              broadcastAgentWsMessage({
+                type: "agent_prompt_error",
+                sessionId: session.sessionId ?? null,
+                error: err instanceof Error ? { name: err.name, message: err.message, stack: err.stack } : String(err),
+                receivedAt: new Date().toISOString(),
+              });
+            })
+            .finally(() => {
+              promptInFlight = false;
+              clearPromptStallTimer();
+            });
+          sendJson(res, 202, { ok: true, accepted: true, memberCount: memberIds.length });
+        })
+        .catch((err) => sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) }));
       return;
     }
 

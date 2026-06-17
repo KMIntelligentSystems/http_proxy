@@ -58,6 +58,33 @@ export function isUtf8ArtifactMime(mimeType: string): boolean {
       || mimeType === "application/vnd.dva.document+json";
 }
 
+/** Derive a 4–8 word compact label from an artifact title. Strips dates, version suffixes. */
+function deriveLabel(title: string): string {
+  let t = title
+    // Strip date ranges like "(Jan 2002–Apr 2026)"
+    .replace(/\([^)]*\d{4}[^)]*\)/g, "")
+    // Strip "2002-2026" ranges
+    .replace(/\d{4}\s*[–\-]\s*\d{4}/g, "")
+    // Strip trailing parentheticals
+    .replace(/\([^)]+\)$/g, "")
+    // Strip version suffixes
+    .replace(/\s*v\d+$/i, "")
+    .replace(/\s*—\s*/g, ", ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Collapse runs of commas
+  t = t.replace(/,\s*,/g, ",").replace(/,\s*,/g, ",");
+
+  // Remove leading/trailing commas
+  t = t.replace(/^,\s*/, "").replace(/,\s*$/, "");
+
+  // Limit to ~8 words
+  const words = t.split(/\s+/);
+  if (words.length <= 8) return t || title;
+  return words.slice(0, 8).join(" ") + "…";
+}
+
 function safeSessionId(sessionId: string | null | undefined): string {
   const value = (sessionId || "standalone").trim();
   return value.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 120) || "standalone";
@@ -86,13 +113,83 @@ function artifactId(): string {
   return `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
+// ─── Catalog types ──────────────────────────────────────────────────────────────
+
+export type CatalogItem = {
+  id: string;
+  label: string;
+  mimeType: string;
+  createdAt: string;
+  description?: string;
+};
+
+export type CatalogGroup = {
+  role: string;
+  items: CatalogItem[];
+};
+
+export type CatalogBucket = {
+  id: string;
+  category: string;
+  subject: string;
+  groups: CatalogGroup[];
+};
+
+export type CatalogCollection = {
+  id: string;
+  name: string;
+  summary: string;
+  memberIds: string[];
+};
+
+export type CatalogTree = {
+  schemaVersion: number;
+  generatedAt: string;
+  buckets: CatalogBucket[];
+  collections: CatalogCollection[];
+};
+
 export class ArtifactStore {
   readonly rootDir: string;
   private listeners = new Set<ArtifactListener>();
+  private schemaEnsured = false;
 
   constructor(rootDir: string) {
     this.rootDir = path.resolve(rootDir);
     fs.mkdirSync(this.rootDir, { recursive: true });
+  }
+
+  /** Path to the SQLite DB shared with the host. */
+  private dbPath(): string {
+    return path.resolve(this.rootDir, "..", "artifacts.db");
+  }
+
+  /**
+   * Open the artifact DB and apply any lazy migrations the codebase relies on.
+   * Today this only ensures the `v_artifact_head` view exists — older DBs
+   * created from earlier revisions of data/schema.sql don't have it.
+   * Returns undefined when the DB file is missing (legitimate first-run state).
+   */
+  private openDb(): DatabaseSync | undefined {
+    const p = this.dbPath();
+    if (!fs.existsSync(p)) return undefined;
+    const db = new DatabaseSync(p);
+    if (!this.schemaEnsured) {
+      try {
+        db.exec(
+          `CREATE VIEW IF NOT EXISTS v_artifact_head AS
+             SELECT a.*
+             FROM artifact a
+             LEFT JOIN artifact b ON b.replaces_id = a.id
+             WHERE b.id IS NULL
+               AND a.role NOT IN ('memory', 'catalog');`
+        );
+        this.schemaEnsured = true;
+      } catch (err) {
+        console.warn(`[artifacts] could not ensure v_artifact_head view: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    return db;
   }
 
   onCreated(listener: ArtifactListener): () => void {
@@ -170,16 +267,247 @@ export class ArtifactStore {
   }
 
   /** All artifacts from the SQLite DB, returned as ArtifactRecord-shaped objects. */
-  dbList(): ArtifactRecord[] {
-    const dbPath = path.resolve(this.rootDir, "..", "artifacts.db");
-    if (!fs.existsSync(dbPath)) return [];
-    const sqldb = new DatabaseSync(dbPath);
+  /**
+   * Build a catalog tree from DB artifacts, grouped by category → subject → role.
+   * Excludes memory and prior catalog artifacts. Within each (bucket, role),
+   * prefers the latest artifact by replaces_id chain head (fallback: created_at).
+   */
+  buildCatalog(): CatalogTree {
+    const records = this.dbList();
+    const now = new Date().toISOString();
+
+    // Exclude memory roles and prior catalog versions
+    const visible = records.filter((r) => {
+      if (r.role === "memory" || r.role === "catalog") return false;
+      return true;
+    });
+
+    // Group: category → subject → role → items
+    const bucketMap = new Map<string, CatalogBucket>();
+
+    for (const rec of visible) {
+      const category = rec.category || "Uncategorized";
+      const subject = rec.subject || "General";
+      const role = rec.role || "other";
+      const bucketKey = `${category}//${subject}`;
+
+      let bucket = bucketMap.get(bucketKey);
+      if (!bucket) {
+        bucket = {
+          id: `${category.toLowerCase().replace(/[^a-z0-9]+/g, "-")}/${subject.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          category,
+          subject,
+          groups: [],
+        };
+        bucketMap.set(bucketKey, bucket);
+      }
+
+      let group = bucket.groups.find((g) => g.role === role);
+      if (!group) {
+        group = { role, items: [] };
+        bucket.groups.push(group);
+      }
+
+      // Derive compact label: strip dates and version suffixes
+      const label = deriveLabel(rec.title);
+
+      group.items.push({
+        id: rec.id,
+        label,
+        mimeType: rec.mimeType,
+        createdAt: rec.createdAt,
+        description: rec.description || undefined,
+      });
+    }
+
+    // Sort buckets, groups, items
+    const buckets = [...bucketMap.values()].sort((a, b) =>
+      a.category.localeCompare(b.category) || a.subject.localeCompare(b.subject),
+    );
+
+    for (const bucket of buckets) {
+      const roleOrder = ["chart", "section", "page", "dataset-csv", "dataset-meta", "research-notes", "link-inventory", "chart-briefs", "shared-css", "document-manifest"];
+      bucket.groups.sort((a, b) => {
+        const ai = roleOrder.indexOf(a.role);
+        const bi = roleOrder.indexOf(b.role);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      });
+      for (const group of bucket.groups) {
+        group.items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      }
+    }
+
+    // Load current collections from the latest catalog artifact
+    const collections = this.loadCollections();
+
+    return { schemaVersion: 1, generatedAt: now, buckets, collections };
+  }
+
+  /**
+   * Latest persisted catalog artifact (head of the role='catalog' chain),
+   * or undefined if no catalog has been persisted yet. We follow replaces_id
+   * forward from any catalog row — the head is the one nothing replaces.
+   */
+  private getLatestCatalogRow(): { id: string; content: string; createdAt: string } | undefined {
+    const sqldb = this.openDb();
+    if (!sqldb) return undefined;
     try {
+      const rows = sqldb.prepare(
+        `SELECT a.id, a.content, a.created_at
+           FROM artifact a
+           LEFT JOIN artifact b ON b.replaces_id = a.id
+          WHERE a.role = 'catalog' AND b.id IS NULL
+          ORDER BY a.created_at DESC
+          LIMIT 1`
+      ).all() as Record<string, unknown>[];
+      if (rows.length === 0) return undefined;
+      const r = rows[0];
+      return { id: r.id as string, content: r.content as string, createdAt: r.created_at as string };
+    } catch {
+      return undefined;
+    } finally {
+      sqldb.close();
+    }
+  }
+
+  private loadCollections(): CatalogCollection[] {
+    const head = this.getLatestCatalogRow();
+    if (!head) return [];
+    try {
+      const catalog = JSON.parse(head.content);
+      return Array.isArray(catalog?.collections) ? catalog.collections : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Persist a catalog tree as a role='catalog' JSON artifact with replaces_id
+   * pointing at the previous head. No-ops when the structural payload
+   * (buckets + collections) is byte-identical to the head — prevents churn
+   * on routine GET-driven rebuilds.
+   *
+   * Returns the new artifact id when a write happened, or undefined when the
+   * payload was unchanged.
+   */
+  persistCatalogIfChanged(catalog: CatalogTree): string | undefined {
+    const sqldb = this.openDb();
+    if (!sqldb) return undefined;
+    try {
+      // Build a stable serialization that ignores volatile fields like generatedAt.
+      const payload = {
+        schemaVersion: catalog.schemaVersion,
+        buckets: catalog.buckets,
+        collections: catalog.collections,
+      };
+      const payloadStr = JSON.stringify(payload);
+
+      const headRows = sqldb.prepare(
+        `SELECT a.id, a.content
+           FROM artifact a
+           LEFT JOIN artifact b ON b.replaces_id = a.id
+          WHERE a.role = 'catalog' AND b.id IS NULL
+          ORDER BY a.created_at DESC
+          LIMIT 1`
+      ).all() as Record<string, unknown>[];
+
+      const previousId = headRows.length > 0 ? (headRows[0].id as string) : null;
+      if (previousId) {
+        try {
+          const prev = JSON.parse(headRows[0].content as string);
+          const prevPayload = JSON.stringify({
+            schemaVersion: prev.schemaVersion,
+            buckets: prev.buckets,
+            collections: prev.collections,
+          });
+          if (prevPayload === payloadStr) return undefined; // No change — skip the write.
+        } catch {
+          // Fall through and write a fresh row if previous was unparseable.
+        }
+      }
+
+      const id = artifactId();
+      const now = new Date().toISOString();
+      const content = JSON.stringify({ ...catalog, generatedAt: now }, null, 2);
+      const size = Buffer.byteLength(content, "utf-8");
+      const title = "Artifact Catalog";
+      const filename = "artifact-catalog.json";
+
+      // Reuse a synthetic session row so the FK is satisfied. "catalog" is a
+      // stable, reserved session id we own.
+      sqldb.prepare(
+        "INSERT OR IGNORE INTO session (id, model_id, title, started_at, prompt_count) VALUES (?, NULL, ?, ?, 0)"
+      ).run("catalog", "Catalog snapshots", now);
+
+      sqldb.prepare(
+        `INSERT INTO artifact
+           (id, session_id, title, filename, mime_type, role, description, content,
+            size_bytes, created_at, updated_at, replaces_id, provenance, tags)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        id, "catalog", title, filename, "application/json", "catalog",
+        "Derived catalog tree (buckets[] + collections[]).", content,
+        size, now, now, previousId, "{}", JSON.stringify(["catalog"]),
+      );
+      return id;
+    } catch (err) {
+      console.warn(`[artifacts] persistCatalogIfChanged failed: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
+    } finally {
+      sqldb.close();
+    }
+  }
+
+  /**
+   * Upsert a collection (by id, or append a new one) on the latest catalog
+   * and persist a new catalog row that points at the previous head via
+   * replaces_id. Returns the post-write catalog tree.
+   */
+  saveCollection(input: {
+    id?: string;
+    name: string;
+    summary?: string;
+    memberIds: string[];
+  }): CatalogTree {
+    const name = String(input.name || "").trim();
+    if (!name) throw new Error("collection name is required");
+    if (name.length > 120) throw new Error("collection name is too long");
+    const memberIds = Array.isArray(input.memberIds) ? input.memberIds.filter((m) => typeof m === "string" && m.length > 0) : [];
+    if (memberIds.length === 0) throw new Error("collection must have at least one member");
+    const summary = (input.summary || "").trim().slice(0, 500);
+    const id = input.id?.trim() || `col-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+
+    // Build a fresh derived catalog, then apply the collection mutation on top.
+    const catalog = this.buildCatalog();
+    const idx = catalog.collections.findIndex((c) => c.id === id);
+    const entry: CatalogCollection = { id, name, summary, memberIds };
+    if (idx >= 0) catalog.collections[idx] = entry;
+    else catalog.collections.push(entry);
+
+    this.persistCatalogIfChanged(catalog);
+    return catalog;
+  }
+
+  /** Remove a collection by id. Returns the post-write catalog tree. */
+  deleteCollection(id: string): CatalogTree {
+    const catalog = this.buildCatalog();
+    catalog.collections = catalog.collections.filter((c) => c.id !== id);
+    this.persistCatalogIfChanged(catalog);
+    return catalog;
+  }
+
+  dbList(): ArtifactRecord[] {
+    const sqldb = this.openDb();
+    if (!sqldb) return [];
+    try {
+      // Route through v_artifact_head so the catalog tree and any other
+      // caller automatically inherit head-of-chain dedup and the
+      // memory/catalog role exclusion. Identical column shape to before.
       const rows = sqldb.prepare(
         `SELECT a.id, a.session_id, a.title, a.filename, a.mime_type, a.role,
                 a.description, a.size_bytes, a.created_at, a.updated_at,
                 c.name AS category, s.name AS subject
-         FROM artifact a
+         FROM v_artifact_head a
          LEFT JOIN session sess ON a.session_id = sess.id
          LEFT JOIN subject s ON sess.subject_id = s.id
          LEFT JOIN category c ON s.category_id = c.id
@@ -208,9 +536,8 @@ export class ArtifactStore {
   /** Fetch a single artifact's content from the SQLite DB. Returns undefined if not found. */
   dbGet(id: string): { record: ArtifactRecord; content: string } | undefined {
     if (!/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
-    const dbPath = path.resolve(this.rootDir, "..", "artifacts.db");
-    if (!fs.existsSync(dbPath)) return undefined;
-    const sqldb = new DatabaseSync(dbPath);
+    const sqldb = this.openDb();
+    if (!sqldb) return undefined;
     try {
       const rows = sqldb.prepare("SELECT id, session_id, title, filename, mime_type, role, description, size_bytes, created_at, updated_at, content FROM artifact WHERE id = ?").all(id) as Record<string, unknown>[];
       if (rows.length === 0) return undefined;

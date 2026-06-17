@@ -130,6 +130,25 @@ FROM artifact a
 LEFT JOIN artifact b ON b.replaces_id = a.id
 WHERE b.id IS NULL;
 
+-- ---------------------------------------------------------------------------
+-- v_artifact_head — head-of-chain artifacts, with infrastructure roles hidden
+--
+-- This is the canonical user-facing artifact view. Both the catalog builder
+-- and the agent's user-facing NL→SQL surface should pivot off this view so
+-- they cannot disagree about what the corpus contains.
+--
+-- Differences from artifact_latest:
+--   1. memory artifacts are excluded (they're agent-internal scratchpads).
+--   2. catalog artifacts are excluded (the catalog is derived state — it
+--      should never show up inside itself).
+-- ---------------------------------------------------------------------------
+CREATE VIEW IF NOT EXISTS v_artifact_head AS
+SELECT a.*
+FROM artifact a
+LEFT JOIN artifact b ON b.replaces_id = a.id
+WHERE b.id IS NULL
+  AND a.role NOT IN ('memory', 'catalog');
+
 -- Full hierarchy: category → subject → session → artifact
 CREATE VIEW IF NOT EXISTS catalog AS
 SELECT

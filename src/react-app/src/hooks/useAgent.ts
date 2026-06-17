@@ -6,8 +6,10 @@ import {
   isWorking,
   type ArtifactRecord,
 } from "../lib/agent-bridge";
+import type { CatalogTree } from "../components/CatalogTree";
 
 export type { ArtifactRecord };
+export type { CatalogTree };
 
 export type Notice = { kind: "info" | "error"; message: string };
 
@@ -17,6 +19,7 @@ export function useAgent() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [persistedIds, setPersistedIds] = useState<Set<string>>(new Set());
   const [dbArtifacts, setDbArtifacts] = useState<ArtifactRecord[]>([]);
+  const [catalog, setCatalog] = useState<CatalogTree | null>(null);
 
   // Re-fetch DB artifacts after save so the DB section stays current
   const fetchDbArtifacts = useCallback(async () => {
@@ -31,9 +34,23 @@ export function useAgent() {
     }
   }, []);
 
+  // Fetch catalog
+  const fetchCatalog = useCallback(async () => {
+    try {
+      const res = await fetch("/ui/api/catalog", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setCatalog(data);
+      }
+    } catch {
+      // Catalog endpoint may not be available yet
+    }
+  }, []);
+
   useEffect(() => {
     fetchDbArtifacts();
-  }, [fetchDbArtifacts]);
+    fetchCatalog();
+  }, [fetchDbArtifacts, fetchCatalog]);
 
   useEffect(() => {
     const unsubWorking = onWorkingChange(setWorking);
@@ -52,6 +69,10 @@ export function useAgent() {
 
     artifactEvents.addEventListener("artifact_created", onArtifact);
 
+    // Incremental catalog refresh on new artifacts
+    const onCatalogUpdated = () => { fetchCatalog(); };
+    artifactEvents.addEventListener("catalog_updated", onCatalogUpdated);
+
     // Load existing artifacts from the server on mount
     fetch("/ui/api/artifacts")
       .then((r) => r.json())
@@ -63,6 +84,7 @@ export function useAgent() {
     return () => {
       unsubWorking();
       artifactEvents.removeEventListener("artifact_created", onArtifact);
+      artifactEvents.removeEventListener("catalog_updated", onCatalogUpdated);
     };
   }, []);
 
@@ -89,5 +111,5 @@ export function useAgent() {
     setArtifacts((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice, persistedIds, dbArtifacts, fetchDbArtifacts };
+  return { artifacts, working, submit, saveArtifact, discardArtifact, notice, dismissNotice, setNotice, persistedIds, dbArtifacts, fetchDbArtifacts, catalog, fetchCatalog };
 }

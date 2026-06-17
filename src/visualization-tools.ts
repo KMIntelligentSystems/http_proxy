@@ -1245,16 +1245,26 @@ Schema:
   category(id, name, description, created_at, updated_at)
   model(id, provider, display_name, created_at)
 
+Views (prefer these for user-facing reads):
+  v_artifact_head — head-of-replaces_id-chain artifacts with memory + catalog
+                    roles excluded. Identical columns to artifact. This is the
+                    same dedup the GET /ui/api/catalog tree uses, so SELECTing
+                    FROM v_artifact_head guarantees the agent and the sidebar
+                    see the same corpus.
+  artifact_latest — same head-of-chain dedup but WITHOUT the role exclusion.
+                    Use when you legitimately need to inspect memory or
+                    catalog rows (rare).
+
   tags and provenance are JSON. For tag containment use LIKE: tags LIKE '%\"m3\"%'
   role examples: chart, dataset-csv, dataset-meta, section, page, document-manifest, memory
   mime_type examples: text/html, text/csv, text/markdown, application/json, image/svg+xml
 
 The query MUST select at minimum: id, title, filename, mime_type, content.
-Recommended: SELECT id, title, filename, mime_type, role, description, content, tags FROM artifact WHERE …
+Recommended: SELECT id, title, filename, mime_type, role, description, content, tags FROM v_artifact_head WHERE …
 
 Example — "Provide the results of M3 NSA data surveys":
   SELECT id, title, filename, mime_type, role, description, content
-  FROM artifact
+  FROM v_artifact_head
   WHERE tags LIKE '%\"m3\"%' AND tags LIKE '%\"nsa\"%'
   ORDER BY created_at DESC`,
     parameters: Type.Object({
