@@ -5,17 +5,27 @@ tool quirks, data file locations, BLS API gotchas, architecture decisions.
 
 ## Frontend rendering rules
 
-The React UI (`/ui`, `src/react-app/src/App.tsx`) shows artifacts in an `<iframe>`.
-Two filters in `App.tsx` (lines ~28–31) determine what's reachable from the sidebar:
+The React UI (`/ui`, `src/react-app/src/App.tsx`) renders artifacts in an
+`<iframe>`. The sidebar is now a **catalog tree** (`CatalogTree.tsx`) reading
+from `GET /ui/api/catalog`, not a flat list of `artifact_created` events.
 
-1. **HTML-only:** the sidebar lists only `mimeType === "text/html"`. CSV / markdown /
-   JSON / SVG rows are written to the file store but invisible in the sidebar —
-   they only render if the user navigates directly to `/ui/api/artifacts/<id>`.
-2. **Title-dedup:** rows with identical titles collapse to one entry. Because
-   the WebSocket reducer prepends each new `artifact_created` event, the
-   surviving entry is whichever event arrived **last** — NOT necessarily the
-   most recent vintage. See "DB-First Data Access" below for the dedup-at-SQL
-   pattern that avoids this.
+Key properties of the catalog path:
+
+1. **Dedup happens in SQL, not in the React reducer.** Both `buildCatalog()`
+   and `query_artifacts` should pivot off the `v_artifact_head` view (head
+   of the `replaces_id` chain, with `role IN ('memory','catalog')`
+   excluded). The legacy "near-random survivor" title-dedup bug is gone
+   provided every read goes through that view.
+2. **All roles are visible** in the catalog tree except `memory` and
+   `catalog` (which are excluded by the view). CSVs, markdown, JSON,
+   manifests, and HTML pages all surface under their bucket.
+3. **The catalog is itself a persisted artifact** (`role: "catalog"`,
+   `mimeType: application/json`) with a `replaces_id` chain. Each write
+   diffs the structural payload before chaining — routine browse GETs do
+   not churn the DB.
+4. **The orchestrator maintains a document outline** (`role:
+   "document-outline"`, `mimeType: text/markdown`) per active draft. See
+   AGENTS.md § "Document outline" for the lifecycle.
 
 **Always use the proxy URL** (`http://localhost:8080/ui/`), not the Vite dev
 server at `:5173`. The `/ui/ws/agent` WebSocket requires the `x-loopback: 1`
@@ -124,31 +134,26 @@ FROM subject
 ORDER BY name;
 ```
 
-### Recommended SELECT pattern (dedup + HTML-only)
+### Recommended SELECT pattern (use `v_artifact_head`)
 
-The raw `ORDER BY created_at DESC` pattern surfaces ALL matching rows, including
-stale vintages with duplicate titles — which the sidebar's title-dedup then
-collapses to a near-random survivor (often the broken oldest one). Use this
-instead:
+The canonical user-facing read pivots off the `v_artifact_head` view. It
+gives you head-of-`replaces_id`-chain rows with `role IN ('memory',
+'catalog')` already excluded — the same dedup the sidebar tree applies, so
+the agent and the UI cannot disagree about the corpus.
 
 ```sql
-WITH ranked AS (
-  SELECT *, ROW_NUMBER() OVER (
-    PARTITION BY filename, mime_type
-    ORDER BY created_at DESC
-  ) AS rn
-  FROM artifact
-  WHERE tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'
-)
-SELECT id, title, filename, mime_type, role, description, content
-FROM ranked
-WHERE rn = 1
-  AND mime_type = 'text/html'
-ORDER BY title;
+SELECT id, title, filename, mime_type, role, description, content, tags
+FROM v_artifact_head
+WHERE tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'
+ORDER BY created_at DESC;
 ```
 
-This guarantees one row per `(filename, mime_type)`, drops older vintages, and
-only surfaces rows the sidebar will actually display.
+Use `artifact_latest` (head-of-chain, no role exclusion) only when you need
+to inspect `memory` or `catalog` rows directly. Use the raw `artifact`
+table only when version history matters.
+
+The view is created lazily on first DB open by `ArtifactStore.openDb()`;
+older DBs upgrade automatically.
 
 If the query returns 0 rows (or only rows that don't actually answer the question),
 then and only then fall back to external APIs / web-search and write the result

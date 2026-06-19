@@ -214,7 +214,8 @@ Available specialist agents:
 | `statistician` | Applied statistical analysis: density, regression, time-series, seasonal adjustment, causal. **Method-agnostic** — picks the right technique from `.pi/skills/` and runs it in Python with explicit uncertainty. | `text/markdown`, `application/json`, `text/csv` (all `role: statistical-analysis` except CSVs which are `dataset-csv`) |
 | `narrator` | Prose sections and chart briefs | `text/markdown`, `application/json` |
 | `coder` | Self-contained D3 chart HTML | `text/html` |
-| `stylist` | Page composition, CSS, document manifest | `text/css`, `text/html`, `application/vnd.dva.document+json` |
+| `stylist` | Page composition (reads outline + theme), `role: "page"` HTML artifacts, document manifest. Does NOT invent CSS — references an existing `role: "shared-css"` theme artifact via `manifest.cssArtifactId`. | `text/html`, `application/vnd.dva.document+json` |
+| `cataloguer` | Catalog curator. Five JSON-job modes (relabel, infer-metadata, tag-pivots, suggest-collection, health-check). Returns proposals; orchestrator applies them. **User-initiated only** — the orchestrator delegates to the cataloguer when the user explicitly asks ("catalogue these", "audit catalog", "suggest a collection"). No host-side scheduling. | `application/json` (proposal payload), optional `text/markdown` memory |
 
 > Validation is done by orchestrator + Playwright. There is no dedicated validator sub-agent.
 
@@ -269,14 +270,16 @@ One table covers both new prompts and follow-up feedback:
 | Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` |
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
 | Multi-page narrative, briefing, report, document | Full document pipeline (see workflow below) |
+| "Compose / build a document" (with or without selected artifacts) | Document compose flow — read the head document-outline for the active subject, `ask_user` for any missing field (audience / theme / framing), then `delegate` to `stylist`. See § "Document Outline". |
+| "Catalogue / audit / relabel / suggest a collection" | `delegate({agent: "cataloguer", task: ...})` with the appropriate job mode. **Only ever user-initiated.** |
 | Ambiguous between chart and report | **Ask the user before delegating.** |
 | Ambiguous domain/category/subject | **Ask the user before fetching or creating durable artifacts.** |
-| Feedback: layout/ordering | `stylist` (manifest only) |
+| Feedback: layout/ordering | Update outline (reorder sections), then `stylist` to regenerate pages + manifest. |
 | Feedback: chart shape | `coder` for that brief |
 | Feedback: prose | `narrator` for that section |
 | Feedback: data wrong | `research` Mode A → if confirmed, Mode B → downstream |
-| Feedback: style | `stylist` (CSS only) |
-| Feedback: new content | Full pipeline |
+| Feedback: style | Change `outline.theme`, then `stylist` (no CSS authoring). |
+| Feedback: new content | Full pipeline; append to outline before delegating. |
 
 ### Delegation Protocol
 
@@ -298,6 +301,14 @@ Agents never touch the filesystem. They read what the orchestrator passes in and
 | `Narrator memory — …`     | narrator (on re-call), coder, stylist |
 | `Coder memory — …`        | coder (on re-call), stylist |
 | `Stylist memory — …`      | stylist (on re-call) |
+| `Cataloguer memory — …`   | cataloguer (on re-call) |
+
+> **Sub-agent memory vs orchestrator outline.** `role: "memory"` artifacts are
+> **tactical, per-turn** scratchpads produced by sub-agents — they are hidden
+> in the sidebar and carried forward only via the matrix above. The
+> orchestrator's **strategic, between-turn** record is a separate kind of
+> artifact, `role: "document-outline"`, described in § "Document Outline".
+> Do not conflate the two.
 
 **Revision loop.** If produced artifacts fail Quality Criteria, re-issue with a correction instruction up to **3 times**, passing failed-attempt memory artifacts back in. On the 4th failure, escalate to the user with the artifacts and a brief explanation of the failure mode.
 
@@ -309,9 +320,118 @@ For a multi-page document prompt:
 2. **Research CSV extraction** (Mode B) for each chart that needs tabular data → CSV + metadata.
 3. **Narrator** → prose sections + chart briefs (each brief references a `datasetArtifactId`).
 4. **Coder** (one call per brief) → one chart HTML artifact per brief. If a brief has no dataset, coder fails back; do extraction, retry.
-5. **Stylist** → optional CSS + N page HTML artifacts + document manifest.
-6. **Validate** with Playwright: every page renders, every chart iframe returns 200, no console errors.
-7. **Present** the document via the artifact panel.
+5. **Update the document outline** (see § "Document Outline") — list each produced artifact as a section with its type (`heading` / `text` / `chart`) and `artifactId`. Set `status: ready-to-compose` once the outline is complete.
+6. **`ask_user` for any missing outline fields** — `audience`, `theme`, framing notes. Do not delegate to stylist until the outline has them.
+7. **Stylist** → reads outline + theme artifact → N `role: "page"` HTML artifacts + document manifest. Stylist does NOT author CSS; it references the agreed `role: "shared-css"` theme via `manifest.cssArtifactId`.
+8. **Validate** with Playwright: every page renders, every chart iframe returns 200, no console errors.
+9. **Update outline** → `status: composed`, `manifestArtifactId: <id>`.
+10. **Present** the document via the artifact panel; tell the user it can also be opened at `/ui/doc/<manifestArtifactId>` (standalone review surface).
+
+### Document Outline
+
+The **outline** is the orchestrator's strategic, between-turn record of one
+active document draft. It is what keeps the document coherent across turns,
+and what the stylist reads when composing. Sub-agent `role: "memory"`
+artifacts are tactical (per turn); the outline is strategic (per draft).
+They are distinct concepts — do not file orchestrator state under
+`role: "memory"`.
+
+#### Shape
+
+- `role: "document-outline"`
+- `mimeType: text/markdown`
+- One active **head** per Subject; chained via `replaces_id`.
+- YAML frontmatter holds the structured fields; the body lists sections.
+
+```markdown
+---
+draftId: draft-m3-2026q2-briefing
+subject: M3 Manufacturing Shipments
+title: M3 manufacturing slowdown — Q2 2026 briefing
+audience: null              # set via ask_user when user prompts compose
+theme: null                 # id of a role: "shared-css" artifact
+status: drafting            # drafting | ready-to-compose | composed | revising
+updatedAt: 2026-06-17T15:30:00Z
+manifestArtifactId: null    # set after stylist returns
+---
+
+## Sections
+
+### 1. Cover
+- type: heading
+- text: "M3 manufacturing slowdown — Q2 2026"
+
+### 2. The headline trend
+- type: text
+- prose: "Shipments fell 2.3% YoY in March 2026..."
+- referencesChartIds: [abc123]
+
+### 3. NSA total shipments
+- type: chart
+- artifactId: abc123
+- caption: "Monthly NSA shipments, 2002–2026."
+
+### 4. Methodology
+- type: text
+- prose: "M3 SA is frozen Jan 2026 → ≥Dec 2026; we use NSA throughout."
+
+## Open questions
+- Audience not yet confirmed.
+
+## Caveats logged
+- M3 SA freeze active.
+```
+
+**Section types are limited to** `heading`, `text`, `chart`. No others.
+
+#### Lifecycle
+
+The orchestrator maintains the outline. Triggers:
+
+1. **Turn produced ≥1 visible artifact under a Subject with an existing
+   head outline** → read the head, append the new artifact(s) as proposed
+   sections, write a new outline head with `replaces_id` pointing at the
+   previous head. No user prompt required for this maintenance write.
+2. **Turn produced ≥1 visible artifact under a Subject with no outline
+   AND the user's prompt is document-bound** (mentions `compose`, `brief`,
+   `report`, `document`) → create the first outline. Otherwise do not
+   create one yet.
+3. **User prompts `compose`** → read the head outline. Use `ask_user` to
+   fill any `null` field that compose needs (`audience`, `theme`, framing).
+   Write the answers back into a new outline head with `status:
+   ready-to-compose`. Then `delegate` to the stylist.
+4. **Stylist returns** → write a new outline head with
+   `status: composed` and `manifestArtifactId: <id>`.
+5. **User asks for revisions** → write a new outline head with
+   `status: revising` and the edits. Re-run from step 7 of the workflow.
+
+#### Reading the outline
+
+At the start of any turn whose Subject already has an outline:
+
+```sql
+SELECT id, content
+FROM v_artifact_head
+WHERE role = 'document-outline'
+  AND content LIKE '%subject: <subject name>%'
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+(The orchestrator can match more strictly on the YAML `draftId` if it has
+it from a prior turn.)
+
+#### What the outline is NOT
+
+- It is not the **document manifest**. The manifest is downstream output
+  produced by stylist (`application/vnd.dva.document+json`,
+  `role: "document-manifest"`).
+- It is not a **collection** in the catalog sense. Collections are
+  user-curated bundles of artifact ids (no slot semantics, no draft
+  state); the outline is the orchestrator's plan for one specific
+  document, with section types and `audience`/`theme`/`status` fields.
+- It is not a **catalog**. The catalog is derived state over the whole
+  corpus; the outline is intent for one draft.
 
 ### Quality Criteria
 
