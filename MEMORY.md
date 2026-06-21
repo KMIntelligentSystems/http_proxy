@@ -371,6 +371,106 @@ needed to extend `data/lookups/m3_series.json` with a detailed section.
 - **Python wrapper:** `statsmodels.tsa.x13.x13_arima_analysis(...)`. Set `X13PATH=C:/Program Files/x13as` (or pass `x12path=...` — yes, kwarg name is historical).
 - **Venv packages confirmed present (2026-05-24):** `numpy 2.3.4`, `pandas 2.3.3`, `scipy 1.16.3`, `scikit-learn 1.7.2`, `statsmodels 0.14.6`, `patsy 1.0.2`. STL and `x13_arima_analysis` both importable; X-13 binary resolves correctly with `X13PATH=C:/Program Files/x13as`.
 
+## Catalog restructuring — mechanical notes
+
+### Querying the DB directly (bypassing `query_artifacts`)
+
+When you need full JOIN output that `query_artifacts` can't surface (e.g.
+category/subject names, session columns, raw metadata without the `content`
+requirement), query the DB directly via Node's built-in `node:sqlite`:
+
+```bash
+cd C:/repos/http_proxy && node -e "
+const { DatabaseSync } = require('node:sqlite');
+const db = new DatabaseSync('data/artifacts.db');
+const rows = db.prepare(\`SELECT ...\`).all();
+console.log(JSON.stringify(rows, null, 2));
+"
+```
+
+**Do NOT use `better-sqlite3`.** It lives under `node_modules/.ignored/` and
+its native `.node` binding is unresolvable from a plain `node -e` eval. The
+`node:sqlite` `DatabaseSync` is what `src/artifacts.ts` uses and it works
+reliably. Note that Node prints an `ExperimentalWarning` about SQLite — ignore
+it; it's harmless.
+
+### `query_artifacts` requires `content` in SELECT
+
+Without the `content` column, every row is silently skipped with the message
+"row has no string content column (include `content` in SELECT)." This trips
+you up when you only want metadata. Workaround: include `content` even if
+you discard it, or bypass with a direct `node:sqlite` query.
+
+### The catalog view: `v_artifact_head`
+
+```sql
+CREATE VIEW v_artifact_head AS
+  SELECT a.*
+  FROM artifact a
+  LEFT JOIN artifact b ON b.replaces_id = a.id
+  WHERE b.id IS NULL
+    AND a.role NOT IN ('memory', 'catalog')
+```
+
+Heads are rows where no other artifact's `replaces_id` points back → the
+terminal node of each chain. `memory` and `catalog` rows are excluded. This
+view is the authoritative dedup for both the sidebar tree and the orchestrator.
+
+### Subject/session/artifact chain
+
+The taxonomy chain is `category → subject → session → artifact`. An artifact
+inherits its category and subject **through its session's `subject_id`**. Two
+key implications:
+
+1. **A null `session.subject_id` → Uncategorized artifact** regardless of the
+   artifact's own fields.
+2. **To recategorize an artifact, update its session's `subject_id`** — not
+   the artifact row.
+
+### Catalog tree API
+
+`GET /ui/api/catalog` returns:
+
+```json
+{
+  "schemaVersion": 1,
+  "generatedAt": "...",
+  "buckets": [{ "id": "economics/m3-manufacturing-analysis", "category": "...",
+                "subject": "...", "groups": [{ "role": "chart", "items": [...] }] }],
+  "collections": []
+}
+```
+
+Each call also side-effects `persistCatalogIfChanged()` — a new `role: "catalog"`
+artifact is written if the structural payload differs from the head.
+
+### WebSocket event mismatch (catalog refresh)
+
+| Event type | Sent by | Listened by frontend? |
+|---|---|---|
+| `catalog_updated` | `create_artifact` broadcast (host.ts:662), collection POST/DELETE (884, 900) | **Yes** (agent-bridge.ts:660) |
+| `catalog_persisted` | `GET /ui/api/catalog` when a new catalog row is persisted (host.ts:859) | **No** |
+
+**Consequence:** Direct DB mutations (e.g. reassigning `session.subject_id`,
+creating/deleting subjects) do NOT trigger the `catalog_updated` WebSocket
+event. The catalog API returns correct data, but the React sidebar won't
+re-fetch until the user **refreshes the browser**.
+
+To force a sidebar update without a manual refresh after direct DB work, hit
+`POST /ui/api/catalog/collections` with a no-op or call `create_artifact` for
+a dummy artifact — either will broadcast `catalog_updated`. The cleanest
+automated path is still the user hitting F5.
+
+### Better-sqlite3 is available but requires the right require path
+
+The actual `.node` binary lives at:
+```
+node_modules/.ignored/better-sqlite3/build/Release/better_sqlite3.node
+```
+It can be required via absolute path: `require('C:/repos/http_proxy/node_modules/.ignored/better-sqlite3')`.
+However, prefer `node:sqlite` `DatabaseSync` for one-off queries — it eliminates
+the native-binding headache.
+
 ## Architecture
 
 - **Python MCP venv:** `C:\repos\codeGen-mcp-server\venv\Scripts\python.exe`

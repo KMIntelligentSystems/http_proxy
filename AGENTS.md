@@ -280,8 +280,19 @@ One table covers both new prompts and follow-up feedback:
 | Feedback: data wrong | `research` Mode A → if confirmed, Mode B → downstream |
 | Feedback: style | Change `outline.theme`, then `stylist` (no CSS authoring). |
 | Feedback: new content | Full pipeline; append to outline before delegating. |
+| Recategorize / merge categories / subjects / move artifacts | Query DB directly via `node:sqlite` to inspect taxonomy chains (§ MEMORY.md "Catalog restructuring"). Update `session.subject_id` rows, create/delete subjects as needed. **After DB mutations, tell the user to refresh their browser** — the `catalog_updated` WS event only fires on `create_artifact`, not on direct DB writes. Validate with `GET /ui/api/catalog` (curl) before reporting success. |
 
-### Delegation Protocol
+### Post-operation: remind the user to refresh
+
+Direct catalog mutations (DB writes that change `session.subject_id`, create or
+delete subjects/categories, or rewire `replaces_id` chains) do **not** produce a
+`catalog_updated` WebSocket event. The catalog API at `/ui/api/catalog` will return
+correct data immediately, but the React sidebar tree is populated at mount time and
+on `catalog_updated` events only.
+
+When you've completed a catalog operation, always:
+1. Verify via `curl -s http://localhost:8080/ui/api/catalog`.
+2. Tell the user: **"Refresh your browser to see the updated sidebar tree."**
 
 When you delegate to a sub-agent:
 
@@ -463,6 +474,24 @@ Before presenting work to the user, verify:
 | `playwright_*` | Browser automation and validation |
 | `read` / `write` / `edit` | File operations |
 | `delegate` | Hand off to a specialist sub-agent (see Sub-agents section) |
+
+## Conversation Summary
+
+At the end of a substantive session (multi-turn, catalog changes, document
+production, or any workflow where future sessions would benefit from knowing
+what happened), **offer to save a conversation summary as a temporary artifact**:
+
+> "Would you like me to save a summary of this session's key decisions and
+> artifacts as a temporary note? Future sessions can pick it up from the DB."
+
+If the user says yes, create one `text/markdown` artifact with:
+- `role: "memory"`
+- `title: "Conversation summary — <date> — <short topic>"`
+- Content: bullet list of decisions made, artifacts created, DB changes applied,
+  open items, and any caveats that the next session's orchestrator should know.
+
+The summary is de-emphasized in the sidebar (memory role) but queryable by the
+next session's bootstrapping step.
 
 ## Guidelines
 

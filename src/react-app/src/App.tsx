@@ -12,7 +12,7 @@ import { ThinkingPanel } from "./components/ThinkingPanel";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
-  const { artifacts, working, submit, notice, dismissNotice, setNotice, catalog } = useAgent();
+  const { artifacts, working, submit, notice, dismissNotice, setNotice, catalog, dbArtifacts } = useAgent();
   const conversation = useConversation();
   const thinking = useThinking();
   const [aborting, setAborting] = useState(false);
