@@ -32,6 +32,8 @@ export class ArtifactPanel extends LitElement {
   private selectedId: string | undefined;
   private loading = true;
   private error = "";
+  private jsonContent: string | null = null;
+  private jsonLoading = false;
 
   protected override createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -82,6 +84,28 @@ export class ArtifactPanel extends LitElement {
     if (button) this.selectedId = button.dataset.artifactId;
   };
 
+  private async loadJson(artifact: ArtifactRecord): Promise<void> {
+    this.jsonLoading = true;
+    this.jsonContent = null;
+    this.requestUpdate();
+    try {
+      const res = await fetch(artifact.url, { cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      try {
+        const parsed = JSON.parse(text);
+        this.jsonContent = JSON.stringify(parsed, null, 2);
+      } catch {
+        this.jsonContent = text;
+      }
+    } catch (err) {
+      this.jsonContent = `Error loading JSON: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      this.jsonLoading = false;
+      this.requestUpdate();
+    }
+  }
+
   private renderPreview(artifact: ArtifactRecord | undefined): TemplateResult {
     if (!artifact) {
       return html`
@@ -93,15 +117,32 @@ export class ArtifactPanel extends LitElement {
       `;
     }
 
+    // Reset JSON state when switching away from a JSON artifact
+    if (artifact.mimeType !== "application/json" && this.jsonContent !== null) {
+      this.jsonContent = null;
+      this.jsonLoading = false;
+    }
+
     if (artifact.mimeType === "application/vnd.dva.document+json") {
       return html`<document-paginator manifest-url=${artifact.url}></document-paginator>`;
+    }
+
+    if (artifact.mimeType === "application/json") {
+      if (this.jsonLoading) {
+        return html`<pre class="artifact-json">Loading…</pre>`;
+      }
+      if (this.jsonContent !== null) {
+        return html`<pre class="artifact-json">${this.jsonContent}</pre>`;
+      }
+      // Trigger fetch — will re-render when loaded
+      void this.loadJson(artifact);
+      return html`<pre class="artifact-json">Loading…</pre>`;
     }
 
     if (artifact.mimeType === "text/markdown"
         || artifact.mimeType === "text/plain"
         || artifact.mimeType === "text/css"
-        || artifact.mimeType === "text/csv"
-        || artifact.mimeType === "application/json") {
+        || artifact.mimeType === "text/csv") {
       return html`<iframe class="artifact-frame" src=${artifact.url} title=${artifact.title}></iframe>`;
     }
 
