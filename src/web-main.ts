@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { createArtifactStore } from "./artifacts.js";
 import { loadProjectEnv } from "./env.js";
-import { applyModelSelection, startHost } from "./host.js";
+import { applyModelSelection, startHost, type HostServer } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
 import { createVisualizationTools } from "./visualization-tools.js";
 import { UserQuestionManager } from "./user-questions.js";
@@ -74,6 +74,9 @@ function stopProxy() {
 let activeRuntime: any;
 const artifactStore = createArtifactStore(path.join(PROJECT_ROOT, "data", "artifacts"));
 const userQuestionManager = new UserQuestionManager();
+// Mutable ref so visualizationTools can broadcast catalog_updated
+// after the host is started (below).
+const hostRef = { current: null as HostServer | null };
 
 const MCP_PLAYWRIGHT_URL = process.env["MCP_PLAYWRIGHT_URL"] ?? "http://localhost:3000/mcp";
 const MCP_SEARCH_URL = process.env["MCP_SEARCH_URL"] ?? "http://localhost:3004/mcp";
@@ -153,6 +156,7 @@ const visualizationTools = createVisualizationTools({
   artifactStore,
   cwd: process.cwd(),
   getSessionId: () => activeRuntime?.session?.sessionId,
+  onCatalogChanged: () => hostRef.current?.broadcastCatalogUpdated(),
 });
 
 const customTools = [...mcpTools, askUserTool, helloTool, ...visualizationTools];
@@ -211,6 +215,7 @@ for (const methodName of ["newSession", "switchSession", "fork", "importFromJson
 }
 
 const host = startHost({ runtime, artifactStore, userQuestionManager });
+hostRef.current = host;
 
 const startupModel = process.env["MODEL"]?.trim();
 if (startupModel) {

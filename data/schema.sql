@@ -1,27 +1,21 @@
 -- ============================================================================
 -- SQLite schema for persistent artifact store
 -- Designed for: DVA (Data Visualization Agent) project
---
--- Purpose: explain and chart complex data from any domain.
--- Primary sources today are BLS / Census / FRED, but the schema is
--- domain-agnostic — it should accommodate medical, environmental, financial,
--- or any structured data that benefits from statistical and graphical
--- explanation.
---
--- Storage policy:
---   - SVG is NOT saved as a standalone artifact. Charts are embedded inline
---     inside text/html artifacts (D3, inline <svg>). The image/svg+xml
---     mime type exists only for legacy backward-compat.
---   - PNG is NOT stored in this schema. Screenshots / rendered images are
---     transient — consumed by the model for verification, never persisted.
---     If persistent PNG storage is needed later, add a sibling artifact_blobs
---     table with a BLOB column; do not mutate this table.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
+-- user — authenticated identity for multi-tenant catalog scoping
+-- Purpose: isolate artifacts by user. The TUI agent is unscoped (sees all).
+-- Browser sessions are scoped via x-authenticated-user header from the proxy.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user (
+    id           TEXT PRIMARY KEY,                         -- username from Basic Auth
+    display_name TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
 -- category — top-level domain grouping
--- Purpose: partition subjects by broad area of inquiry.
--- Examples: "Economics", "Healthcare", "Demographics", "Climate", "Finance"
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS category (
     id          TEXT PRIMARY KEY,                          -- UUID
@@ -66,6 +60,7 @@ CREATE TABLE IF NOT EXISTS session (
     id           TEXT PRIMARY KEY,                         -- UUID
     subject_id   TEXT REFERENCES subject(id) ON DELETE SET NULL,
     model_id     TEXT REFERENCES model(id) ON DELETE SET NULL,
+    user_id      TEXT REFERENCES user(id) ON DELETE SET NULL,
     title        TEXT,                                     -- optional user-provided session name
     started_at   TEXT NOT NULL DEFAULT (datetime('now')),
     ended_at     TEXT,
@@ -117,6 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_artifact_model     ON artifact(model_id);
 CREATE INDEX IF NOT EXISTS idx_artifact_replaces  ON artifact(replaces_id);
 CREATE INDEX IF NOT EXISTS idx_session_subject    ON session(subject_id);
 CREATE INDEX IF NOT EXISTS idx_session_model      ON session(model_id);
+CREATE INDEX IF NOT EXISTS idx_session_user       ON session(user_id);
 CREATE INDEX IF NOT EXISTS idx_subject_category   ON subject(category_id);
 
 -- ---------------------------------------------------------------------------

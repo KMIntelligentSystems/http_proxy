@@ -19,6 +19,11 @@ Key properties of the catalog path:
 2. **All roles are visible** in the catalog tree except `memory` and
    `catalog` (which are excluded by the view). CSVs, markdown, JSON,
    manifests, and HTML pages all surface under their bucket.
+   **The agent controls what the sidebar shows** via `catalogFilter` —
+   the sidebar tree is empty on startup and only populates when the agent
+   sets a filter through `query_artifacts` (see AGENTS.md § "Prompt-Driven
+   Catalog Filtering"). Without a filter, `buildCatalog()` returns
+   `buckets: []`.
 3. **The catalog is itself a persisted artifact** (`role: "catalog"`,
    `mimeType: application/json`) with a `replaces_id` chain. Each write
    diffs the structural payload before chaining — routine browse GETs do
@@ -158,6 +163,48 @@ older DBs upgrade automatically.
 If the query returns 0 rows (or only rows that don't actually answer the question),
 then and only then fall back to external APIs / web-search and write the result
 with `create_artifact`.
+
+### Concept-filtered SELECTs
+
+Before running `query_artifacts`, extract concepts from the user prompt
+and build targeted WHERE clauses. **Always pass `catalogFilter`** so the
+sidebar catalog tree shows only matching entries:
+
+**By dataset tag:**
+```sql
+SELECT id, title, filename, mime_type, role, description, content, tags
+FROM v_artifact_head
+WHERE tags LIKE '%"m3"%'
+ORDER BY created_at DESC;
+```
+Pass: `catalogFilter: { tags: ["m3"] }`
+
+**By category + role:**
+```sql
+SELECT a.id, a.title, a.filename, a.mime_type, a.role, a.description, a.content, a.tags
+FROM v_artifact_head a
+JOIN session s ON s.id = a.session_id
+JOIN subject sub ON sub.id = s.subject_id
+JOIN category c ON c.id = sub.category_id
+WHERE c.name = 'Economics' AND a.role = 'chart'
+ORDER BY a.created_at DESC;
+```
+
+**Multi-concept (AND logic):**
+```sql
+SELECT id, title, filename, mime_type, role, description, content, tags
+FROM v_artifact_head
+WHERE tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'
+ORDER BY created_at DESC;
+```
+
+**Multi-concept (OR logic — related topics):**
+```sql
+WHERE tags LIKE '%"m3"%' OR tags LIKE '%"fred"%' OR tags LIKE '%"ipi"%'
+```
+
+If the concept mapping is ambiguous, ask the user to clarify before
+running broad queries.
 
 ### Category / subject registry
 
@@ -448,18 +495,31 @@ artifact is written if the structural payload differs from the head.
 
 | Event type | Sent by | Listened by frontend? |
 |---|---|---|
-| `catalog_updated` | `create_artifact` broadcast (host.ts:662), collection POST/DELETE (884, 900) | **Yes** (agent-bridge.ts:660) |
-| `catalog_persisted` | `GET /ui/api/catalog` when a new catalog row is persisted (host.ts:859) | **No** |
+| `catalog_updated` | `persist_artifacts` tool, `POST /ui/api/artifacts/<id>/save`, collection POST/DELETE | **Yes** (agent-bridge.ts:660) |
+| `catalog_persisted` | `GET /ui/api/catalog` when a new catalog row is persisted (host.ts) | **No** |
+| `artifact_created` | `create_artifact` + `query_artifacts` (via `artifactStore.onCreated`) | **Yes** |
 
-**Consequence:** Direct DB mutations (e.g. reassigning `session.subject_id`,
-creating/deleting subjects) do NOT trigger the `catalog_updated` WebSocket
-event. The catalog API returns correct data, but the React sidebar won't
-re-fetch until the user **refreshes the browser**.
+**`create_artifact` no longer broadcasts `catalog_updated`.** It writes to the
+file store only — the catalog DB hasn't changed. `catalog_updated` is reserved
+for SQLite persistence operations.
 
-To force a sidebar update without a manual refresh after direct DB work, hit
-`POST /ui/api/catalog/collections` with a no-op or call `create_artifact` for
-a dummy artifact — either will broadcast `catalog_updated`. The cleanest
-automated path is still the user hitting F5.
+### Artifact persistence boundary
+
+Two stores, one lifecycle rule:
+
+- **File store** (`/ui/api/artifacts/<id>`, in-memory): written by
+  `create_artifact`. Ephemeral — lost on host restart.
+- **SQLite DB** (`data/artifacts.db`): written by the agent via
+  `persist_artifacts`, **only on explicit user request** ("save",
+  "persist").
+
+The agent NEVER auto-persists after `create_artifact`. It presents a
+pending-artifact tree and waits for the user to say "save." This is a
+hard boundary: if the user moves on without saving, the artifacts
+evaporate harmlessly.
+
+See AGENTS.md § "Artifact Lifecycle: Create → Present → Persist" for
+the full three-phase workflow.
 
 ### Better-sqlite3 is available but requires the right require path
 

@@ -13,6 +13,22 @@ export type { CatalogTree };
 
 export type Notice = { kind: "info" | "error"; message: string };
 
+/** Build a Basic Auth header from sessionStorage credentials. */
+function authHeaders(): Record<string, string> {
+  const user = sessionStorage.getItem("dva_user");
+  const pass = sessionStorage.getItem("dva_pass");
+  if (!user || !pass) return {};
+  return { Authorization: "Basic " + btoa(`${user}:${pass}`) };
+}
+
+/** Authenticated fetch wrapper. */
+async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const ah = authHeaders();
+  for (const [k, v] of Object.entries(ah)) headers.set(k, v);
+  return fetch(input, { ...init, headers });
+}
+
 export function useAgent() {
   const [artifacts, setArtifacts] = useState<ArtifactRecord[]>([]);
   const [working, setWorking] = useState(isWorking);
@@ -24,7 +40,7 @@ export function useAgent() {
   // Re-fetch DB artifacts after save so the DB section stays current
   const fetchDbArtifacts = useCallback(async () => {
     try {
-      const res = await fetch("/ui/api/artifacts/db", { cache: "no-store" });
+      const res = await authFetch("/ui/api/artifacts/db", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setDbArtifacts(data.artifacts ?? []);
@@ -37,7 +53,7 @@ export function useAgent() {
   // Fetch catalog
   const fetchCatalog = useCallback(async () => {
     try {
-      const res = await fetch("/ui/api/catalog", { cache: "no-store" });
+      const res = await authFetch("/ui/api/catalog", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
         setCatalog(data);
@@ -74,7 +90,7 @@ export function useAgent() {
     artifactEvents.addEventListener("catalog_updated", onCatalogUpdated);
 
     // Load existing artifacts from the server on mount
-    fetch("/ui/api/artifacts")
+    authFetch("/ui/api/artifacts")
       .then((r) => r.json())
       .then((data: { artifacts?: ArtifactRecord[] }) => {
         if (data.artifacts) setArtifacts(data.artifacts);
@@ -97,7 +113,7 @@ export function useAgent() {
   const dismissNotice = useCallback(() => setNotice(null), []);
 
   const saveArtifact = useCallback(async (id: string) => {
-    const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/save`, { method: "POST" });
+    const res = await authFetch(`/ui/api/artifacts/${encodeURIComponent(id)}/save`, { method: "POST" });
     if (!res.ok) throw new Error(`Save failed: ${res.status}`);
     // Mark as persisted instead of removing — keeps it visible in sidebar
     setPersistedIds((prev) => new Set(prev).add(id));
@@ -106,7 +122,7 @@ export function useAgent() {
   }, [fetchDbArtifacts]);
 
   const discardArtifact = useCallback(async (id: string) => {
-    const res = await fetch(`/ui/api/artifacts/${encodeURIComponent(id)}/discard`, { method: "POST" });
+    const res = await authFetch(`/ui/api/artifacts/${encodeURIComponent(id)}/discard`, { method: "POST" });
     if (!res.ok) throw new Error(`Discard failed: ${res.status}`);
     setArtifacts((prev) => prev.filter((a) => a.id !== id));
   }, []);

@@ -1079,3 +1079,185 @@ body {
   border-color: #f78166;
 }
 .navbar .abort-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* ─── Login screen ─────────────────────────────────────────────── */
+.login-shell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: radial-gradient(circle at 15% 10%, rgba(88,166,255,.16), transparent 30%),
+              radial-gradient(circle at 85% 0%, rgba(210,168,255,.14), transparent 26%),
+              linear-gradient(135deg,#080b10,#0d1117 55%,#07090d);
+}
+
+.login-card {
+  width: min(480px, calc(100vw - 32px));
+  padding: 40px 36px;
+  border: 1px solid rgba(139,148,158,.22);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(22,27,34,.92), rgba(13,17,23,.88));
+  box-shadow: 0 18px 60px rgba(0,0,0,.35);
+}
+
+.login-brand {
+  text-align: center;
+  font-size: 48px;
+  letter-spacing: -.04em;
+  margin-bottom: 4px;
+  color: #f0f6fc;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 15px;
+  margin-bottom: 28px;
+}
+
+.login-prompt {
+  text-align: center;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.login-role-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.login-role-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 12px;
+  border: 1px solid rgba(139,148,158,.2);
+  border-radius: 14px;
+  background: rgba(255,255,255,.03);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color .16s, background .16s, transform .16s;
+  font-family: inherit;
+}
+.login-role-btn:hover {
+  border-color: rgba(88,166,255,.5);
+  background: rgba(88,166,255,.08);
+  transform: translateY(-2px);
+}
+.login-role-icon { font-size: 28px; }
+.login-role-btn strong { font-size: 16px; color: #f0f6fc; }
+.login-role-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  line-height: 1.4;
+}
+
+.login-credentials {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-role-badge {
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(88,166,255,.08);
+  border: 1px solid rgba(88,166,255,.18);
+}
+.login-role-badge strong {
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
+.login-back-btn {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 0;
+  font-family: inherit;
+}
+.login-back-btn:hover { color: var(--accent); }
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.login-field span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.login-field input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color .15s;
+}
+.login-field input:focus {
+  border-color: var(--accent);
+}
+.login-field input:disabled {
+  opacity: .5;
+}
+
+.login-submit-btn {
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: #238636;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.login-submit-btn:hover:not(:disabled) { background: #2ea043; }
+.login-submit-btn:disabled { opacity: .5; cursor: default; }
+
+.login-error {
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: var(--radius);
+  background: rgba(247,129,102,.12);
+  border: 1px solid rgba(247,129,102,.3);
+  color: #f78166;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* user pill in navbar */
+.navbar .user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(63,185,80,.1);
+  border: 1px solid rgba(63,185,80,.25);
+  color: #aff5b4;
+  white-space: nowrap;
+}
+.navbar .user-pill.admin {
+  background: rgba(210,168,255,.1);
+  border-color: rgba(210,168,255,.25);
+  color: #d2a8ff;
+}

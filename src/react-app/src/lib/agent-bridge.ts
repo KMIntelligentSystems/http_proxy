@@ -10,6 +10,22 @@
 
 export type AgentState = "idle" | "working";
 
+/** Build a Basic Auth header from sessionStorage credentials, or an empty object. */
+function authHeaders(): Record<string, string> {
+  const user = sessionStorage.getItem("dva_user");
+  const pass = sessionStorage.getItem("dva_pass");
+  if (!user || !pass) return {};
+  return { Authorization: "Basic " + btoa(`${user}:${pass}`) };
+}
+
+/** Fetch wrapper that includes auth headers. */
+async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const ah = authHeaders();
+  for (const [k, v] of Object.entries(ah)) headers.set(k, v);
+  return fetch(input, { ...init, headers });
+}
+
 export type ModelInfo = {
   provider: string;
   id: string;
@@ -643,7 +659,11 @@ function dispatchAssistantResponse(data: any) {
 
 function connect(): void {
   const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  ws = new WebSocket(`${protocol}//${location.host}/ui/ws/agent`);
+  // Pass auth via query param for WebSocket (browser WebSocket API doesn't support custom headers)
+  const user = sessionStorage.getItem("dva_user");
+  const pass = sessionStorage.getItem("dva_pass");
+  const authParam = user && pass ? `?user=${encodeURIComponent(user)}&pass=${encodeURIComponent(pass)}` : "";
+  ws = new WebSocket(`${protocol}//${location.host}/ui/ws/agent${authParam}`);
 
   ws.onmessage = (message) => {
     // Any inbound byte counts as liveness, regardless of type — the watchdog
@@ -827,7 +847,7 @@ export async function sendPrompt(text: string): Promise<PromptResponse> {
   setWorking(true);
   startTurnWatchdog();
   try {
-    const res = await fetch("/ui/api/agent/prompt", {
+    const res = await authFetch("/ui/api/agent/prompt", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ input: text }),
@@ -855,7 +875,7 @@ export async function sendPrompt(text: string): Promise<PromptResponse> {
  * the server returns 503 if no turn is running, which we surface as an error.
  */
 export async function abortAgent(): Promise<void> {
-  const res = await fetch("/ui/api/agent/abort", { method: "POST" });
+  const res = await authFetch("/ui/api/agent/abort", { method: "POST" });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body?.error === "string" ? body.error : `HTTP ${res.status}`);
@@ -865,7 +885,7 @@ export async function abortAgent(): Promise<void> {
 }
 
 export async function answerUserQuestion(id: string, response: string): Promise<void> {
-  const res = await fetch("/ui/api/agent/answer", {
+  const res = await authFetch("/ui/api/agent/answer", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id, response }),
@@ -891,7 +911,7 @@ export function isWorking(): boolean {
 
 /** Fetch the list of available models and current selection. */
 export async function fetchModels(): Promise<{ current: ModelInfo | null; available: ModelInfo[] }> {
-  const res = await fetch("/ui/api/agent/models");
+  const res = await authFetch("/ui/api/agent/models");
   if (!res.ok) throw new Error(`Failed to fetch models: ${res.status}`);
   const data = await res.json();
   setCurrentModel(data.current ?? null);
@@ -903,7 +923,7 @@ export async function fetchModels(): Promise<{ current: ModelInfo | null; availa
  * Returns the server response body.
  */
 export async function switchModel(providerColonId: string): Promise<any> {
-  const res = await fetch("/ui/api/agent/prompt", {
+  const res = await authFetch("/ui/api/agent/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ input: `/m ${providerColonId}` }),

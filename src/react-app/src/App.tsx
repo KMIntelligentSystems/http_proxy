@@ -9,9 +9,15 @@ import { CatalogTree } from "./components/CatalogTree";
 import { ModelSelector } from "./components/ModelSelector";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { ThinkingPanel } from "./components/ThinkingPanel";
+import { useAuth } from "./lib/auth";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
+  const auth = useAuth();
+  return <AuthenticatedApp auth={auth} />;
+}
+
+function AuthenticatedApp({ auth }: { auth: { username: string; role: string } | null }) {
   const { artifacts, working, submit, notice, dismissNotice, setNotice, catalog, dbArtifacts } = useAgent();
   const conversation = useConversation();
   const thinking = useThinking();
@@ -44,6 +50,7 @@ export function App() {
   const [activeArtifactId, setActiveArtifactId] = useState<string | null>(null);
   const [manifest, setManifest] = useState<DocumentManifest | null>(null);
   const [viewArtifact, setViewArtifact] = useState<ArtifactRecord | null>(null);
+  const [jsonContent, setJsonContent] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadItem = useCallback(
@@ -58,8 +65,24 @@ export function App() {
           .then(setManifest)
           .catch(() => setManifest(null));
         setViewArtifact(null);
+        setJsonContent(null);
+      } else if (a.mimeType === "application/json") {
+        setManifest(null);
+        setViewArtifact(a);
+        fetch(a.url)
+          .then((r) => r.text())
+          .then((text) => {
+            try {
+              const parsed = JSON.parse(text);
+              setJsonContent(JSON.stringify(parsed, null, 2));
+            } catch {
+              setJsonContent(text);
+            }
+          })
+          .catch(() => setJsonContent(null));
       } else {
         setManifest(null);
+        setJsonContent(null);
         setViewArtifact(a);
       }
     },
@@ -216,6 +239,9 @@ export function App() {
       )}
       <nav className="navbar">
         <span className="brand">DVA</span>
+        <span className={`user-pill ${auth?.role ?? "anon"}`} title={auth ? `Logged in as ${auth.username} (${auth.role})` : "Not authenticated"}>
+          {auth ? (auth.role === "admin" ? "🔧" : "👤") : "🔒"} {auth?.username ?? "guest"}
+        </span>
         <ModelSelector />
         <input
           ref={inputRef}
@@ -293,6 +319,8 @@ export function App() {
           </div>
         ) : manifest ? (
           <DocumentViewer manifest={manifest} />
+        ) : viewArtifact && viewArtifact.mimeType === "application/json" && jsonContent !== null ? (
+          <pre className="json-viewer">{jsonContent}</pre>
         ) : viewArtifact ? (
           <iframe
             className="dv-iframe"

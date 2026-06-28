@@ -19,7 +19,7 @@ import { createMcpTools } from "./mcp-tools.js";
 import { loadProjectEnv } from "./env.js";
 import { createArtifactStore } from "./artifacts.js";
 import { createVisualizationTools } from "./visualization-tools.js";
-import { startHost } from "./host.js";
+import { startHost, type HostServer } from "./host.js";
 import { UserQuestionManager } from "./user-questions.js";
 
 loadProjectEnv(process.cwd());
@@ -93,11 +93,15 @@ const userQuestionManager = new UserQuestionManager();
 // Mutable ref so visualizationTools can resolve the session ID
 // after the runtime is created (below).
 const sessionIdRef = { current: (): string | null => null };
+// Mutable ref so visualizationTools can broadcast catalog_updated
+// after the host is started (below).
+const hostRef = { current: null as HostServer | null };
 
 const visualizationTools = createVisualizationTools({
   artifactStore,
   getSessionId: () => sessionIdRef.current(),
   cwd: process.cwd(),
+  onCatalogChanged: () => hostRef.current?.broadcastCatalogUpdated(),
 });
 
 const askUserTool = defineTool({
@@ -177,6 +181,7 @@ sessionIdRef.current = () => runtime.session?.sessionId ?? null;
 // artifact_created events are broadcast to browser WebSocket clients
 // via artifactStore.onCreated() inside startHost().
 const host = startHost({ runtime, artifactStore, userQuestionManager });
+hostRef.current = host;
 
 // Start the proxy as a child process.
 startProxy();

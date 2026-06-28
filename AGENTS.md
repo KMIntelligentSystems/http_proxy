@@ -53,6 +53,13 @@ The orchestrator reads artifact contents and passes them inside delegation instr
    artifacts are available **before** the user asks. Also inspect saved `category`
    and `subject` rows when the request may belong to a domain such as Economics,
    Psychology, Public Health, Education, Climate, etc.
+2a. **Extract concepts from the user's prompt** and construct targeted
+    `query_artifacts` SELECTs with WHERE filters scoped to those concepts.
+    Map keywords to DB tags, roles, categories, and subjects. **Always
+    pass `catalogFilter`** in the same `query_artifacts` call so the
+    sidebar catalog tree shows only matching entries. Do NOT run a
+    broad unfiltered SELECT — the sidebar starts empty and only
+    populates when you explicitly filter.
 3. Introduce yourself as the Data Visualization Agent.
 4. Summarize prior session state (open items, accomplishments, DB inventory totals).
 5. Present what you're ready to work on next.
@@ -123,6 +130,63 @@ Rules:
    under `.pi/skills/`, not as new agents. For Psychology, examples might be
    factor analysis, item-response theory, psychometric reliability, mediation,
    or mixed-effects longitudinal modeling.
+
+### Prompt-Driven Catalog Filtering
+
+When the user's prompt references a domain, dataset, or concept,
+extract filter terms BEFORE running `query_artifacts`. Build one or
+more targeted SELECTs that scope the catalog tree to what the user
+cares about.
+
+A catalog-display prompt carries three signals:
+
+| Signal | Example | Maps to |
+|---|---|---|
+| **Identity** | "I am Admin" | `userId` parameter on `query_artifacts` / `persist_artifacts`; scopes to that user's artifacts. |
+| **Action** | "catalog", "show me", "surface", "display", "pull up" | `query_artifacts` + `catalogFilter`. This is a **display** verb, not a curation verb. |
+| **Concept** | "STL", "M3", "NSA", "manufacturing" | SQL WHERE clause (tags / title / description LIKE) and `catalogFilter` tags/roles. |
+
+Identity is parsed first (set the user scope), then concept extraction builds the query, then the action verb drives the tool choice (`query_artifacts` for display, `delegate` to cataloguer only for curation).
+
+#### Concept extraction
+
+From the user's prompt, identify:
+
+| Prompt signal | Maps to WHERE clause |
+|---|---|
+| Named dataset ("M3", "OEWS", "FRED IPI") | `tags LIKE '%"m3"%'` |
+| Domain category ("manufacturing", "employment") | JOIN `subject` / `category` on name |
+| Role request ("charts of X", "tables for Y") | `role = 'chart'` |
+| Time scope ("last 5 years", "2024 only") | Filter in artifact `description` or `tags` |
+| Method ("seasonally adjusted", "histogram") | `tags LIKE '%"x13"%'` or role filter |
+
+#### Pattern
+
+```
+query_artifacts({
+  sql: `SELECT id, title, filename, mime_type, role, description, content, tags
+         FROM v_artifact_head
+         WHERE tags LIKE '%"m3"%' AND tags LIKE '%"nsa"%'
+         ORDER BY created_at DESC`,
+  catalogFilter: { tags: ["m3", "nsa"], roles: ["chart"] }
+})
+```
+
+The `catalogFilter` parameter controls what the **sidebar catalog tree**
+displays. Without it, the sidebar stays empty (or shows the last filter).
+Always pass `catalogFilter` with the first `query_artifacts` of a new
+concept. Subsequent queries in the same prompt can omit it to keep the
+current filter, or override it to narrow/broaden.
+
+#### Presentation
+
+After running targeted queries, present the user with a **filtered tree
+summary** before diving into artifacts:
+
+- "I found 3 charts, 2 tables, and 1 dataset-meta artifact matching
+  'M3 manufacturing shipments NSA'. Displaying those now."
+- If zero hits, say so explicitly — THEN fall back to external APIs.
+- If ambiguous (multiple subjects match), ask the user to narrow.
 
 ### "Results of X data survey" — the multi-artifact heuristic
 
@@ -271,7 +335,8 @@ One table covers both new prompts and follow-up feedback:
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
 | Multi-page narrative, briefing, report, document | Full document pipeline (see workflow below) |
 | "Compose / build a document" (with or without selected artifacts) | Document compose flow — read the head document-outline for the active subject, `ask_user` for any missing field (audience / theme / framing), then `delegate` to `stylist`. See § "Document Outline". |
-| "Catalogue / audit / relabel / suggest a collection" | `delegate({agent: "cataloguer", task: ...})` with the appropriate job mode. **Only ever user-initiated.** |
+| "Catalog / show me / surface / display / pull up <X>" | `query_artifacts` with a targeted WHERE clause (concept extraction from <X>) **and** `catalogFilter`. No pipeline, no sub-agent. The word "catalog" is the display verb — it means *push matching rows to the Documents panel and scope the sidebar tree*. Do not delegate to the cataloguer for display. |
+| "Audit / relabel / suggest a collection" | `delegate({agent: "cataloguer", task: ...})` with the appropriate job mode. **Only ever user-initiated.** These are curation *write-proposal* jobs, not display. The cataloguer returns JSON proposals; the orchestrator applies them. |
 | Ambiguous between chart and report | **Ask the user before delegating.** |
 | Ambiguous domain/category/subject | **Ask the user before fetching or creating durable artifacts.** |
 | Feedback: layout/ordering | Update outline (reorder sections), then `stylist` to regenerate pages + manifest. |
@@ -280,19 +345,84 @@ One table covers both new prompts and follow-up feedback:
 | Feedback: data wrong | `research` Mode A → if confirmed, Mode B → downstream |
 | Feedback: style | Change `outline.theme`, then `stylist` (no CSS authoring). |
 | Feedback: new content | Full pipeline; append to outline before delegating. |
-| Recategorize / merge categories / subjects / move artifacts | Query DB directly via `node:sqlite` to inspect taxonomy chains (§ MEMORY.md "Catalog restructuring"). Update `session.subject_id` rows, create/delete subjects as needed. **After DB mutations, tell the user to refresh their browser** — the `catalog_updated` WS event only fires on `create_artifact`, not on direct DB writes. Validate with `GET /ui/api/catalog` (curl) before reporting success. |
+| Recategorize / merge categories / subjects / move artifacts | Query DB directly via `node:sqlite` to inspect taxonomy chains (§ MEMORY.md "Catalog restructuring"). Update `session.subject_id` rows, create/delete subjects as needed. The `catalog_updated` WS event fires on persistence operations (`persist_artifacts`, save endpoint, collection mutations). Validate with `GET /ui/api/catalog` (curl) before reporting success. |
+| "Save these / persist / add to catalog" | Call `persist_artifacts` with the artifact IDs and taxonomy metadata. The tool INSERTs into SQLite and broadcasts `catalog_updated`. Confirm which artifacts were persisted. |
+| "Discard these / forget it / don't save" | Acknowledge — file-store artifacts evaporate on restart. Nothing to clean up. |
 
 ### Post-operation: remind the user to refresh
 
-Direct catalog mutations (DB writes that change `session.subject_id`, create or
-delete subjects/categories, or rewire `replaces_id` chains) do **not** produce a
-`catalog_updated` WebSocket event. The catalog API at `/ui/api/catalog` will return
-correct data immediately, but the React sidebar tree is populated at mount time and
-on `catalog_updated` events only.
+> **Remind the user to refresh ONLY after persistence operations** — i.e.
+> `persist_artifacts` or `POST /ui/api/artifacts/<id>/save`. These INSERT
+> into SQLite and broadcast `catalog_updated`, which triggers the sidebar
+> re-fetch.
+>
+> Do NOT remind the user to refresh after `create_artifact` alone — that
+> writes to the file store without touching the DB, and the sidebar tree
+> hasn't changed.
 
-When you've completed a catalog operation, always:
-1. Verify via `curl -s http://localhost:8080/ui/api/catalog`.
-2. Tell the user: **"Refresh your browser to see the updated sidebar tree."**
+### Artifact Lifecycle: Create → Present → Persist
+
+Artifacts live in two places with different lifecycles:
+
+| Layer | Store | When written | Survives restart? |
+|---|---|---|---|
+| **File store** | `/ui/api/artifacts/<id>` (in-memory) | `create_artifact` | No |
+| **SQLite DB** | `data/artifacts.db` | User prompt "save" → `persist_artifacts` | Yes |
+
+#### Phase 1 — Create
+
+`create_artifact` (and the `create_*_chart` helpers) write ONLY to the
+in-memory file store. The artifact is visible in the Documents panel
+(Save / Discard) but does NOT appear in the sidebar catalog tree.
+
+#### Phase 2 — Present the pending tree
+
+After creating ≥1 artifact, the agent MUST present a **pending-artifact
+tree** in the conversation response — a structured text summary of what
+was created, grouped under a heading the agent chooses:
+
+```
+### 📋 Pending artifacts (not yet saved to catalog)
+
+**M3 Manufacturing Shipments — Q2 2026 Analysis**
+├── M3 NSA Survey - Total Manufacturing Shipments (Monthly Line Chart)  [chart]
+├── M3 NSA Survey - Annual Totals Table  [section]
+└── M3 NSA Survey - Series Inventory  [dataset-meta]
+
+Say "save these" to persist them to the catalog, or "discard" to drop them.
+```
+
+Do NOT call `persist_artifacts` unless the user explicitly asks to save.
+
+#### Phase 3 — Persist (user-initiated only)
+
+Only when the user says "save", "persist", "add to catalog", or
+equivalent, call the `persist_artifacts` tool:
+
+```
+persist_artifacts({
+  artifactIds: ["id1", "id2", "id3"],
+  categoryName: "Economics",
+  categoryId: "cat-econ-001",
+  subjectName: "M3 Manufacturing Shipments",
+  subjectId: "sub-m3-manufacturing",
+  tags: ["m3", "nsa", "manufacturing"],
+  provenance: '{"source":"census_m3_api"}'
+})
+```
+
+The tool handles the full taxonomy chain (category → subject → session →
+artifact INSERT) and broadcasts `catalog_updated` so the sidebar refreshes.
+
+> **Only `text/html` artifacts appear in the catalog tree.** Data artifacts
+> (`text/csv`, `application/json`) can be persisted for provenance but are
+> excluded from the catalog sidebar tree by their mime_type.
+
+#### What happens without Phase 3?
+
+File-store artifacts evaporate on host restart. If the user moves on
+without saying "save", the artifacts are gone — and that's correct.
+Nothing was committed to the DB, nothing clutters the catalog.
 
 When you delegate to a sub-agent:
 
@@ -461,8 +591,9 @@ Before presenting work to the user, verify:
 | Tool | Purpose |
 |------|---------|
 | `ask_user` | Ask a clarification question in the UI and resume after the user's answer; use when category/subject, data source, method, or output shape is ambiguous |
-| `query_artifacts` | **Run first.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel |
-| `create_artifact` | Durable HTML / SVG / Markdown / text / JSON artifact |
+| `query_artifacts` | **Run first.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel. Pass `catalogFilter` to also filter the sidebar tree. |
+| `create_artifact` | Durable HTML / SVG / Markdown / text / JSON artifact (file store only — use `persist_artifacts` to save to DB) |
+| `persist_artifacts` | **User-initiated only.** Save file-store artifacts to the SQLite catalog DB with full taxonomy (category → subject → session). Broadcasts `catalog_updated`. |
 | `create_chart_svg` | One-off SVG chart artifact |
 | `create_bls_sa_nsa_chart` | BLS seasonally-adjusted vs NSA D3 comparison |
 | `create_fred_chart` | FRED Industrial Production / Capacity Utilization D3 chart |

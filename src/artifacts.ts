@@ -27,6 +27,7 @@ export type ArtifactRecord = {
   role?: string;        // semantic tag, e.g. "memory", "dataset-csv", "chart", "page", "document-manifest"
   category?: string;    // domain category (from DB JOIN)
   subject?: string;     // domain subject (from DB JOIN)
+  tags?: string;        // raw JSON tags array from DB (e.g. '["m3","nsa"]')
 };
 
 export type CreateArtifactInput = {
@@ -56,6 +57,17 @@ export function isUtf8ArtifactMime(mimeType: string): boolean {
   return mimeType.startsWith("text/")
       || mimeType === "application/json"
       || mimeType === "application/vnd.dva.document+json";
+}
+
+/** Safely parse a JSON tags array string, returning an empty array on failure. */
+function parseTags(raw: string | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((t): t is string => typeof t === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Derive a 4–8 word compact label from an artifact title. Strips dates, version suffixes. */
@@ -149,14 +161,47 @@ export type CatalogTree = {
   collections: CatalogCollection[];
 };
 
+/** Server-side filter applied to buildCatalog(). Set by the agent via
+ *  query_artifacts when the user's prompt carries domain concepts.
+ *  When null/empty, buildCatalog() returns an empty tree — the sidebar
+ *  shows nothing until the agent explicitly filters. */
+export type CatalogFilter = {
+  tags?: string[];
+  roles?: string[];
+  categories?: string[];
+  subjects?: string[];
+};
+
 export class ArtifactStore {
   readonly rootDir: string;
   private listeners = new Set<ArtifactListener>();
   private schemaEnsured = false;
+  private catalogFilter: CatalogFilter | null = null;
 
   constructor(rootDir: string) {
     this.rootDir = path.resolve(rootDir);
+    // Wipe stale file-store artifacts from prior runs. The catalog DB
+    // is the durable store; the file store is scratch space per process.
+    try { fs.rmSync(this.rootDir, { recursive: true, force: true }); } catch { /* first run */ }
     fs.mkdirSync(this.rootDir, { recursive: true });
+  }
+
+  /** Current user id for browser-catalog scoping. Set by the host from
+   *  x-authenticated-user header. The TUI agent sets this to null (unscoped). */
+  currentUserId: string | null = null;
+
+  /** Set a server-side filter that buildCatalog() applies. When null or
+   *  all fields empty, the catalog returns an empty tree. Called by the
+   *  agent (query_artifacts tool) after extracting concepts from the
+   *  user's prompt. */
+  setCatalogFilter(filter: CatalogFilter | null): void {
+    this.catalogFilter = filter;
+  }
+
+  /** Remove the active catalog filter. The next buildCatalog() call
+   *  returns an empty tree until a new filter is set. */
+  clearCatalogFilter(): void {
+    this.catalogFilter = null;
   }
 
   /** Path to the SQLite DB shared with the host. */
@@ -176,13 +221,16 @@ export class ArtifactStore {
     const db = new DatabaseSync(p);
     if (!this.schemaEnsured) {
       try {
+        // Drop old view first so schema changes are picked up on restart.
+        db.exec("DROP VIEW IF EXISTS v_artifact_head");
         db.exec(
-          `CREATE VIEW IF NOT EXISTS v_artifact_head AS
+          `CREATE VIEW v_artifact_head AS
              SELECT a.*
              FROM artifact a
              LEFT JOIN artifact b ON b.replaces_id = a.id
              WHERE b.id IS NULL
-               AND a.role NOT IN ('memory', 'catalog');`
+               AND a.role NOT IN ('memory', 'catalog', 'dataset-csv')
+               AND a.mime_type NOT IN ('application/json', 'text/csv');`
         );
         this.schemaEnsured = true;
       } catch (err) {
@@ -272,20 +320,61 @@ export class ArtifactStore {
    * Excludes memory and prior catalog artifacts. Within each (bucket, role),
    * prefers the latest artifact by replaces_id chain head (fallback: created_at).
    */
+  /** Build the catalog tree, scoped to currentUserId if set (browser session)
+   *  or unscoped (TUI agent session). */
   buildCatalog(): CatalogTree {
-    const records = this.dbList();
+    const records = this.dbList(this.currentUserId);
     const now = new Date().toISOString();
 
-    // Exclude memory roles and prior catalog versions
+    // Exclude internal-only roles and mime types — these are plumbing,
+    // not end-user content.
     const visible = records.filter((r) => {
       if (r.role === "memory" || r.role === "catalog") return false;
+      if (r.role === "dataset-csv") return false;
+      if (r.mimeType === "application/json") return false;
+      if (r.mimeType === "text/csv") return false;
       return true;
+    });
+
+    // ── Apply server-side catalog filter ──────────────────────────────────
+    // When the agent hasn't set a filter (startup), return an empty catalog.
+    // The sidebar shows nothing until the agent extracts concepts from the
+    // user's prompt and runs a filtered query_artifacts call.
+    const filter = this.catalogFilter;
+    const hasFilter = filter && (
+      (filter.tags && filter.tags.length > 0) ||
+      (filter.roles && filter.roles.length > 0) ||
+      (filter.categories && filter.categories.length > 0) ||
+      (filter.subjects && filter.subjects.length > 0)
+    );
+
+    let filtered: typeof visible;
+    if (!hasFilter) {
+      return { schemaVersion: 1, generatedAt: now, buckets: [], collections: this.loadCollections() };
+    }
+
+    filtered = visible.filter((r) => {
+      // OR across filter fields, OR within each field's values
+      if (filter.tags && filter.tags.length > 0) {
+        const artTags: string[] = parseTags(r.tags);
+        if (filter.tags.some(ft => artTags.includes(ft))) return true;
+      }
+      if (filter.roles && filter.roles.length > 0) {
+        if (filter.roles.includes(r.role || "")) return true;
+      }
+      if (filter.categories && filter.categories.length > 0) {
+        if (filter.categories.includes(r.category || "")) return true;
+      }
+      if (filter.subjects && filter.subjects.length > 0) {
+        if (filter.subjects.includes(r.subject || "")) return true;
+      }
+      return false;
     });
 
     // Group: category → subject → role → items
     const bucketMap = new Map<string, CatalogBucket>();
 
-    for (const rec of visible) {
+    for (const rec of filtered) {
       const category = rec.category || "Uncategorized";
       const subject = rec.subject || "General";
       const role = rec.role || "other";
@@ -496,23 +585,25 @@ export class ArtifactStore {
     return catalog;
   }
 
-  dbList(): ArtifactRecord[] {
+  /** List artifacts from DB, optionally scoped to a user. When userId is
+   *  provided, only artifacts in sessions belonging to that user are returned.
+   *  When null, all artifacts are returned (TUI agent mode). */
+  dbList(userId?: string | null): ArtifactRecord[] {
     const sqldb = this.openDb();
     if (!sqldb) return [];
     try {
-      // Route through v_artifact_head so the catalog tree and any other
-      // caller automatically inherit head-of-chain dedup and the
-      // memory/catalog role exclusion. Identical column shape to before.
-      const rows = sqldb.prepare(
-        `SELECT a.id, a.session_id, a.title, a.filename, a.mime_type, a.role,
+      const userClause = userId ? `AND sess.user_id = '${userId.replace(/'/g, "''")}'` : "";
+      const sql = `SELECT a.id, a.session_id, a.title, a.filename, a.mime_type, a.role,
                 a.description, a.size_bytes, a.created_at, a.updated_at,
+                a.tags,
                 c.name AS category, s.name AS subject
          FROM v_artifact_head a
          LEFT JOIN session sess ON a.session_id = sess.id
          LEFT JOIN subject s ON sess.subject_id = s.id
          LEFT JOIN category c ON s.category_id = c.id
-         ORDER BY a.created_at DESC`
-      ).all() as Record<string, unknown>[];
+         WHERE 1=1 ${userClause}
+         ORDER BY a.created_at DESC`;
+      const rows = sqldb.prepare(sql).all() as Record<string, unknown>[];
       return rows.map((rec) => ({
         id: rec.id as string,
         sessionId: rec.session_id as string,
@@ -527,14 +618,16 @@ export class ArtifactStore {
         url: `/ui/api/artifacts/${rec.id}`,
         category: (rec.category as string) || undefined,
         subject: (rec.subject as string) || undefined,
+        tags: (rec.tags as string) || undefined,
       }));
     } finally {
       sqldb.close();
     }
   }
 
-  /** Fetch a single artifact's content from the SQLite DB. Returns undefined if not found. */
-  dbGet(id: string): { record: ArtifactRecord; content: string } | undefined {
+  /** Fetch a single artifact's content from the SQLite DB, optionally scoped to user.
+   *  Returns undefined if not found. */
+  dbGet(id: string, userId?: string | null): { record: ArtifactRecord; content: string } | undefined {
     if (!/^[A-Za-z0-9_-]+$/.test(id)) return undefined;
     const sqldb = this.openDb();
     if (!sqldb) return undefined;

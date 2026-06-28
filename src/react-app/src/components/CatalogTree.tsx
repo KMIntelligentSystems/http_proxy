@@ -1,5 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
 
+// ─── Auth-aware fetch helper ───────────────────────────────────────────────
+function authHeaders(): Record<string, string> {
+  const user = sessionStorage.getItem("dva_user");
+  const pass = sessionStorage.getItem("dva_pass");
+  if (!user || !pass) return {};
+  return { Authorization: "Basic " + btoa(`${user}:${pass}`) };
+}
+
 // ─── Types (mirrors server CatalogTree shape) ──────────────────────────────
 
 export type CatalogItem = {
@@ -153,7 +161,7 @@ export function CatalogTree({ catalog, selectedIds, onSelectionChange, activeArt
     try {
       const res = await fetch("/ui/api/catalog/collections", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ name: name.trim(), summary: summary.trim(), memberIds: [...selectedIds] }),
       });
       if (!res.ok) {
@@ -174,7 +182,7 @@ export function CatalogTree({ catalog, selectedIds, onSelectionChange, activeArt
     try {
       const res = await fetch("/ui/api/catalog/compose", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ memberIds: [...selectedIds] }),
       });
       if (!res.ok) {

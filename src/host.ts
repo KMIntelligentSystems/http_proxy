@@ -8,9 +8,38 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
 import type { UserQuestionManager } from "./user-questions.js";
+import { loadProjectEnv } from "./env.js";
+
+// Load .env before reading process.env at module scope. ESM hoists all static
+// imports before the importing module's body executes, so by the time cli.ts /
+// web-main.ts call loadProjectEnv, host.ts has already read BASIC_AUTH_USERS.
+// Calling loadProjectEnv here in host.ts's own module body runs after imports
+// resolve but before the module-scope constants below, guaranteeing the env is
+// populated regardless of which entry point loads this module.
+loadProjectEnv(process.cwd());
 
 const HOST_PORT = parseInt(process.env["HOST_PORT"] ?? "3100", 10);
 const PROXY_URL = process.env["PROXY_URL"] ?? "http://localhost:8080";
+
+// Basic Auth users for local loopback auth verification (shared with proxy.ts).
+// Multi-user format: BASIC_AUTH_USERS=admin:pass1,user:pass2
+const BASIC_AUTH_USERS_RAW = process.env["BASIC_AUTH_USERS"] ?? "";
+function parseBasicUsers(raw: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of raw.split(",")) {
+    const trimmed = entry.trim();
+    if (!trimmed) continue;
+    const idx = trimmed.indexOf(":");
+    if (idx < 0) continue;
+    map.set(trimmed.slice(0, idx).trim(), trimmed.slice(idx + 1));
+  }
+  // Legacy single-user fallback
+  const bu = process.env["BASIC_AUTH_USER"];
+  const bp = process.env["BASIC_AUTH_PASS"];
+  if (bu && bp && map.size === 0) map.set(bu, bp);
+  return map;
+}
+const BASIC_AUTH_USERS = parseBasicUsers(BASIC_AUTH_USERS_RAW);
 
 // BLS API key — prefer process.env (set by Railway or loadProjectEnv), fall back to data/.env
 let BLS_API_KEY = process.env["BLS_API_KEY"]?.trim().replace(/["']/g, "") ?? "";
@@ -152,6 +181,10 @@ function startPromptStallTimer(sessionId: string | null): void {
       const reason = `No agent activity for ${Math.round(silentMs / 1000)}s (turn age ${Math.round(totalMs / 1000)}s). Server-side stall watchdog fired.`;
       console.error(`[agent prompt stalled] sessionId=${lastStallSessionId} ${reason}`);
       clearPromptStallTimer();
+      // Release the prompt-in-flight guard — the model provider hung and
+      // the user must be able to retry. The underlying session.prompt()
+      // promise may still be dangling, but its .finally() is harmless.
+      promptInFlight = false;
       broadcastAgentWsMessage({
         type: "agent_prompt_stalled",
         sessionId: lastStallSessionId,
@@ -160,11 +193,6 @@ function startPromptStallTimer(sessionId: string | null): void {
         turnAgeMs: totalMs,
         receivedAt: new Date().toISOString(),
       });
-      // promptInFlight stays true until session.prompt() actually settles —
-      // we don't want a second prompt to clobber an in-flight (possibly slow
-      // but still-alive) turn. The 409 in POST /prompt protects against that.
-      // If/when the turn genuinely resolves later, agent_prompt_complete or
-      // agent_prompt_error will still fire normally.
     }
   }, 15_000);
   if (typeof (handle as any).unref === "function") (handle as any).unref();
@@ -408,6 +436,8 @@ export type HostServer = {
   server: http.Server;
   wss: WebSocketServer;
   close: () => Promise<void>;
+  /** Broadcast catalog_updated to all connected WebSocket clients. */
+  broadcastCatalogUpdated: () => void;
 };
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown) {
@@ -656,12 +686,9 @@ const detachArtifactEvents = artifactStore.onCreated((artifact) => {
     artifact,
     receivedAt: new Date().toISOString(),
   });
-  // Broadcast a lightweight nudge so the client refreshes the catalog.
-  // Don't inline the full catalog — the client will re-fetch GET /ui/api/catalog.
-  broadcastAgentWsMessage({
-    type: "catalog_updated",
-    receivedAt: new Date().toISOString(),
-  });
+  // catalog_updated is NOT broadcast here — the catalog DB hasn't changed.
+  // It is broadcast only by persistence operations that INSERT into SQLite
+  // (save endpoint, persist_artifacts tool, collection mutations).
 });
 const detachAgentEventBridge = attachAgentEventBridge(ctx);
 const server = http.createServer((req, res) => {
@@ -671,6 +698,42 @@ const server = http.createServer((req, res) => {
   if (req.headers["x-loopback"] === "1") {
     const requestUrl = new URL(req.url ?? "/", "http://host.local");
     const pathname = requestUrl.pathname;
+
+    // Extract authenticated user from proxy header (multi-tenant scoping).
+    // Loopback requests from the TUI (no proxy) won't have this header.
+    const authUser = req.headers["x-authenticated-user"];
+    let currentUser = typeof authUser === "string" && authUser.trim() ? authUser.trim() : null;
+
+    // When the proxy runs on loopback, auth is skipped and x-authenticated-user is
+    // set to "loopback". In that case, check for a direct Basic Auth header (sent by
+    // the React login form) and validate it against the known users list.
+    if (currentUser === "loopback") {
+      const authHeader = req.headers["authorization"] ?? "";
+      if (authHeader.startsWith("Basic ")) {
+        try {
+          const decoded = Buffer.from(authHeader.slice(6), "base64").toString("utf-8");
+          const idx = decoded.indexOf(":");
+          if (idx >= 0) {
+            const user = decoded.slice(0, idx);
+            const pass = decoded.slice(idx + 1);
+            const expectedPass = BASIC_AUTH_USERS.get(user);
+            if (expectedPass && pass === expectedPass) {
+              currentUser = user;
+            }
+          }
+        } catch { /* keep loopback */ }
+      }
+    }
+
+    ctx.artifactStore!.currentUserId = currentUser;
+    if (currentUser) {
+      try {
+        const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
+        sqldb.prepare("INSERT OR IGNORE INTO user (id, display_name, created_at) VALUES (?, ?, ?)")
+          .run(currentUser, currentUser, new Date().toISOString());
+        sqldb.close();
+      } catch { /* user table may not exist yet — schema migration runs on next restart */ }
+    }
 
     // The app lives under /ui. Redirect the bare root so visiting the public
     // URL lands on the app instead of the "Invalid static path" fallthrough.
@@ -774,6 +837,45 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // ── GET /ui/api/auth/me — return current user from x-authenticated-user header ──
+    if (pathname === "/ui/api/auth/me" && req.method === "GET") {
+      if (currentUser && currentUser !== "loopback") {
+        sendJson(res, 200, { username: currentUser, role: currentUser === "admin" ? "admin" : "user" });
+      } else {
+        // On loopback (dev), return null — the proxy skips auth.
+        sendJson(res, 200, { username: null, role: null });
+      }
+      return;
+    }
+
+    // ── POST /ui/api/auth/login — verify credentials for the React login form ──
+    if (pathname === "/ui/api/auth/login" && req.method === "POST") {
+      readJsonBody(req)
+        .then((body) => {
+          const username = typeof body?.username === "string" ? body.username.trim() : "";
+          const password = typeof body?.password === "string" ? body.password : "";
+          if (!username || !password) {
+            sendJson(res, 400, { error: "Username and password are required." });
+            return;
+          }
+          const expectedPass = BASIC_AUTH_USERS.get(username);
+          if (!expectedPass || password !== expectedPass) {
+            sendJson(res, 401, { error: "Invalid credentials." });
+            return;
+          }
+          // Ensure the user row exists in the DB.
+          try {
+            const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
+            sqldb.prepare("INSERT OR IGNORE INTO user (id, display_name, created_at) VALUES (?, ?, ?)")
+              .run(username, username, new Date().toISOString());
+            sqldb.close();
+          } catch { /* schema may not exist yet — harmless */ }
+          sendJson(res, 200, { ok: true, username, role: username === "admin" ? "admin" : "user" });
+        })
+        .catch((err) => sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
+
     // Artifact listing — file store only (current-session artifacts).
     // DB artifacts are queried on-demand via query_artifacts and re-surfaced via create_artifact.
     if (pathname === "/ui/api/artifacts" && req.method === "GET") {
@@ -784,7 +886,10 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // POST /ui/api/artifacts/<id>/save — persist from file store to DB, then delete file
+    // POST /ui/api/artifacts/<id>/save — persist from file store to DB, then delete file.
+    // Accepts optional taxonomy fields (categoryId, categoryName, subjectId,
+    // subjectName, tags, provenance) in the JSON body so saved artifacts don't
+    // land in "Uncategorized".
     const saveMatch = pathname.match(/^\/ui\/api\/artifacts\/([^/]+)\/save$/);
     if (saveMatch && req.method === "POST") {
       const id = decodeURIComponent(saveMatch[1]);
@@ -794,38 +899,68 @@ const server = http.createServer((req, res) => {
         res.end("Artifact not found");
         return;
       }
-      try {
-        const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
-        try {
-          const record = hit.record;
-          const content = fs.readFileSync(hit.filePath, "utf-8");
-          const now = new Date().toISOString();
-          const role = record.role || "chart";
-          const tags = JSON.stringify(record.role ? [record.role] : []);
 
-          // Ensure session exists (parameterized)
-          sqldb.prepare(
-            "INSERT OR IGNORE INTO session (id, model_id, title, started_at, prompt_count) VALUES (?, NULL, ?, ?, 1)"
-          ).run(record.sessionId, record.title, record.createdAt);
+      readJsonBody(req)
+        .then((taxBody) => {
+          const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
+          try {
+            const record = hit.record;
+            const content = fs.readFileSync(hit.filePath, "utf-8");
+            const now = new Date().toISOString();
+            const role = record.role || "chart";
+            const catId = typeof taxBody?.categoryId === "string" ? taxBody.categoryId : null;
+            const catName = typeof taxBody?.categoryName === "string" ? taxBody.categoryName : null;
+            const subId = typeof taxBody?.subjectId === "string" ? taxBody.subjectId : null;
+            const subName = typeof taxBody?.subjectName === "string" ? taxBody.subjectName : null;
+            const taxTags = Array.isArray(taxBody?.tags) ? taxBody.tags.filter((t: unknown) => typeof t === "string") : [];
+            const provenance = typeof taxBody?.provenance === "string" ? taxBody.provenance : "{}";
+            const artifactTags = taxTags.length > 0 ? JSON.stringify(taxTags) : JSON.stringify(record.role ? [record.role] : []);
 
-          // Insert artifact (parameterized — no SQL injection via content)
-          sqldb.prepare(
-            "INSERT OR REPLACE INTO artifact (id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, provenance, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-          ).run(
-            record.id, record.sessionId, record.title, record.filename,
-            record.mimeType, role, record.description ?? null, content,
-            record.size, record.createdAt, now, "{}", tags,
-          );
+            // Create taxonomy chain if provided.
+            let subjectIdForSession: string | null = null;
+            if (catId && catName) {
+              sqldb.prepare(
+                "INSERT OR IGNORE INTO category (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+              ).run(catId, catName, now, now);
+            }
+            if (subId && subName && catId) {
+              sqldb.prepare(
+                "INSERT OR IGNORE INTO subject (id, category_id, name, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+              ).run(subId, catId, subName, JSON.stringify(taxTags), now, now);
+              subjectIdForSession = subId;
+            }
 
-          artifactStore.delete(id);
-          sendJson(res, 200, { ok: true, id });
-        } finally {
-          sqldb.close();
-        }
-      } catch (err) {
-        console.error(`[host] artifact save error: ${err instanceof Error ? err.message : String(err)}`);
-        sendJson(res, 500, { error: err instanceof Error ? err.message : "Save failed" });
-      }
+            // Ensure session exists with subject_id and user_id (parameterized)
+            sqldb.prepare(
+              "INSERT OR IGNORE INTO session (id, subject_id, model_id, user_id, title, started_at, prompt_count) VALUES (?, ?, NULL, ?, ?, ?, 1)"
+            ).run(record.sessionId, subjectIdForSession, currentUser, record.title, record.createdAt);
+
+            // Insert artifact (parameterized — no SQL injection via content)
+            sqldb.prepare(
+              "INSERT OR REPLACE INTO artifact (id, session_id, title, filename, mime_type, role, description, content, size_bytes, created_at, updated_at, provenance, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            ).run(
+              record.id, record.sessionId, record.title, record.filename,
+              record.mimeType, role, record.description ?? null, content,
+              record.size, record.createdAt, now, provenance, artifactTags,
+            );
+
+            artifactStore.delete(id);
+
+            // Catalog changed — tell the frontend to refresh the sidebar tree.
+            broadcastAgentWsMessage({
+              type: "catalog_updated",
+              receivedAt: new Date().toISOString(),
+            });
+
+            sendJson(res, 200, { ok: true, id });
+          } finally {
+            sqldb.close();
+          }
+        })
+        .catch((err) => {
+          console.error(`[host] artifact save error: ${err instanceof Error ? err.message : String(err)}`);
+          sendJson(res, 500, { error: err instanceof Error ? err.message : "Save failed" });
+        });
       return;
     }
 
@@ -995,7 +1130,7 @@ const server = http.createServer((req, res) => {
         const category = requestUrl.searchParams.get("category")?.trim() ?? undefined;
         const subject = requestUrl.searchParams.get("subject")?.trim() ?? undefined;
         const role = requestUrl.searchParams.get("role")?.trim() ?? undefined;
-        let records = artifactStore.dbList();
+        let records = artifactStore.dbList(currentUser ?? undefined);
         if (category) {
           records = records.filter((r) => r.category === category);
         }
@@ -1017,7 +1152,7 @@ const server = http.createServer((req, res) => {
     if (artifactMatch && req.method === "GET") {
       const id = decodeURIComponent(artifactMatch[1]);
       // DB first, file store as fallback
-      const dbHit = artifactStore.dbGet(id);
+      const dbHit = artifactStore.dbGet(id, currentUser ?? undefined);
       if (dbHit) {
         if (pathname.endsWith("/metadata")) {
           sendJson(res, 200, dbHit.record);
@@ -1244,6 +1379,12 @@ const server = http.createServer((req, res) => {
         sendJson(res, 503, { error: "Agent abort is not available" });
         return;
       }
+      // Reset the prompt-in-flight guard immediately — the user explicitly
+      // asked to stop, so they should be able to start a new prompt right
+      // away. The underlying session.prompt() will settle on its own (its
+      // .finally() is a no-op after this).
+      promptInFlight = false;
+      clearPromptStallTimer();
       ctx.userQuestionManager?.cancelAll("agent_aborted");
       Promise.resolve(abort.call(ctx.runtime.session))
         .then(() => sendJson(res, 200, { ok: true }))
@@ -1399,6 +1540,23 @@ wss.on("connection", (clientSocket, req) => {
   // /ui/ws/agent — browser runtime event stream. Only serve the loopback-tagged
   // second hop that has passed through the proxy.
   if (wsPathname === "/ui/ws/agent" && req.headers["x-loopback"] === "1") {
+    // Extract user identity for loopback WS connections.
+    // The proxy sets x-authenticated-user. For loopback (no auth enforced),
+    // check query params sent by the React login form.
+    let wsUser = req.headers["x-authenticated-user"] as string | undefined;
+    if (!wsUser || wsUser === "loopback") {
+      const wsUrl = new URL(req.url ?? "/", "http://host.local");
+      const qUser = wsUrl.searchParams.get("user");
+      const qPass = wsUrl.searchParams.get("pass");
+      if (qUser && qPass) {
+        const expectedPass = BASIC_AUTH_USERS.get(qUser);
+        if (expectedPass && qPass === expectedPass) {
+          wsUser = qUser;
+        }
+      }
+    }
+    // Store resolved user on the socket for use by broadcast/event handlers.
+    (clientSocket as any)._dvaUser = wsUser && wsUser !== "loopback" ? wsUser : null;
     agentClients.add(clientSocket);
     agentClientLiveness.set(clientSocket, true);
     clientSocket.on("pong", () => {
@@ -1482,6 +1640,12 @@ server.listen(HOST_PORT, "127.0.0.1", () => {
 return {
   server,
   wss,
+  broadcastCatalogUpdated: () => {
+    broadcastAgentWsMessage({
+      type: "catalog_updated",
+      receivedAt: new Date().toISOString(),
+    });
+  },
   close: () => new Promise<void>((resolve, reject) => {
     clearInterval(keepaliveTimer);
     detachAgentEventBridge();

@@ -38,6 +38,12 @@ data/artifacts/*
 # agent session intermediates
 tmp*/
 
+# db
+*.db
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+
 # python
 __pycache__/
 *.pyc

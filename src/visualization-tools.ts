@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import { defineTool } from "@mariozechner/pi-coding-agent";
@@ -198,6 +199,9 @@ export function createVisualizationTools(options: {
   artifactStore: ArtifactStore;
   getSessionId: () => string | null | undefined;
   cwd?: string;
+  /** Called after persist_artifacts writes to the DB or query_artifacts
+   *  sets a catalog filter, so the host can broadcast catalog_updated. */
+  onCatalogChanged?: () => void;
 }) {
   const cwd = options.cwd ?? process.cwd();
 
@@ -1266,9 +1270,20 @@ Example — "Provide the results of M3 NSA data surveys":
   SELECT id, title, filename, mime_type, role, description, content
   FROM v_artifact_head
   WHERE tags LIKE '%\"m3\"%' AND tags LIKE '%\"nsa\"%'
-  ORDER BY created_at DESC`,
+  ORDER BY created_at DESC
+
+**catalogFilter:** Pass an optional filter object (tags, roles, categories,
+subjects) to control what the sidebar catalog tree displays. Without it the
+sidebar stays empty (or shows the previous filter). Always pass catalogFilter
+with the first query_artifacts call for a new user prompt.`,
     parameters: Type.Object({
       sql: Type.String({ description: "SELECT-only SQL query against data/artifacts.db. Must include content column to render artifacts." }),
+      catalogFilter: Type.Optional(Type.Object({
+        tags: Type.Optional(Type.Array(Type.String(), { description: "Tags to filter the sidebar catalog by (OR match)." })),
+        roles: Type.Optional(Type.Array(Type.String(), { description: "Roles to filter by (OR match)." })),
+        categories: Type.Optional(Type.Array(Type.String(), { description: "Category names to filter by (OR match)." })),
+        subjects: Type.Optional(Type.Array(Type.String(), { description: "Subject names to filter by (OR match)." })),
+      }, { description: "Optional sidebar catalog filter. When provided, the catalog tree in the sidebar will show only artifacts matching these criteria. Leave unset to keep the current filter. Set once per user prompt; subsequent query_artifacts without catalogFilter don't change the filter." })),
     }),
     execute: async (_toolCallId, params) => {
       const sql = (params.sql || "").trim();
@@ -1294,7 +1309,22 @@ Example — "Provide the results of M3 NSA data surveys":
 
       let rows: Record<string, unknown>[];
       try {
-        rows = sqldb.prepare(sql).all() as Record<string, unknown>[];
+        // Automatically scope queries by current user when a browser session
+        // is active. The TUI agent (currentUserId = null) sees everything.
+        const userId = options.artifactStore.currentUserId;
+        let effectiveSql = sql;
+        if (userId) {
+          // Wrap table references in subqueries that filter by user's sessions.
+          const escUser = userId.replace(/'/g, "''");
+          effectiveSql = effectiveSql
+            .replace(/FROM\s+v_artifact_head(\s|$)/gi,
+              `FROM (SELECT a.* FROM v_artifact_head a JOIN session s ON a.session_id = s.id WHERE s.user_id = '${escUser}') AS v_artifact_head `)
+            .replace(/FROM\s+artifact_latest(\s|$)/gi,
+              `FROM (SELECT a.* FROM artifact_latest a JOIN session s ON a.session_id = s.id WHERE s.user_id = '${escUser}') AS artifact_latest `)
+            .replace(/FROM\s+artifact\b(\s|$)/gi,
+              `FROM (SELECT a.* FROM artifact a JOIN session s ON a.session_id = s.id WHERE s.user_id = '${escUser}') AS artifact `);
+        }
+        rows = sqldb.prepare(effectiveSql).all() as Record<string, unknown>[];
       } catch (err) {
         sqldb.close();
         return {
@@ -1347,6 +1377,19 @@ Example — "Provide the results of M3 NSA data surveys":
         }
       }
 
+      // If a catalogFilter was provided, set it server-side so the sidebar
+      // tree only shows matching entries. Also broadcast catalog_updated.
+      const cf = (params as any).catalogFilter;
+      if (cf && (cf.tags?.length || cf.roles?.length || cf.categories?.length || cf.subjects?.length)) {
+        options.artifactStore.setCatalogFilter({
+          tags: cf.tags ?? [],
+          roles: cf.roles ?? [],
+          categories: cf.categories ?? [],
+          subjects: cf.subjects ?? [],
+        });
+        options.onCatalogChanged?.();
+      }
+
       const lines: string[] = [];
       lines.push(`Found ${rows.length} row(s); surfaced ${surfaced.length} to the Documents panel${skipped.length ? `, skipped ${skipped.length}` : ""}.`);
       if (surfaced.length) {
@@ -1367,5 +1410,145 @@ Example — "Provide the results of M3 NSA data surveys":
     },
   });
 
-  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool, parsePdfTool, queryArtifactsTool];
+  // ─── persist_artifacts ────────────────────────────────────────────────────
+  // Moves file-store artifacts into the SQLite catalog DB with full taxonomy
+  // (category → subject → session → artifact). Only call when the user
+  // explicitly asks to save, persist, or add to catalog.
+
+  const persistArtifactsTool = defineTool({
+    name: "persist_artifacts",
+    label: "Persist Artifacts to Catalog",
+    description: `Move file-store artifacts into the SQLite catalog DB so they
+appear in the sidebar tree. Creates category/subject/session rows as needed.
+Only call when the user explicitly asks to save, persist, or add to catalog.
+
+After calling, the catalog tree refreshes automatically via WebSocket.
+Returns a summary of what was persisted and under which taxonomy.`,
+    parameters: Type.Object({
+      artifactIds: Type.Array(Type.String(), {
+        description: "Artifact IDs returned by create_artifact to persist."
+      }),
+      categoryName: Type.String({
+        description: "Category display name, e.g. 'Economics'. Created if missing."
+      }),
+      categoryId: Type.String({
+        description: "Category ID slug, e.g. 'cat-econ-001'."
+      }),
+      subjectName: Type.String({
+        description: "Subject display name, e.g. 'M3 Manufacturing Shipments'."
+      }),
+      subjectId: Type.String({
+        description: "Subject ID slug, e.g. 'sub-m3-manufacturing'."
+      }),
+      subjectDescription: Type.Optional(Type.String({
+        description: "Optional subject description."
+      })),
+      sessionTitle: Type.Optional(Type.String({
+        description: "Session title. Defaults to subjectName + date."
+      })),
+      userId: Type.Optional(Type.String({
+        description: "User ID to associate persisted artifacts with. When omitted, falls back to the current browser-authenticated user (or null for TUI). Use 'admin' or 'user' to simulate multi-tenant scoping from the TUI."
+      })),
+      tags: Type.Optional(Type.Array(Type.String(), {
+        description: "Tags applied to all persisted artifacts (JSON array of strings)."
+      })),
+      provenance: Type.Optional(Type.String({
+        description: "JSON provenance object shared across all artifacts, e.g. '{\"source\":\"census_m3_api\"}'."
+      })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const dbPath = path.resolve(cwd, "data", "artifacts.db");
+      const sqldb = new DatabaseSync(dbPath);
+      const now = new Date().toISOString();
+      const sessionId = `sess-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 6)}`;
+      const sessTitle = params.sessionTitle || `${params.subjectName} — ${new Date().toLocaleDateString()}`;
+      const allTags = params.tags ?? [];
+      const provenance = params.provenance || "{}";
+
+      const persisted: { id: string; title: string; role: string }[] = [];
+      const skipped: { id: string; reason: string }[] = [];
+
+      try {
+        // 1. Ensure category
+        sqldb.prepare(
+          "INSERT OR IGNORE INTO category (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
+        ).run(params.categoryId, params.categoryName, now, now);
+
+        // 2. Ensure subject
+        const subDesc = params.subjectDescription || `Artifacts related to ${params.subjectName}`;
+        sqldb.prepare(
+          "INSERT OR IGNORE INTO subject (id, category_id, name, description, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(params.subjectId, params.categoryId, params.subjectName, subDesc, JSON.stringify(allTags), now, now);
+
+        // 3. Ensure session (with user_id for multi-tenant scoping)
+        const userId = (params as any).userId || options.artifactStore.currentUserId;
+        sqldb.prepare(
+          "INSERT OR IGNORE INTO session (id, subject_id, model_id, user_id, title, started_at, prompt_count, created_at) VALUES (?, ?, NULL, ?, ?, ?, 1, ?)"
+        ).run(sessionId, params.subjectId, userId, sessTitle, now, now);
+
+        // 4. For each artifact, read from file store and INSERT into DB
+        for (const artId of params.artifactIds) {
+          const hit = options.artifactStore.get(artId);
+          if (!hit) {
+            skipped.push({ id: artId, reason: "Artifact not found in file store" });
+            continue;
+          }
+          try {
+            const record = hit.record;
+            const content = fs.readFileSync(hit.filePath, "utf-8");
+            const role = record.role || "chart";
+            const artTags = allTags.length > 0
+              ? JSON.stringify(allTags)
+              : JSON.stringify(record.role ? [record.role] : []);
+
+            sqldb.prepare(
+              `INSERT OR REPLACE INTO artifact
+                 (id, session_id, title, filename, mime_type, role, description,
+                  content, size_bytes, created_at, updated_at,
+                  model_id, replaces_id, provenance, tags)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)`
+            ).run(
+              record.id, sessionId, record.title, record.filename,
+              record.mimeType, role, record.description ?? null, content,
+              record.size, record.createdAt, now, provenance, artTags,
+            );
+
+            // Delete from file store after successful DB insert
+            options.artifactStore.delete(record.id);
+            persisted.push({ id: record.id, title: record.title, role });
+          } catch (err) {
+            skipped.push({ id: artId, reason: err instanceof Error ? err.message : String(err) });
+          }
+        }
+      } finally {
+        try { sqldb.close(); } catch {}
+      }
+
+      const lines: string[] = [];
+      if (persisted.length) {
+        // Notify the host to broadcast catalog_updated to WebSocket clients.
+        options.onCatalogChanged?.();
+
+        lines.push(`Persisted ${persisted.length} artifact(s) under **${params.categoryName} › ${params.subjectName}**:`);
+        for (const p of persisted) lines.push(`  • ${p.title} [${p.role}] (${p.id})`);
+        lines.push("");
+        lines.push("Catalog tree refreshed. User: refresh your browser if the sidebar doesn't update.");
+      }
+      if (skipped.length) {
+        lines.push("");
+        lines.push("Skipped:");
+        for (const s of skipped) lines.push(`  • ${s.id}: ${s.reason}`);
+      }
+      if (persisted.length === 0 && skipped.length === 0) {
+        lines.push("No artifacts to persist.");
+      }
+
+      return {
+        content: [{ type: "text" as const, text: lines.join("\n") }],
+        details: { persisted: persisted.map(p => p.id), skipped: skipped.map(s => s.id), taxonomy: `${params.categoryName}/${params.subjectName}` },
+      };
+    },
+  });
+
+  return [createArtifactTool, createChartSvgTool, createBlsSaNsaChartTool, createDocumentTool, createFredChartTool, createEcChartTool, createAbsChartTool, createAsmChartTool, parsePdfTool, queryArtifactsTool, persistArtifactsTool];
 }
