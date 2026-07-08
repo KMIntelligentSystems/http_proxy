@@ -15,6 +15,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createArtifactStore } from "./artifacts.js";
+import { pullIndicatorDataset } from "./daemon-tools.js";
 import { loadProjectEnv } from "./env.js";
 import { applyModelSelection, startHost, type HostServer } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
@@ -152,6 +153,34 @@ const helloTool = defineTool({
   }),
 });
 
+const pullIndicatorDatasetTool = defineTool({
+  name: "pull_indicator_dataset",
+  label: "Pull Indicator Dataset",
+  description:
+    "Wake the nowcasting daemon to fetch leading-indicator data from FRED, " +
+    "BLS, or Census for a given reference month.  Returns structured JSON " +
+    "with series observations, units, and provenance.  Use when the user " +
+    "asks for fresh economic data or when a nowcast needs updated indicators.",
+  parameters: Type.Object({
+    source: Type.String({ description: "Data source: 'fred', 'bls', or 'census'." }),
+    month: Type.String({ description: "Reference month YYYY-MM." }),
+    series: Type.Optional(Type.Array(Type.String(), { description: "Specific series IDs to fetch (optional; defaults to the source's configured set)." })),
+    model: Type.Optional(Type.String({ description: "OpenRouter model override (optional)." })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const result = await pullIndicatorDataset({
+      source: params.source,
+      month: params.month,
+      series: params.series,
+      model: params.model,
+    });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result) }],
+      details: result,
+    };
+  },
+});
+
 const visualizationTools = createVisualizationTools({
   artifactStore,
   cwd: process.cwd(),
@@ -159,7 +188,7 @@ const visualizationTools = createVisualizationTools({
   onCatalogChanged: () => hostRef.current?.broadcastCatalogUpdated(),
 });
 
-const customTools = [...mcpTools, askUserTool, helloTool, ...visualizationTools];
+const customTools = [...mcpTools, askUserTool, helloTool, pullIndicatorDatasetTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 

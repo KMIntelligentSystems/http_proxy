@@ -3,6 +3,11 @@
 Loaded at session start. Non-generic, project-specific operational knowledge:
 tool quirks, data file locations, BLS API gotchas, architecture decisions.
 
+**The browser is the primary interaction surface**, not the TUI. This file
+documents the browser path in detail; the TUI is a developer fallback. See
+AGENTS.md § "Primary interaction surface: the browser" for the policy
+framing.
+
 ## Frontend rendering rules
 
 The React UI (`/ui`, `src/react-app/src/App.tsx`) renders artifacts in an
@@ -32,10 +37,171 @@ Key properties of the catalog path:
    "document-outline"`, `mimeType: text/markdown`) per active draft. See
    AGENTS.md § "Document outline" for the lifecycle.
 
-**Always use the proxy URL** (`http://localhost:8080/ui/`), not the Vite dev
-server at `:5173`. The `/ui/ws/agent` WebSocket requires the `x-loopback: 1`
-header that only the proxy injects; via Vite the WS connection is a brittle
-4-hop relay.
+**Always use the proxy URL**, not the Vite dev server directly. In local dev,
+load `http://localhost:5173/ui/` (Vite serves the app and proxies `/ui/api`,
+`/ui/ws`, `/ui/data` to the proxy at `:8080`). In production (Railway only),
+Vite is not running — the built `dist/web` is served by the host and accessed
+*through* the proxy at Railway's assigned `PORT` env var (the `:8080` in code is
+just the local default). The `/ui/ws/agent` WebSocket requires the
+`x-loopback: 1` header that only the proxy injects; going directly to the host
+`:3100` or to Vite's own WS relay is a brittle path.
+
+## Browser event contract (`agent-bridge.ts`)
+
+The React app opens a WebSocket to `/ui/ws/agent` at module load and
+discards the raw `agent_event` stream into four named UI panels (Thinking,
+Conversation, Documents, Sidebar — see AGENTS.md § "Browser UX surfaces").
+The agent's output flows through this contract; knowing it lets you reason
+about what the user is actually seeing while you work.
+
+### WS message types handled by the frontend
+
+| `type` | Sent by | Frontend action |
+|---|---|---|
+| `heartbeat` | host (every 30s) | liveness tick only; resets client watchdog |
+| `agent_event` | `session.subscribe()` via `attachAgentEventBridge` | `handleAgentEvent()` → Thinking Panel entry (text/reasoning/tool_call/tool_result/lifecycle) |
+| `artifact_created` | `create_artifact` + `query_artifacts` via `artifactStore.onCreated` | `useAgent` prepends to artifacts state; auto-selects newest |
+| `assistant_response` | host on `agent_prompt_complete` (derived from latest assistant message) | `useConversation` adds a Conversation Panel bubble |
+| `user_question` | `ask_user` tool via `UserQuestionManager` | App shows a modal; user answer POSTs to `/ui/api/agent/answer` |
+| `user_question_resolved` | host when answer received or timeout | App removes the modal from the queue |
+| `agent_state` | host on attach + model switch | `ModelSelector` updates current model display |
+| `catalog_updated` | `persist_artifacts`, `POST .../save`, collection mutations | `useAgent` re-fetches `GET /ui/api/catalog` |
+| `catalog_persisted` | `GET /ui/api/catalog` side-effect | **Not listened** by the frontend — harmless |
+| `agent_prompt_complete` | host when `session.prompt()` resolves | `setWorking(false)`; dispatches `assistant_response`; finalizes thinking |
+| `agent_prompt_error` | host on `session.prompt()` rejection or abort | `setWorking(false)`; surfaces error in Conversation + Thinking |
+| `agent_prompt_stalled` | host stall watchdog (240s silence) | `setWorking(false)`; surfaces stall error |
+| `agent_empty_turn_nudge` | host when a turn ended with no text + no tool calls | Thinking Panel status row; the host auto-sends a nudge prompt |
+| `agent_bridge_status` | host on session attach/detach | logged; not user-visible |
+
+### Stall watchdogs (defensive)
+
+Two independent watchdogs protect against hung turns. Neither forcibly aborts
+the session; they just release the `working` guard so the UI un-spins.
+
+| Watchdog | Where | Threshold | Fires on |
+|---|---|---|---|
+| Client liveness | `agent-bridge.ts` | 75s no inbound WS bytes | half-open socket (edge idle timeout) |
+| Client turn stall | `agent-bridge.ts` | 180s no `agent_event` while `working` | model provider hung the stream |
+| Server turn stall | `host.ts` | 240s no `agent_event` | same, server-side |
+
+If you ever see `agent_prompt_stalled` arrive, the turn was released — the
+user can Submit again. Do not loop trying to "finish" a stalled turn.
+
+### Partial reply + error surfacing
+
+If the assistant streamed *some* text before a provider failure or tool
+exception, `agent-bridge` surfaces **both** the partial reply and the error
+as Conversation bubbles. Do not be surprised to see your earlier text
+appear alongside an error — this is intentional, not a duplicate.
+
+### Cross-tab / discard-save asymmetry
+
+`POST /ui/api/artifacts/<id>/save` and `/discard` update **only the calling
+tab's** React state. There is no `artifact_removed` WS broadcast. If you
+(or another agent) mutate the file store via Playwright or curl, tell the
+user to **refresh their tab** to clear stale entries.
+
+## Cataloguing artifacts: the file-store vs DB distinction
+
+The single most common cataloguing failure is conflating **file-store
+artifacts** (from `create_artifact`) with **SQLite DB artifacts**. They are
+different stores and `query_artifacts` only reads one of them.
+
+### The two stores, explicitly
+
+| Store | Written by | Read by `query_artifacts`? | In sidebar tree? |
+|---|---|---|---|
+| **File store** (in-memory, `/ui/api/artifacts/<id>`) | `create_artifact`, `create_*_chart` | **No** — `query_artifacts` queries SQLite only | No (pushed to Documents panel momentarily via `artifact_created` WS, then gone unless re-selected) |
+| **SQLite DB** (`data/artifacts.db`) | `persist_artifacts` (user says "save") | **Yes** — pivot off `v_artifact_head` | HTML yes; CSV/JSON no (excluded by mime_type) |
+
+### Failure mode this session (2026-07-02 productivity run)
+
+After `create_artifact` produced 5 new artifacts, I ran a `query_artifacts`
+SELECT against `v_artifact_head` to "catalogue" them. The query returned
+**pre-existing M3/STL/nowcast DB artifacts** (created by prior sessions) —
+NOT my 5 new file-store artifacts. I then printed a pending-artifact tree
+listing the 5 new ones as if catalogued, which was false: the actual query
+had surfaced the old DB rows. I then compounded it by calling
+`persist_artifacts` on the word "catalogue" — auto-saving without the user
+saying "save".
+
+**Root causes:** (1) `query_artifacts` cannot surface file-store artifacts;
+they are pushed to the frontend only at creation time via the
+`artifact_created` WS event. (2) "Catalogue" is NOT a persist trigger — only
+"save"/"persist" is.
+
+### Two senses of "catalogue" (do not conflate)
+
+| Sense | Context | Action |
+|---|---|---|
+| **Catalogue existing DB artifacts** | "Show me / catalogue the STL artifacts" (surfacing saved work) | `query_artifacts` + `catalogFilter` (reads SQLite) |
+| **Catalogue newly-created artifacts** | "Catalogue the resulting artifacts in the panel" (after a build/forecast) | Do nothing extra — `create_artifact` already pushed them via `artifact_created` WS and they appear in the Documents panel automatically. Present the pending tree as text. Do NOT query. Do NOT persist. |
+
+### Correct two-turn flow (create turn → save turn)
+
+**Turn 1 — Create (the build/forecast turn):**
+
+1. `create_artifact` produces file-store artifacts. They appear in the
+   Documents panel **automatically** via the `artifact_created` WS event at
+   creation time — no query needed.
+2. Present the pending-artifact tree as a **text summary** in the
+   conversation response. This is prose you write, NOT a `query_artifacts`
+   result. Do NOT run `query_artifacts` here — it reads SQLite and will
+   return old DB rows, not your new file-store artifacts.
+3. **Finish the turn. STOP.** Do not persist. The user now reviews the
+   displayed artifacts.
+
+**Turn 2 — User-initiated follow-up (only when the user speaks):**
+
+- If the user says "modify" / "change" / feedback on the output → revision
+  (re-run the relevant step, replace via `create_artifact`).
+- If the user says "save" / "persist" / "add to catalog" → `persist_artifacts`.
+  This writes to SQLite and broadcasts `catalog_updated`. Then verify with a
+  scoped `query_artifacts` and tell the user to refresh.
+
+**Never auto-persist.** Persistence is user-initiated only. The word
+"catalogue" in a build prompt means *display in the panel*, not *save to DB*.
+
+### Rule of thumb
+
+> **`query_artifacts` is a SQLite read, not a file-store listing.** It can
+> only return what has been `persist_artifacts`'d. File-store artifacts are
+> ephemeral and pushed to the UI only at creation time. Never run
+> `query_artifacts` expecting it to surface `create_artifact` output that
+> hasn't been persisted yet. And never `persist_artifacts` unless the user
+> explicitly says "save" — "catalogue" is a display verb, not a save verb.
+
+## Operating discipline: stop reading, start writing
+
+A recurring failure mode in long multi-step tasks (data fetch → construct →
+forecast → catalogue) is **over-reading**: the agent re-reads files it
+already has, re-verifies alignment it already confirmed, and burns turns
+on forensics instead of producing artifacts. Symptoms:
+
+- Re-`read`-ing a CSV that was already loaded into a Python dict in the
+  same turn.
+- Re-running `query_artifacts` to "check" what was just created.
+- Re-confirming date alignment that was verified two steps ago.
+- Reading the same lookup JSON multiple times across turns.
+
+### Discipline rules
+
+1. **Once loaded into a Python script's memory, the data is in hand.** Do
+   not re-read the source file in a follow-up script unless the script needs
+   a fresh copy.
+2. **Verification has a budget.** One alignment check per dataset join, not
+   one per downstream step. If you verified "242 common months, Apr 2026
+   present" once, trust it for the construction and the forecast.
+3. **When the user aborts mid-bog, do not restart from scratch.** The
+   artifacts and scripts already produced are still valid; resume from the
+   last incomplete step, not step 1.
+4. **Prefer producing an artifact over reading one more file.** If you have
+   enough to write the CSV / HTML / analysis, write it. The marginal value
+   of one more `read` is almost always below the marginal value of one more
+   `create_artifact`.
+5. **Track state mentally, not by re-querying.** After `create_artifact`
+   returns an ID, hold that ID in the conversation; do not `query_artifacts`
+   to rediscover it.
 
 ## Python execution: prefer write+bash over `execute_python`
 
@@ -287,13 +453,6 @@ The app supports a UI-backed clarification tool:
 Timeout/no-client returns `answered: false` with `reason` such as `timeout` or
 `no_active_client`. Agents must not treat those strings as user answers.
 
-### Discard/save asymmetry across browser tabs
-
-`POST /ui/api/artifacts/<id>/save` and `/discard` only update the React state
-of the client that initiated the call. There is no `artifact_removed` WS
-broadcast yet. If you (or another agent) mutate the file store via Playwright
-or a curl call, tell the user to **refresh their tab** to clear stale entries.
-
 ## Pre-Existing Data Files
 
 Check these before fetching fresh data:
@@ -493,9 +652,12 @@ artifact is written if the structural payload differs from the head.
 
 ### WebSocket event mismatch (catalog refresh)
 
+The full WS message table now lives in § "Browser event contract" above.
+Two rows matter for catalog work specifically:
+
 | Event type | Sent by | Listened by frontend? |
 |---|---|---|
-| `catalog_updated` | `persist_artifacts` tool, `POST /ui/api/artifacts/<id>/save`, collection POST/DELETE | **Yes** (agent-bridge.ts:660) |
+| `catalog_updated` | `persist_artifacts` tool, `POST /ui/api/artifacts/<id>/save`, collection POST/DELETE | **Yes** (re-fetches `GET /ui/api/catalog`) |
 | `catalog_persisted` | `GET /ui/api/catalog` when a new catalog row is persisted (host.ts) | **No** |
 | `artifact_created` | `create_artifact` + `query_artifacts` (via `artifactStore.onCreated`) | **Yes** |
 

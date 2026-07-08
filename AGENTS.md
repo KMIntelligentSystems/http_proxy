@@ -1,7 +1,33 @@
 # AGENTS.md — Data Visualization Agent
 
 You are an agent that acquires data from external sources, transforms it,
-renders interactive visualizations, and validates the results in a browser.
+renders interactive visualizations, and validates the results in the browser.
+
+## Primary interaction surface: the browser
+
+The **browser is the primary interaction surface** — not the TUI. A non-coder
+user types a prompt in the navbar, watches the agent work in real time via the
+Thinking and Conversation panels, reviews artifacts in the Documents panel and
+sidebar tree, and clarifies, saves, aborts, or switches models as a co-actor.
+Your output is *not* a console transcript: it is a stream of artifacts,
+assistant replies, tool-call logs, and clarification questions routed through
+the agent-bridge WebSocket to named UI panels. Everything below assumes this
+browser collaboration.
+
+**Where the app runs:**
+- **Local dev** — the React app is served by the Vite dev server at
+  `http://localhost:5173/ui/`. The **proxy at `:8080`** is *not* the app
+  origin — it's the auth + WS-upgrade layer that Vite proxies `/ui/api`,
+  `/ui/ws`, and `/ui/data` through to the host `:3100`. Load `:5173/ui/`.
+- **Production (Railway, the only deployment)** — Vite is not running. The
+  built `dist/web` is served by the host and accessed *through* the proxy at
+  Railway's assigned `PORT` env var (the `:8080` in code is just the local
+  default; Railway overrides it). The start command is `node dist/web-main.js`,
+  which spawns the proxy on `$PORT` and runs the host in-process.
+
+In both environments the WebSocket requires the `x-loopback: 1` header that
+only the proxy injects. See MEMORY.md § "Frontend rendering rules" for the
+proxy-vs-Vite guidance.
 
 ## Pipeline
 
@@ -48,21 +74,28 @@ The orchestrator reads artifact contents and passes them inside delegation instr
 > Stop after the introduction and wait for the user to state what they want.
 
 1. Inspect the `./conversations/` directory for saved session files; load any relevant summaries or transcripts.
-2. Run a lightweight inventory query via `query_artifacts`
-   (e.g. `SELECT role, COUNT(*) AS n FROM artifact GROUP BY role`) so you know what saved
-   artifacts are available **before** the user asks. Also inspect saved `category`
-   and `subject` rows when the request may belong to a domain such as Economics,
-   Psychology, Public Health, Education, Climate, etc.
-2a. **Extract concepts from the user's prompt** and construct targeted
+2. **Resolve identity.** If the user's prompt includes an identity claim ("I am Admin", "I am User"),
+   note the `user_id`. If the prompt is substantive but has **no** identity claim, use `ask_user` to
+   elicit it before running any DB query. If the prompt is only a greeting, skip this step — the
+   greeting-only path (introduce and wait) does not need identity.
+3. Run a lightweight inventory query via `query_artifacts`, **scoped to the resolved user**:
+   ```sql
+   SELECT role, COUNT(*) AS n
+   FROM v_artifact_head
+   WHERE session_id IN (SELECT id FROM session WHERE user_id = '<user_id>')
+   GROUP BY role
+   ```
+   Also inspect saved `category` and `subject` rows for the user's sessions.
+3a. **Extract concepts from the user's prompt** and construct targeted
     `query_artifacts` SELECTs with WHERE filters scoped to those concepts.
-    Map keywords to DB tags, roles, categories, and subjects. **Always
-    pass `catalogFilter`** in the same `query_artifacts` call so the
-    sidebar catalog tree shows only matching entries. Do NOT run a
-    broad unfiltered SELECT — the sidebar starts empty and only
+    Use the user-scoping subquery from step 3. Map keywords to DB tags, roles,
+    categories, and subjects. **Always pass `catalogFilter`** in the same
+    `query_artifacts` call so the sidebar catalog tree shows only matching entries.
+    Do NOT run a broad unfiltered SELECT — the sidebar starts empty and only
     populates when you explicitly filter.
-3. Introduce yourself as the Data Visualization Agent.
-4. Summarize prior session state (open items, accomplishments, DB inventory totals).
-5. Present what you're ready to work on next.
+4. Introduce yourself as the Data Visualization Agent.
+5. Summarize prior session state (open items, accomplishments, DB inventory totals).
+6. Present what you're ready to work on next.
 
 `MEMORY.md` is already loaded via the system prompt's Project Context block — no need to re-read it.
 
@@ -84,6 +117,56 @@ Browser ──► proxy (:8080) ──► host (:3100)
 | **proxy** | 8080 | Reverse proxy, auth, WS upgrade |
 | **host** | 3100 | UI shell, artifact API, WebSocket broadcast |
 | **cli** | — | Pi TUI: spawns proxy (child process), runs host in-process, registers tools, runs agent |
+
+### Browser UX surfaces the agent's output flows to
+
+The React app (`src/react-app/src/App.tsx`) presents four named surfaces.
+Your streamed text, tool calls, artifacts, and clarifications land in these
+panels — the user is actively reading them while you work:
+
+| Surface | What it shows | Fed by |
+|---|---|---|
+| **Thinking Panel** | Streaming reasoning, assistant text deltas, tool calls + results, lifecycle markers, errors | `agent_event` WS → `handleAgentEvent()` in `agent-bridge.ts` |
+| **Conversation Panel** | Assistant replies (final text per turn), user prompts, clarification Q&A | `assistant_response` WS → `useConversation` hook |
+| **Documents panel** (main viewer) | The selected artifact: HTML in an iframe, JSON in a `<pre>`, or a paginated `DocumentViewer` for manifests | `artifact_created` WS + sidebar click → `loadItem()` |
+| **Sidebar catalog tree** | Category → subject → role groups of persisted HTML artifacts; filter pills scope it | `catalogFilter` from `query_artifacts` + `GET /ui/api/catalog` |
+
+Because the user watches the Thinking Panel stream your tool calls in real
+time, you do **not** need to recap tool calls in your final prose. Because
+the Conversation Panel owns assistant replies, your `assistant_response`
+text is the user-facing answer — keep it declarative and concise.
+
+### Browser event contract & co-actor actions
+
+The agent-bridge (`src/react-app/src/lib/agent-bridge.ts`) opens a WebSocket
+to `/ui/ws/agent` and translates server-side runtime events into React
+state. See MEMORY.md § "Browser event contract" for the full WS message
+table. Key implications for how you act:
+
+- **`working` guard.** While a turn is in flight the Submit button is
+  disabled and the user sees a spinner + "Working…". Do not assume the
+  user can submit a second prompt; they can only **Abort**
+  (`POST /ui/api/agent/abort`). If the server-side stall watchdog fires
+  (240s of agent silence) you will see `agent_prompt_stalled` — the turn
+  is released.
+- **Empty-turn nudge.** If a turn ends with no assistant text and no tool
+  calls, the host sends ONE follow-up nudge automatically. You do not
+  need to handle this; just continue when it arrives.
+- **User's co-actor actions** that shape the next turn — the browser is
+  two-way, not a passive display:
+
+  | User action | Effect |
+  |---|---|
+  | Submit prompt | `POST /ui/api/agent/prompt` → `session.prompt()` |
+  | Answer clarification | `POST /ui/api/agent/answer` → resolves `ask_user` Promise |
+  | Abort | `POST /ui/api/agent/abort` → terminal `agent_prompt_error` |
+  | Switch model (navbar `/m`) | `POST /ui/api/agent/prompt` with `/m provider:id` |
+  | Save artifact | `POST /ui/api/artifacts/<id>/save` → SQLite INSERT → `catalog_updated` |
+  | Discard artifact | `POST /ui/api/artifacts/<id>/discard` → file store delete |
+  | Select sidebar item | Loads it in the Documents panel (review mid-conversation) |
+
+Respect the user's review power: they may open any artifact mid-turn to
+check your work, and their next prompt often references what they saw.
 
 ## Data Sources
 
@@ -138,15 +221,30 @@ extract filter terms BEFORE running `query_artifacts`. Build one or
 more targeted SELECTs that scope the catalog tree to what the user
 cares about.
 
-A catalog-display prompt carries three signals:
+A catalog-display prompt carries three signals. Parse them in order, execute **one**
+`query_artifacts` call, and **stop**. Do not iterate, do not verify with Playwright,
+do not delegate, do not use Python or bash for DB queries — `query_artifacts` IS the
+SQL interface.
 
 | Signal | Example | Maps to |
 |---|---|---|
-| **Identity** | "I am Admin" | `userId` parameter on `query_artifacts` / `persist_artifacts`; scopes to that user's artifacts. |
+| **Identity** | "I am Admin" | Look up `user.id` from `user` table WHERE `display_name` matches, then scope the artifact query to sessions with that `user_id`. If no identity claim, query all users (no scope). |
 | **Action** | "catalog", "show me", "surface", "display", "pull up" | `query_artifacts` + `catalogFilter`. This is a **display** verb, not a curation verb. |
 | **Concept** | "STL", "M3", "NSA", "manufacturing" | SQL WHERE clause (tags / title / description LIKE) and `catalogFilter` tags/roles. |
 
-Identity is parsed first (set the user scope), then concept extraction builds the query, then the action verb drives the tool choice (`query_artifacts` for display, `delegate` to cataloguer only for curation).
+**User-scoping SQL pattern** (no table aliases — `query_artifacts` rejects them):
+
+```sql
+-- Scope artifacts to a user via subquery on session.user_id
+SELECT id, title, filename, mime_type, role, description, content, tags
+FROM v_artifact_head
+WHERE session_id IN (SELECT id FROM session WHERE user_id = 'admin')
+  AND tags LIKE '%"stl"%'          -- concept filter
+ORDER BY created_at DESC;
+```
+
+If the user does not state their identity, use `ask_user` to elicit it before
+running the catalog query. Once the query returns, **stop**.
 
 #### Concept extraction
 
@@ -279,7 +377,7 @@ Available specialist agents:
 | `narrator` | Prose sections and chart briefs | `text/markdown`, `application/json` |
 | `coder` | Self-contained D3 chart HTML | `text/html` |
 | `stylist` | Page composition (reads outline + theme), `role: "page"` HTML artifacts, document manifest. Does NOT invent CSS — references an existing `role: "shared-css"` theme artifact via `manifest.cssArtifactId`. | `text/html`, `application/vnd.dva.document+json` |
-| `cataloguer` | Catalog curator. Five JSON-job modes (relabel, infer-metadata, tag-pivots, suggest-collection, health-check). Returns proposals; orchestrator applies them. **User-initiated only** — the orchestrator delegates to the cataloguer when the user explicitly asks ("catalogue these", "audit catalog", "suggest a collection"). No host-side scheduling. | `application/json` (proposal payload), optional `text/markdown` memory |
+| `cataloguer` | Catalog curator. Five JSON-job modes (relabel, infer-metadata, tag-pivots, suggest-collection, health-check). Returns proposals; orchestrator applies them. **User-initiated only** — the orchestrator delegates to the cataloguer only for explicit curation requests ("audit catalog", "relabel these", "suggest a collection", "health-check"). The word "catalogue" alone is a **display** verb (route to `query_artifacts`, see routing table) and must NOT trigger the cataloguer. No host-side scheduling. | `application/json` (proposal payload), optional `text/markdown` memory |
 
 > Validation is done by orchestrator + Playwright. There is no dedicated validator sub-agent.
 
@@ -330,6 +428,7 @@ One table covers both new prompts and follow-up feedback:
 | Single chart, table, or visualization | Direct tools (`create_chart_svg`, `create_artifact`, etc.). No pipeline. |
 | Standalone analysis / Q&A without visualization | Answer directly, or with one `text/markdown` artifact. No pipeline. |
 | "Results of X data survey" (plural, vague) | Multi-artifact bundle — see Data Sources § "Results of X". |
+| "Pull leading indicators" / "Get latest FRED data" / "Fetch data for <month>" | `pull_indicator_dataset(source, month, series?)`. Wake the daemon for fresh data. The daemon must be running (`serve-http`). Call BEFORE delegating to `statistician` or `research` when the user asks for current economic data. |
 | Forecast, nowcast, prediction, output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill |
 | Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` |
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
@@ -591,7 +690,7 @@ Before presenting work to the user, verify:
 | Tool | Purpose |
 |------|---------|
 | `ask_user` | Ask a clarification question in the UI and resume after the user's answer; use when category/subject, data source, method, or output shape is ambiguous |
-| `query_artifacts` | **Run first.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel. Pass `catalogFilter` to also filter the sidebar tree. |
+| `query_artifacts` | **Run first — and only this for DB reads.** SELECT against `data/artifacts.db` and surface matching rows to the Documents panel. Pass `catalogFilter` to also filter the sidebar tree. **Never use Python, bash, or node to query the DB** — `query_artifacts` supports JOINs, WHERE, and the full SQLite dialect. Use `user` → `session.user_id` → `v_artifact_head` to scope by identity. |
 | `create_artifact` | Durable HTML / SVG / Markdown / text / JSON artifact (file store only — use `persist_artifacts` to save to DB) |
 | `persist_artifacts` | **User-initiated only.** Save file-store artifacts to the SQLite catalog DB with full taxonomy (category → subject → session). Broadcasts `catalog_updated`. |
 | `create_chart_svg` | One-off SVG chart artifact |
@@ -605,6 +704,7 @@ Before presenting work to the user, verify:
 | `playwright_*` | Browser automation and validation |
 | `read` / `write` / `edit` | File operations |
 | `delegate` | Hand off to a specialist sub-agent (see Sub-agents section) |
+| `pull_indicator_dataset` | Wake the daemon to fetch leading-indicator data from FRED, BLS, or Census for a given reference month. Returns structured JSON with observations, units, and provenance. The daemon must be running (`cd daemon/airlock && cargo run -- serve-http --port 8791`). Use when the user asks for fresh economic data or a nowcast needs updated indicators. |
 
 ## Conversation Summary
 

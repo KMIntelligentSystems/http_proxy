@@ -326,7 +326,7 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
             className="dv-iframe"
             src={viewArtifact.url}
             title={viewArtifact.title}
-            /* no sandbox — artifacts are same-origin trusted content */
+            sandbox="allow-scripts"
           />
         ) : (
           <div className="empty-state">
