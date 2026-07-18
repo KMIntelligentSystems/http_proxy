@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
@@ -87,6 +88,18 @@ let lastAgentEventAt = 0;
 let promptStartedAt = 0;
 let promptStallTimer: ReturnType<typeof setInterval> | null = null;
 let lastStallSessionId: string | null = null;
+
+// ─── Daemon broadcast bridge ───────────────────────────────────────────────
+// The active agent session, exposed so the broadcast endpoint can inject
+// notification prompts into the orchestrator when new data arrives.
+let activeAgentSession: AgentSession | undefined;
+
+const DAEMON_URL = process.env["DAEMON_URL"] ?? "http://127.0.0.1:8791";
+const DAEMON_HMAC_KEY = process.env["DAEMON_HMAC_KEY"] ?? "dev-insecure-hmac-key-change-me";
+
+function daemonHmacSign(payload: string): string {
+  return crypto.createHmac("sha256", DAEMON_HMAC_KEY).update(payload).digest("hex");
+}
 
 // ─── Empty-turn auto-nudge ─────────────────────────────────────────────────
 //
@@ -489,20 +502,19 @@ function getAgentState(ctx: HostContext) {
 }
 
 function attachAgentEventBridge(ctx: HostContext): () => void {
-  let activeSession: AgentSession | undefined;
   let unsubscribe: (() => void) | undefined;
 
   function detachSession() {
     unsubscribe?.();
     unsubscribe = undefined;
-    activeSession = undefined;
+    activeAgentSession = undefined;
   }
 
   function attachSession(session: AgentSession) {
-    if (session === activeSession) return;
+    if (session === activeAgentSession) return;
 
     unsubscribe?.();
-    activeSession = session;
+    activeAgentSession = session;
     unsubscribe = session.subscribe((event) => {
       // Stall-watchdog liveness: any event proves the agent loop is making
       // forward progress, so reset the silence timer.
@@ -639,6 +651,28 @@ export async function applyModelSelection(
 
 async function handleModelSlashCommand(input: string, session: AgentSession): Promise<ModelCommandResult> {
   const arg = input.slice(2).trim();
+  // Reload models.json so edits since session start (e.g. newly added models)
+  // appear without a host restart — mirrors the TUI /model picker, which calls
+  // modelRegistry.refresh() every time it opens.
+  try {
+    session.modelRegistry.refresh();
+  } catch (err) {
+    return {
+      ok: false,
+      changed: false,
+      message: `Failed to reload models.json: ${err instanceof Error ? err.message : String(err)}`,
+      current: session.model ? summarizeModel(session.model) : undefined,
+    };
+  }
+  const loadError = session.modelRegistry.getError();
+  if (loadError) {
+    return {
+      ok: false,
+      changed: false,
+      message: `models.json error: ${loadError}`,
+      current: session.model ? summarizeModel(session.model) : undefined,
+    };
+  }
   const current = session.model;
   const currentSummary = current ? summarizeModel(current) : undefined;
 
@@ -668,6 +702,130 @@ async function handleModelSlashCommand(input: string, session: AgentSession): Pr
 }
 
 // ─── HTTP server ─────────────────────────────────────────────────────────────
+
+// ─── Daemon broadcast handler ──────────────────────────────────────────
+// Receives a signed AvailabilityBroadcast from the daemon, verifies it,
+// pulls the dataset, stores it as an artifact, and notifies the orchestrator.
+
+interface BroadcastBody {
+  schemaVersion: number;
+  broadcastId: string;
+  datasetId: string;
+  referenceMonth: string;
+  target: string;
+  source: string;
+  seriesIncluded: string[];
+  releaseDate: string;
+  contentHash: string;
+  emittedAt: string;
+}
+
+async function handleDaemonBroadcast(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  ctx: HostContext,
+): Promise<void> {
+  // 1. Parse and verify HMAC signature
+  let payload: any;
+  try {
+    const text = await readRequestText(req);
+    payload = JSON.parse(text);
+  } catch {
+    sendJson(res, 400, { error: "invalid JSON body" });
+    return;
+  }
+
+  const broadcastBody: BroadcastBody = payload;
+  const signature = payload?.signature?.value as string | undefined;
+  if (!signature || !broadcastBody?.datasetId) {
+    sendJson(res, 400, { error: "missing broadcast body or signature" });
+    return;
+  }
+
+  const signable = JSON.stringify(broadcastBody);
+  const expectedSig = daemonHmacSign(signable);
+  if (signature !== expectedSig) {
+    sendJson(res, 401, { error: "HMAC verification failed" });
+    return;
+  }
+
+  const { datasetId, referenceMonth, target, source, seriesIncluded, contentHash } = broadcastBody;
+  console.log(`[daemon broadcast] verified source=${source} target=${target} month=${referenceMonth} dataset=${datasetId} series=${seriesIncluded.join(",")}`);
+
+  // 2. Pull dataset from daemon
+  let dataset: any;
+  try {
+    const pullSig = daemonHmacSign(datasetId);
+    const pullResp = await fetch(`${DAEMON_URL}/datasets/${datasetId}`, {
+      headers: { "X-Daemon-Sig": pullSig },
+    });
+    if (!pullResp.ok) {
+      sendJson(res, 502, { error: `daemon pull failed: HTTP ${pullResp.status}` });
+      return;
+    }
+    dataset = await pullResp.json();
+  } catch (err) {
+    sendJson(res, 502, { error: `daemon pull failed: ${err instanceof Error ? err.message : String(err)}` });
+    return;
+  }
+
+  // 3. Verify content hash
+  const datasetJson = JSON.stringify(dataset);
+  const actualHash = crypto.createHash("sha256").update(datasetJson).digest("hex");
+  if (actualHash !== contentHash) {
+    sendJson(res, 422, { error: `content hash mismatch: expected ${contentHash}, got ${actualHash}` });
+    return;
+  }
+
+  // 4. Store as artifact (file store — visible in Documents panel, Savable)
+  const artifactStore = ctx.artifactStore;
+  if (!artifactStore) {
+    sendJson(res, 500, { error: "artifact store not available" });
+    return;
+  }
+
+  const title = `[Daemon] ${target} — ${source} — ${referenceMonth}`;
+  let artifactId: string;
+  try {
+    const record = await artifactStore.create({
+      title,
+      filename: `daemon-${datasetId}.json`,
+      mimeType: "application/json",
+      role: "dataset-meta",
+      description: `Leading indicators from daemon ${source} for reference month ${referenceMonth}. Series: ${seriesIncluded.join(", ")}. Target: ${target}.`,
+      content: datasetJson,
+    });
+    artifactId = record.id;
+  } catch (err) {
+    sendJson(res, 500, { error: `artifact store failed: ${err instanceof Error ? err.message : String(err)}` });
+    return;
+  }
+
+  console.log(`[daemon broadcast] stored artifact ${artifactId}`);
+
+  // 5. Broadcast WebSocket event to UI panels
+  broadcastAgentWsMessage({
+    type: "daemon_dataset_available",
+    datasetId,
+    referenceMonth,
+    target,
+    source,
+    seriesIncluded,
+    artifactId,
+    receivedAt: new Date().toISOString(),
+  });
+
+  // 6. The broadcast no longer reaches the interactive orchestrator. The
+  // target refresh-daemon (src/refresh-daemon.ts) is the receiver that applies
+  // the leading indicators through a contained Oracle + 4-verb airlock. The
+  // React host only emits an informational WS event — never a prompt() — so
+  // untrusted broadcast-derived content cannot reach a capability-bearing LLM.
+  // (This legacy handler is retained only for dev back-compat; in the two-daemon
+  // architecture broadcasts are POSTed to the refresh-daemon, not here.)
+
+  // Respond. (No prompt() is ever called; the agent turn is not involved.)
+  sendJson(res, 200, { ok: true, artifactId, note: "stored (broadcast handler is legacy; refresh-daemon is the receiver)" });
+}
 
 export function startHost(ctx: HostContext = {}): HostServer {
 const artifactStore = ctx.artifactStore ?? createArtifactStore(path.resolve(PROJECT_ROOT, "data", "artifacts"));
@@ -1200,6 +1358,19 @@ const server = http.createServer((req, res) => {
           sendJson(res, 503, { error: "Model registry not available" });
           return;
         }
+        // Reload models.json so newly added models appear without a restart,
+        // matching the TUI /model picker behavior.
+        try {
+          registry.refresh();
+        } catch (err) {
+          sendJson(res, 500, { error: `Failed to reload models.json: ${err instanceof Error ? err.message : String(err)}` });
+          return;
+        }
+        const loadError = registry.getError();
+        if (loadError) {
+          sendJson(res, 500, { error: `models.json error: ${loadError}` });
+          return;
+        }
         const available = registry.getAvailable().map(summarizeModel);
         const current = session.model ? summarizeModel(session.model) : null;
         sendJson(res, 200, { current, available });
@@ -1435,6 +1606,15 @@ const server = http.createServer((req, res) => {
         blsReq.write(payload);
         blsReq.end();
       });
+      return;
+    }
+
+    // ── POST /ui/api/daemon/broadcast — receive a signed AvailabilityBroadcast ───
+    // The daemon POSTs here after fetching and storing data.  We verify the HMAC,
+    // pull the dataset, hash-verify it, store it as an artifact, and notify the
+    // orchestrator (if an agent session is active).
+    if (pathname === "/ui/api/daemon/broadcast" && req.method === "POST") {
+      handleDaemonBroadcast(req, res, ctx);
       return;
     }
 

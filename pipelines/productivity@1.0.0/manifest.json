@@ -1,0 +1,14 @@
+{
+  "pipelineId": "productivity-seasonal-rw",
+  "version": "1.0.0",
+  "runtime": "node",
+  "entrypoint": "run.js",
+  "description": "Manufacturing productivity proxy via seasonal random walk. Semantics (c) pure re-derivation — no model state. prod(M) = prod(M-12) with a rolling-origin residual PI. Composes real_output (M3 shipments / IPMAN deflator) / aggregate_hours (CES employment × AWH). Deterministic given (input, contract, env); no scientific packages required.",
+  "envLock": "requirements.txt",
+  "acceptedSeries": ["m3_total_shipments_nsa", "fred_ipman", "bls_ces_mfg_employment", "bls_ces_mfg_hours"],
+  "params": {
+    "anchorLagMonths": 12,
+    "piWindowMonths": 36,
+    "piLevels": [0.80, 0.95]
+  }
+}

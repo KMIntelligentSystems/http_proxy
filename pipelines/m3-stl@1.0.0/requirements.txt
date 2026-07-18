@@ -1,0 +1,7 @@
+# Locked numeric environment for m3-stl@1.0.0.
+# Pinned to the versions recorded in the May 2026 SARIMA model card caveat
+# (Python 3.12.10, statsmodels 0.14.6) so recomputation is byte-stable.
+# env_hash = sha256 of this file; a bump invalidates every contract version.
+numpy==1.26.4
+pandas==2.2.2
+statsmodels==0.14.6

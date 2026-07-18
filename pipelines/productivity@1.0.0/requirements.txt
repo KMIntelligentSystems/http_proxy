@@ -1,0 +1,4 @@
+# No third-party dependencies — this skill is pure Node arithmetic
+# (seasonal random walk + rolling-origin residual quantiles). The env_hash
+# is therefore over the Node major version only, recorded in the contract.
+# (Locked for reproducibility discipline; empty of packages.)

@@ -1,0 +1,5 @@
+# Locked numeric environment for m3-sarima@1.0.0.
+# Pinned to the versions in the May 2026 SARIMA model card caveat.
+numpy==1.26.4
+pandas==2.2.2
+statsmodels==0.14.6

@@ -1,0 +1,15 @@
+{
+  "pipelineId": "m3-leading-indicator-nowcast",
+  "version": "1.0.0",
+  "runtime": "python",
+  "entrypoint": "run.py",
+  "description": "Bridge-equation LASSO nowcast of annual real manufacturing output. glm-5-2-plan semantics (a): frozen-weight re-score. YTD feature re-derivation through cutoff t -> frozen coef/scaler re-score -> frozen empirical PI. The flagship frozen-re-score technique (NOT a refit).",
+  "envLock": "requirements.txt",
+  "acceptedSeries": ["m3_new_orders", "m3_unfilled_orders", "fred_mcumfn", "fred_ipman", "fred_tcu", "bls_ces_mfg_hours"],
+  "params": {
+    "selectedEstimator": "lasso_cv",
+    "excluded": ["ols", "stepwise_bic"],
+    "piLevels": [0.80, 0.95]
+  },
+  "status": "scaffold — frozen weights TODO. The LASSO coef/scaler/feature-order must be extracted by re-fitting against the indicator panel (data/nowcast_indicator_panel.csv, gitignored) and frozen to pipelines/m3-leading-indicator-nowcast@1.0.0/weights.json. Contract recorded so the broker routes here; run_nowcast_skill rejects with 'weights not frozen' until then."
+}

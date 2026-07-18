@@ -1,0 +1,17 @@
+{
+  "pipelineId": "m3-stl",
+  "version": "1.0.0",
+  "runtime": "python",
+  "entrypoint": "run.py",
+  "description": "M3 NSA Total Manufacturing Shipments — STL seasonal-trend decomposition (robust) with a 24-month linear trend extrapolation + 5-year average seasonal factor one-step forecast. glm-5-2-plan semantics (b): refit with pinned params + env. STL is local, cheap, deterministic given (data, params, env), so refit-on-append preserves the purity contract.",
+  "envLock": "requirements.txt",
+  "acceptedSeries": ["m3_total_shipments_nsa"],
+  "params": {
+    "period": 12,
+    "robust": true,
+    "trendExtrapolationWindowMonths": 24,
+    "seasonalAverageYears": 5,
+    "piResidualWindowMonths": 36,
+    "piLevels": [0.80, 0.95]
+  }
+}

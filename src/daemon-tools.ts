@@ -17,6 +17,11 @@ import crypto from "node:crypto";
 
 const DAEMON_URL = process.env["DAEMON_URL"] ?? "http://127.0.0.1:8791";
 const HMAC_KEY = process.env["DAEMON_HMAC_KEY"] ?? "dev-insecure-hmac-key-change-me";
+// The target refresh-daemon that owns indicator_history. The React side mirrors
+// pulled indicators here so the target can extend its YTD series without sharing
+// the React filesystem. If unset or unreachable, the mirror is skipped (the
+// interactive run is never broken by a missing target).
+const REFRESH_DAEMON_URL = process.env["REFRESH_DAEMON_URL"] ?? "http://127.0.0.1:8792";
 
 /** HMAC-SHA256 hex of the payload. */
 function hmacSign(payload: string): string {
@@ -120,7 +125,7 @@ export async function pullIndicatorDataset(opts: {
 
   const dataset: any = await pullResp.json();
 
-  return {
+  const result: PullResult = {
     ok: true,
     datasetId,
     contentHash: outcome.outcome.contentHash,
@@ -130,4 +135,50 @@ export async function pullIndicatorDataset(opts: {
     seriesIncluded: outcome.outcome.seriesIncluded,
     indicators: dataset.indicators,
   };
+
+  // Mirror the pulled indicators to the target refresh-daemon's indicator_history
+  // table. This is the transparent capture: whatever the interactive statistician
+  // just used gets recorded so the target can extend its YTD series going forward.
+  // Best-effort — never breaks the interactive run if the target is unreachable.
+  mirrorIndicatorsToHistory(result).catch(() => {});
+
+  return result;
+}
+
+/**
+ * POST the pulled indicators to the target refresh-daemon's /refresh/bootstrap
+ * endpoint (HMAC-authed, same key). The target upserts into indicator_history.
+ * Silent on failure — the interactive pull's success is not coupled to the
+ * target's availability.
+ */
+async function mirrorIndicatorsToHistory(result: PullResult): Promise<void> {
+  if (!result.ok || !result.indicators?.length) return;
+  const body = JSON.stringify({
+    series: result.indicators.map((ind: any) => ({
+      seriesId: ind.seriesId,
+      observations: (ind.observations ?? []).map((o: any) => ({
+        date: o.date,
+        value: o.value,
+        isPreliminary: o.isPreliminary ?? false,
+      })),
+    })),
+  });
+  const sig = hmacSign(body);
+  try {
+    const resp = await fetch(`${REFRESH_DAEMON_URL}/refresh/bootstrap`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Daemon-Sig": sig },
+      body,
+    });
+    if (resp.ok) {
+      const j: any = await resp.json();
+      console.log(`[daemon-tools] mirrored ${j.seeded ?? 0} indicator obs to target history`);
+    } else {
+      console.warn(`[daemon-tools] target history mirror returned ${resp.status}`);
+    }
+  } catch (err) {
+    // Target not running — fine in dev. The data is still in the source daemon's
+    // sandbox DB and will arrive via the next broadcast if the target comes up.
+    console.warn(`[daemon-tools] target history mirror skipped: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }

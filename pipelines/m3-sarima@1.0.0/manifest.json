@@ -1,0 +1,17 @@
+{
+  "pipelineId": "m3-sarima",
+  "version": "1.0.0",
+  "runtime": "python",
+  "entrypoint": "run.py",
+  "description": "M3 NSA Total Manufacturing Shipments — SARIMA(1,0,1)(1,1,0)[12] on log-levels with drift. glm-5-2-plan semantics (b): refit with pinned params + env. One new observation → MLE refit (reproducible given data+params+env) → one-step forecast + frozen-residual PI.",
+  "envLock": "requirements.txt",
+  "acceptedSeries": ["m3_total_shipments_nsa"],
+  "params": {
+    "order": [1, 0, 1],
+    "seasonal_order": [1, 1, 0, 12],
+    "transformation": "log",
+    "trend": "drift",
+    "piLevels": [0.80, 0.95]
+  },
+  "status": "scaffold — skill executable TODO. The pinned spec is frozen from the May 2026 model card (mqnf8wxi); the refit implementation + frozen residual distribution land in a follow-up. The contract is recorded so the broker routes here; run_nowcast_skill will reject with 'skill not implemented' until then."
+}
