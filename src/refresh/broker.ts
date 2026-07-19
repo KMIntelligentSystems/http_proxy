@@ -112,6 +112,7 @@ export interface RefreshContract {
   optionalSeries: string[];
   piWideningFactor: number;
   replacesTitlePatterns: string[];
+  regimeDummies?: string[];
 }
 
 const CONTRACTS_DIR = path.resolve(__dirname, "..", "..", "data", "contracts");
@@ -180,6 +181,70 @@ export function runNowcastSkill(contract: RefreshContract, input: { dataset: any
     });
     child.stdin.end(JSON.stringify(input));
   });
+}
+
+// ── TaskContext (mirrors daemon grammar.rs TaskContext) ──────────────────
+// The one-time handshake the broker builds from a ready job + contract and
+// passes to the oracle at spawn (as argv / first message) — NOT through
+// dispatch. It tells the oracle WHICH job it is working: the contract, the
+// month, the in-scope series, the pinned pipeline, the verified dataset to
+// apply, and the budget ceiling. The system prompt (mechanism B) names the
+// verbs + rules; the TaskContext gives the specific job instance.
+export interface BudgetCtx {
+  max_tool_calls: number;
+  wall_clock_secs: number;
+}
+export interface TaskContext {
+  schemaVersion: number;
+  sessionId: string;
+  contractId: string;
+  subjectId: string;
+  referenceMonth: string;
+  target: string;
+  goal: string;
+  model: string;
+  pipeline: string;        // the pinned skill, e.g. "m3-stl@1.0.0"
+  semantics: string;       // a-frozen-rescore | b-refit-pinned | c-rederive
+  requiredSeries: string[];// the series in-scope for this contract
+  optionalSeries: string[];
+  datasetId: string;       // the verified broadcast dataset to apply
+  budget: BudgetCtx;
+  regimeDummies: string[];// which breaks are active (from the contract)
+}
+
+const REFRESH_MODEL_DEFAULT = process.env["REFRESH_LLM_MODEL"] ?? "openai/gpt-4o-mini";
+const REFRESH_MAX_TOOL_CALLS = Number(process.env["REFRESH_MAX_TOOL_CALLS"] ?? 12);
+const REFRESH_WALL_CLOCK = Number(process.env["REFRESH_WALL_CLOCK_SECS"] ?? 120);
+
+/** Build the TaskContext for one ready job. Mirrors how the source's run_oracle
+ *  builds its TaskContext from the resolved source/series/budget — here from
+ *  the job + contract. Called once per job, before the oracle is spawned. */
+export function buildTaskContext(job: {
+  id: string; contract_id: string; reference_month: string; target: string; input_fingerprint: string;
+}, contract: RefreshContract, datasetId: string): TaskContext {
+  const semanticsLabel: Record<string, string> = {
+    "a-frozen-rescore": "frozen-weight re-score (re-derive YTD features, re-score, do NOT refit)",
+    "b-refit-pinned": "refit with pinned params + env (reproducible refit on append)",
+    "c-rederive": "pure re-derivation (no model state)",
+  };
+  const semantics = semanticsLabel[contract.semantics] ?? contract.semantics;
+  return {
+    schemaVersion: 1,
+    sessionId: `sess-${crypto.randomUUID()}`,
+    contractId: contract.contractId,
+    subjectId: contract.subjectId,
+    referenceMonth: job.reference_month,
+    target: job.target,
+    goal: `Refresh forecast for ${contract.subjectId} (${contract.pipeline}) for reference month ${job.reference_month} using verified broadcast dataset ${datasetId}. Method: ${semantics}. Decide proceed vs abstain; if proceed, write the result.`,
+    model: REFRESH_MODEL_DEFAULT,
+    pipeline: contract.pipeline,
+    semantics: contract.semantics,
+    requiredSeries: contract.requiredSeries,
+    optionalSeries: contract.optionalSeries,
+    datasetId,
+    budget: { max_tool_calls: REFRESH_MAX_TOOL_CALLS, wall_clock_secs: REFRESH_WALL_CLOCK },
+    regimeDummies: contract.regimeDummies ?? [],
+  };
 }
 
 // ── Tool-call envelope (mirrors daemon grammar.rs ToolCall/ToolResult) ─────────
@@ -328,33 +393,9 @@ export async function dispatch(
   }
 }
 
-// ── Oracle decide: proceed/abstain + analysis prose (the LLM, contained) ─────
-export async function oracleDecide(summary: { target: string; referenceMonth: string; seriesIncluded: string[]; drift: any; point: number }): Promise<{ proceed: boolean; analysisMd: string }> {
-  const key = process.env["REFRESH_LLM_KEY"];
-  const model = process.env["REFRESH_LLM_MODEL"] ?? "openai/gpt-4o-mini";
-  if (!key) {
-    // Dev default: proceed, with a templated note. The LLM is wired but
-    // optional until P2 gives it real drift/revision signals to judge.
-    return { proceed: true, analysisMd: `Automated refresh for ${summary.target} ${summary.referenceMonth} (LLM decide skipped: REFRESH_LLM_KEY unset).` };
-  }
-  const sys = "You are the refresh Oracle. Decide whether to publish this forecast refresh. Reply ONLY JSON: {\"proceed\": boolean, \"analysisMd\": string}. Do not invent numbers.";
-  const user = JSON.stringify(summary);
-  try {
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model, messages: [{ role: "system", content: sys }, { role: "user", content: user }], max_tokens: 400, temperature: 0 }),
-    });
-    const j: any = await resp.json();
-    const txt = j?.choices?.[0]?.message?.content ?? "{}";
-    const m = txt.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(m ? m[0] : txt);
-    return { proceed: !!parsed.proceed, analysisMd: String(parsed.analysisMd ?? "") };
-  } catch (err) {
-    console.error("[broker] oracleDecide LLM call failed, defaulting to proceed:", err instanceof Error ? err.message : String(err));
-    return { proceed: true, analysisMd: `Refresh for ${summary.target} ${summary.referenceMonth} (LLM unavailable; defaulting to proceed).` };
-  }
-}
+// (oracleDecide removed in P3 — the LLM's proceed/abstain is now its choice
+// of write_forecast_artifact vs finish INSIDE the runOracle loop, not a
+// separate pre-step. See src/refresh/oracle.ts.)
 
 // ── Verb 4: write_forecast_artifact (durable, signed, hash-bound) ───────────
 export interface WriteResult { candidateId: string; resultHash: string; dir: string; }
@@ -389,7 +430,13 @@ export function writeForecastArtifact(args: {
   return { candidateId: args.body.broadcastId, resultHash: outputHash, dir };
 }
 
-// ── Job runner: ties the 4 verbs + Oracle for each waiting job ───────────────
+// ── Job runner: drives the oracle loop for each waiting job ────────────────
+// P3: replaces the P2 procedural sequence (read→read→run→oracleDecide→write).
+// Now the oracle (runOracle) drives the loop, issuing tool_calls that dispatch
+// routes, until a terminal (write → stored, or finish → abstain). The broker
+// builds the TaskContext + session and hosts the loop; the LLM decides verb
+// order. oracleDecide is removed — the LLM's proceed/abstain is now its choice
+// of write vs finish INSIDE the loop.
 
 export async function runWaitingJobs(db: DatabaseSync, _daemonUrl: string): Promise<void> {
   const jobs = db.prepare("SELECT id, contract_id, target, reference_month, input_fingerprint FROM refresh_job WHERE state = 'waiting-inputs' LIMIT 4").all() as any[];
@@ -397,34 +444,33 @@ export async function runWaitingJobs(db: DatabaseSync, _daemonUrl: string): Prom
     const contract = loadContracts().find((c) => c.contractId === job.contract_id);
     if (!contract) {
       db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("rejected", new Date().toISOString(), job.id);
-      console.log(`[broker] no contract for target ${job.target}; job rejected`);
+      console.log(`[broker] no contract for job ${job.id}; rejected`);
       continue;
     }
     db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("running", new Date().toISOString(), job.id);
     try {
-      // Resolve the ingested dataset for this job (input_fingerprint = contentHash).
+      // Resolve the verified dataset id for this job (input_fingerprint = contentHash).
       const ds = db.prepare("SELECT dataset_id FROM indicator_dataset WHERE content_hash = ?").get(job.input_fingerprint) as any;
       if (!ds) throw new Error("dataset not found for fingerprint");
-      const dataset = readIndicatorDataset(db, ds.dataset_id);
-      const prior = readPriorForecast(db, contract.subjectId, job.reference_month);
-      const skill = await runNowcastSkill(contract, { dataset, prior });
-      const decide = await oracleDecide({ target: job.target, referenceMonth: job.reference_month, seriesIncluded: dataset.seriesIncluded, drift: skill.drift, point: skill.point });
-      if (!decide.proceed) {
-        fs.mkdirSync(RESULTS_DIR, { recursive: true });
-        const dir = path.join(RESULTS_DIR, contract.subjectId, job.reference_month);
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, "abstention.md"), decide.analysisMd);
+
+      // (A) build the TaskContext handshake; (B)+(C) the oracle drives the loop.
+      const ctx = buildTaskContext(job, contract, ds.dataset_id);
+      const session = new RefreshSession(contract, job.reference_month, ds.dataset_id);
+      const { runOracle } = await import("./oracle.js");
+      const terminal = await runOracle(ctx, session, db);
+
+      if (terminal === "stored") {
+        db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("candidate", new Date().toISOString(), job.id);
+        console.log(`[broker] ${job.id}: oracle wrote candidate (terminal=stored)`);
+      } else if (terminal === "abstain") {
+        fs.mkdirSync(path.join(RESULTS_DIR, contract.subjectId, job.reference_month), { recursive: true });
+        fs.writeFileSync(path.join(RESULTS_DIR, contract.subjectId, job.reference_month, "abstention.md"), `Oracle abstained for ${job.reference_month}.`);
         db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("abstained", new Date().toISOString(), job.id);
-        console.log(`[broker] ${job.id}: Oracle abstained — ${decide.analysisMd.slice(0, 80)}`);
-        continue;
+        console.log(`[broker] ${job.id}: oracle abstained`);
+      } else {
+        db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("failed", new Date().toISOString(), job.id);
+        console.log(`[broker] ${job.id}: oracle failed (terminal=${terminal})`);
       }
-      const written = writeForecastArtifact({
-        contractId: contract.contractId, subjectId: contract.subjectId, referenceMonth: job.reference_month,
-        skill, analysisMd: decide.analysisMd, envHash: contract.envHash,
-        body: { contentHash: job.input_fingerprint, broadcastId: job.id, datasetId: ds.dataset_id, target: job.target, source: "", referenceMonth: job.reference_month, releaseDate: "", emittedAt: "", schemaVersion: 1, seriesIncluded: dataset.seriesIncluded },
-      });
-      db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("candidate", new Date().toISOString(), job.id);
-      console.log(`[broker] ${job.id}: candidate written → ${written.dir}`);
     } catch (err) {
       db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("failed", new Date().toISOString(), job.id);
       console.error(`[broker] ${job.id} failed:`, err instanceof Error ? err.message : String(err));

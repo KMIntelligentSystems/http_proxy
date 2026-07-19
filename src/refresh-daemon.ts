@@ -19,6 +19,12 @@ import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { verifyEnvelope, type BroadcastBody, type EnvelopeV2 } from "./refresh/crypto.js";
 import { loadContracts } from "./refresh/broker.js";
+import { loadProjectEnv } from "./env.js";
+
+// Load .env (DAEMON_HMAC_KEY, OPENROUTER_API_KEY, etc.) like every other
+// entrypoint — mirrors the source daemon's dotenvy::dotenv(). Must happen
+// before the consts below read process.env.
+loadProjectEnv();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "..", "data");
