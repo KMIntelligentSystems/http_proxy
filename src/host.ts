@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
+import { syncIndicatorHistory } from "./refresh-history-bridge.js";
 import type { UserQuestionManager } from "./user-questions.js";
 import { loadProjectEnv } from "./env.js";
 
@@ -1110,6 +1111,14 @@ const server = http.createServer((req, res) => {
               receivedAt: new Date().toISOString(),
             });
 
+            // Bridge trigger 2: a dataset CSV was just persisted — re-sync the
+            // refresh-daemon's indicator_history. Best-effort, fire-and-forget.
+            if (record.mimeType === "text/csv" || role === "dataset-csv") {
+              syncIndicatorHistory({ reason: `save:${id}` })
+                .then((r) => console.log(`[host] refresh-history bridge (save ${id}): ok=${r.ok} seeded=${r.daemon?.seeded ?? "?"}`))
+                .catch(() => { /* target down — the next boot seed or agent sync converges */ });
+            }
+
             sendJson(res, 200, { ok: true, id });
           } finally {
             sqldb.close();
@@ -1815,6 +1824,17 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 server.listen(HOST_PORT, "127.0.0.1", () => {
   console.log(`Host listening on http://127.0.0.1:${HOST_PORT}`);
   console.log(`UI portal at   ${PROXY_URL}/ui`);
+  // Bridge trigger 1: seed-on-start. Push the persisted backbone CSVs to the
+  // refresh-daemon's indicator_history. Best-effort — a down daemon never
+  // blocks or crashes the host; the report line says what happened.
+  syncIndicatorHistory({ reason: "host-boot" })
+    .then((r) => {
+      const sent = r.series.filter((s) => s.status === "sent").length;
+      const total = r.series.length;
+      if (r.ok) console.log(`[host] refresh-history bridge: seeded ${sent}/${total} backbone series (${r.daemon?.seeded ?? "?"} obs upserted)`);
+      else console.warn(`[host] refresh-history bridge: partial/failed — ${JSON.stringify(r.daemon ?? {})} ${r.series.filter((s) => s.error).map((s) => `${s.seriesId}: ${s.error}`).join(" | ")}`);
+    })
+    .catch((err) => console.warn(`[host] refresh-history bridge skipped: ${err instanceof Error ? err.message : String(err)}`));
 });
 
 return {

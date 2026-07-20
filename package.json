@@ -18,7 +18,12 @@
     "test:history-mirror": "tsx scripts/test-history-mirror.ts",
     "test:p2-productivity": "tsx scripts/test-p2-productivity.ts",
     "test:p2-stl": "tsx scripts/test-p2-stl.ts",
-    "test:p3-dispatch": "tsx scripts/test-p3-dispatch.ts"
+    "test:p3-dispatch": "tsx scripts/test-p3-dispatch.ts",
+    "test:p3-taskcontext": "tsx scripts/test-p3-taskcontext.ts",
+    "test:p3-oracle": "tsx scripts/test-p3-oracle.ts",
+    "data:load-index-csvs": "node scripts/load-index-csvs.mjs",
+    "test:bridge-smoke": "node scripts/smoke-refresh-bridge.mjs",
+    "test:p3-real-llm": "tsx scripts/test-p3-real-llm.ts"
   },
   "dependencies": {
     "@mariozechner/mini-lit": "^0.2.0",

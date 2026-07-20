@@ -31,8 +31,20 @@ const RESULTS_DIR = path.resolve(__dirname, "..", "..", "data", "refresh-results
 const PIPELINES_DIR = path.resolve(__dirname, "..", "..", "pipelines");
 
 // Result-signing key (the airlock holds it; the Oracle never sees it).
+// M1: fail-closed in production; loud warning in dev.
+const DEV_SIGN_KEY = "dev-insecure-sign-key-change-me";
+let warnedDevSignKey = false;
 function signKey(): string {
-  return process.env["REFRESH_SIGN_KEY"] ?? "dev-insecure-sign-key-change-me";
+  const k = process.env["REFRESH_SIGN_KEY"];
+  if (k && k !== DEV_SIGN_KEY) return k;
+  if (process.env["NODE_ENV"] === "production") {
+    throw new Error("[airlock] REFRESH_SIGN_KEY must be set to a non-dev value in production");
+  }
+  if (!warnedDevSignKey) {
+    console.warn("[airlock] WARNING: using the dev result-signing key — set REFRESH_SIGN_KEY for any real deployment");
+    warnedDevSignKey = true;
+  }
+  return DEV_SIGN_KEY;
 }
 
 // ── Verb 1: read_indicator_dataset ──────────────────────────────────────────
@@ -215,6 +227,8 @@ export interface TaskContext {
 const REFRESH_MODEL_DEFAULT = process.env["REFRESH_LLM_MODEL"] ?? "openai/gpt-4o-mini";
 const REFRESH_MAX_TOOL_CALLS = Number(process.env["REFRESH_MAX_TOOL_CALLS"] ?? 12);
 const REFRESH_WALL_CLOCK = Number(process.env["REFRESH_WALL_CLOCK_SECS"] ?? 120);
+// M2: cap on the oracle's one free-text field (analysisMd).
+const MAX_ANALYSIS_MD_LEN = 20_000;
 
 /** Build the TaskContext for one ready job. Mirrors how the source's run_oracle
  *  builds its TaskContext from the resolved source/series/budget — here from
@@ -274,18 +288,24 @@ function toolErr(callId: string, code: string, message: string): ToolResult {
 // source's Session.tool_calls / config.budget.
 export class RefreshSession {
   tool_calls = 0;
-  max_tool_calls = 12;
+  max_tool_calls: number;
+  readonly deadlineMs: number;
   contract: RefreshContract;
   referenceMonth: string;
   datasetId: string;
+  // Set by the write verb on success — runWaitingJobs only accepts terminal
+  // "stored" when this is set (H2: a terminal string alone never marks a candidate).
+  writtenCandidateId: string | null = null;
   // cached intermediates (filled by the read/run verbs, consumed by write)
   dataset: any = null;
   prior: any = null;
   skill: SkillResult | null = null;
-  constructor(contract: RefreshContract, referenceMonth: string, datasetId: string) {
+  constructor(contract: RefreshContract, referenceMonth: string, datasetId: string, budget?: BudgetCtx) {
     this.contract = contract;
     this.referenceMonth = referenceMonth;
     this.datasetId = datasetId;
+    this.max_tool_calls = budget?.max_tool_calls ?? REFRESH_MAX_TOOL_CALLS;
+    this.deadlineMs = Date.now() + (budget?.wall_clock_secs ?? REFRESH_WALL_CLOCK) * 1000;
   }
 }
 
@@ -303,6 +323,13 @@ export async function dispatch(
   if (session.tool_calls > session.max_tool_calls) {
     return {
       result: toolErr(call.callId, "budget_exceeded", "max_tool_calls reached"),
+      terminal: "abstain",
+    };
+  }
+  // M3: the wall-clock budget from the TaskContext is enforced here, per call.
+  if (Date.now() > session.deadlineMs) {
+    return {
+      result: toolErr(call.callId, "budget_exceeded", "wall-clock budget exceeded"),
       terminal: "abstain",
     };
   }
@@ -356,7 +383,14 @@ export async function dispatch(
       // The oracle's ONLY contribution is analysisMd (prose). The broker fills
       // contractId/subjectId/body/envHash/signature — the oracle cannot forge
       // provenance. Terminal → the candidate is written.
-      const analysisMd = String(call.args?.analysisMd ?? "");
+      // M2: validate the oracle's one free-text field — required, non-empty, capped.
+      const analysisMd = typeof call.args?.analysisMd === "string" ? call.args.analysisMd.trim() : "";
+      if (!analysisMd) {
+        return { result: toolErr(call.callId, "bad_args", "analysisMd is required and must be a non-empty string") };
+      }
+      if (analysisMd.length > MAX_ANALYSIS_MD_LEN) {
+        return { result: toolErr(call.callId, "bad_args", `analysisMd exceeds the ${MAX_ANALYSIS_MD_LEN}-character cap`) };
+      }
       if (!session.skill) {
         return { result: toolErr(call.callId, "ordering", "call run_nowcast_skill first") };
       }
@@ -381,12 +415,16 @@ export async function dispatch(
             seriesIncluded: session.dataset?.seriesIncluded ?? [],
           },
         });
+        session.writtenCandidateId = written.candidateId;
         return { result: toolOk(call.callId, { candidateId: written.candidateId, resultHash: written.resultHash, dir: written.dir }), terminal: "stored" };
       } catch (e) { return { result: toolErr(call.callId, "write_failed", String(e)) }; }
     }
     case "finish": {
-      const status = String(call.args?.status ?? "abstain");
-      return { result: toolOk(call.callId, { acknowledged: true }), terminal: status };
+      // H2: finish ALWAYS terminates as "abstain" — the oracle cannot assert a
+      // stored outcome without the write verb having actually run. The tool
+      // schema's enum already says ["abstain"]; enforce it here regardless.
+      const note = typeof call.args?.note === "string" ? call.args.note.slice(0, 500) : undefined;
+      return { result: toolOk(call.callId, { acknowledged: true, ...(note ? { note } : {}) }), terminal: "abstain" };
     }
     default:
       return { result: toolErr(call.callId, "unknown_tool", `no such tool: ${call.tool}`) };
@@ -438,16 +476,29 @@ export function writeForecastArtifact(args: {
 // order. oracleDecide is removed — the LLM's proceed/abstain is now its choice
 // of write vs finish INSIDE the loop.
 
+const REFRESH_JOB_LEASE_SECS = Number(process.env["REFRESH_JOB_LEASE_SECS"] ?? 600);
+
+/** M4: state updates always go through here so terminal states clear the lease. */
+function setJobState(db: DatabaseSync, id: string, state: string, leaseExpiresAt: string | null = null): void {
+  db.prepare("UPDATE refresh_job SET state = ?, lease_expires_at = ?, updated_at = ? WHERE id = ?")
+    .run(state, leaseExpiresAt, new Date().toISOString(), id);
+}
+
 export async function runWaitingJobs(db: DatabaseSync, _daemonUrl: string): Promise<void> {
+  // M4: requeue jobs whose oracle crashed mid-run (lease expired, no terminal).
+  db.prepare("UPDATE refresh_job SET state = 'waiting-inputs', lease_expires_at = NULL, updated_at = ? WHERE state = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at < ?")
+    .run(new Date().toISOString(), new Date().toISOString());
   const jobs = db.prepare("SELECT id, contract_id, target, reference_month, input_fingerprint FROM refresh_job WHERE state = 'waiting-inputs' LIMIT 4").all() as any[];
   for (const job of jobs) {
     const contract = loadContracts().find((c) => c.contractId === job.contract_id);
     if (!contract) {
-      db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("rejected", new Date().toISOString(), job.id);
+      setJobState(db, job.id, "rejected");
       console.log(`[broker] no contract for job ${job.id}; rejected`);
       continue;
     }
-    db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("running", new Date().toISOString(), job.id);
+    // M4: claim with a lease so a crashed run becomes retryable.
+    const leaseExpiry = new Date(Date.now() + REFRESH_JOB_LEASE_SECS * 1000).toISOString();
+    setJobState(db, job.id, "running", leaseExpiry);
     try {
       // Resolve the verified dataset id for this job (input_fingerprint = contentHash).
       const ds = db.prepare("SELECT dataset_id FROM indicator_dataset WHERE content_hash = ?").get(job.input_fingerprint) as any;
@@ -455,24 +506,27 @@ export async function runWaitingJobs(db: DatabaseSync, _daemonUrl: string): Prom
 
       // (A) build the TaskContext handshake; (B)+(C) the oracle drives the loop.
       const ctx = buildTaskContext(job, contract, ds.dataset_id);
-      const session = new RefreshSession(contract, job.reference_month, ds.dataset_id);
+      // M3: the session enforces the SAME budget the TaskContext advertises.
+      const session = new RefreshSession(contract, job.reference_month, ds.dataset_id, ctx.budget);
       const { runOracle } = await import("./oracle.js");
       const terminal = await runOracle(ctx, session, db);
 
-      if (terminal === "stored") {
-        db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("candidate", new Date().toISOString(), job.id);
-        console.log(`[broker] ${job.id}: oracle wrote candidate (terminal=stored)`);
-      } else if (terminal === "abstain") {
+      // H2: "stored" is only credible if the write verb actually ran this run.
+      if (terminal === "stored" && session.writtenCandidateId) {
+        setJobState(db, job.id, "candidate");
+        console.log(`[broker] ${job.id}: oracle wrote candidate ${session.writtenCandidateId}`);
+      } else if (terminal === "abstain" || terminal === "stored") {
+        // A terminal "stored" WITHOUT a write is treated as abstain (defense in depth).
         fs.mkdirSync(path.join(RESULTS_DIR, contract.subjectId, job.reference_month), { recursive: true });
         fs.writeFileSync(path.join(RESULTS_DIR, contract.subjectId, job.reference_month, "abstention.md"), `Oracle abstained for ${job.reference_month}.`);
-        db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("abstained", new Date().toISOString(), job.id);
+        setJobState(db, job.id, "abstained");
         console.log(`[broker] ${job.id}: oracle abstained`);
       } else {
-        db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("failed", new Date().toISOString(), job.id);
+        setJobState(db, job.id, "failed");
         console.log(`[broker] ${job.id}: oracle failed (terminal=${terminal})`);
       }
     } catch (err) {
-      db.prepare("UPDATE refresh_job SET state = ?, updated_at = ? WHERE id = ?").run("failed", new Date().toISOString(), job.id);
+      setJobState(db, job.id, "failed");
       console.error(`[broker] ${job.id} failed:`, err instanceof Error ? err.message : String(err));
     }
   }

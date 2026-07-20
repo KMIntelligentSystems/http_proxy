@@ -28,7 +28,9 @@ loadProjectEnv();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.resolve(__dirname, "..", "data");
-const REFRESH_DB = path.join(DATA_DIR, "refresh.db");
+// REFRESH_DB env override: lets tests/smoke-runs use a throwaway DB instead of
+// the shared dev data/refresh.db (the test-contamination issue's minimal enabler).
+const REFRESH_DB = process.env["REFRESH_DB"] ?? path.join(DATA_DIR, "refresh.db");
 const RESULTS_DIR = path.join(DATA_DIR, "refresh-results");
 
 const PORT = Number(process.env["PORT"] ?? process.env["REFRESH_PORT"] ?? 8792);
@@ -36,9 +38,19 @@ const DAEMON_URL = process.env["DAEMON_URL"] ?? "http://127.0.0.1:8791";
 const KEY_ENV = "DAEMON_HMAC_KEY";
 const DEV_KEY = "dev-insecure-hmac-key-change-me";
 
+let warnedDevHmacKey = false;
 function hmacKey(): string {
   const k = process.env[KEY_ENV];
-  return k && k !== DEV_KEY ? k : DEV_KEY;
+  if (k && k !== DEV_KEY) return k;
+  // M1: fail-closed in production; loud warning in dev.
+  if (process.env["NODE_ENV"] === "production") {
+    throw new Error("[refresh-daemon] DAEMON_HMAC_KEY must be set to a non-dev value in production");
+  }
+  if (!warnedDevHmacKey) {
+    console.warn("[refresh-daemon] WARNING: using the dev HMAC key — set DAEMON_HMAC_KEY for any real deployment");
+    warnedDevHmacKey = true;
+  }
+  return DEV_KEY;
 }
 function hmacSign(payload: string): string {
   return crypto.createHmac("sha256", hmacKey()).update(payload).digest("hex");
@@ -108,9 +120,12 @@ function openDb(): DatabaseSync {
       state            TEXT NOT NULL,
       created_at       TEXT NOT NULL,
       updated_at       TEXT NOT NULL,
+      lease_expires_at TEXT,
       UNIQUE(contract_id, input_fingerprint)
     );
   `);
+  // M4 migration: refresh.db files created before the lease column existed.
+  try { db.exec("ALTER TABLE refresh_job ADD COLUMN lease_expires_at TEXT"); } catch { /* column already present */ }
   return db;
 }
 

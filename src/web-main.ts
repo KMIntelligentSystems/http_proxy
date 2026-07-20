@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 
 import { createArtifactStore } from "./artifacts.js";
 import { pullIndicatorDataset } from "./daemon-tools.js";
+import { syncIndicatorHistory } from "./refresh-history-bridge.js";
+import { runSarima } from "./sarima-tools.js";
 import { loadProjectEnv } from "./env.js";
 import { applyModelSelection, startHost, type HostServer } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
@@ -181,6 +183,71 @@ const pullIndicatorDatasetTool = defineTool({
   },
 });
 
+// Bridge trigger 3: the orchestrator can explicitly re-sync the refresh
+// target's indicator_history from the persisted backbone CSVs (e.g. after
+// loading updated index CSVs, or to reseed a fresh refresh.db).
+const syncIndicatorHistoryTool = defineTool({
+  name: "sync_indicator_history",
+  label: "Sync Indicator History",
+  description:
+    "Push the validated backbone index CSVs persisted in artifacts.db to the " +
+    "refresh-daemon's indicator_history table (HMAC-authed /refresh/bootstrap, " +
+    "idempotent upsert keyed on series+month). Use after loading or updating " +
+    "index CSVs, or when the refresh target needs reseeding. Set dryRun to " +
+    "preview what would be sent without posting.",
+  parameters: Type.Object({
+    dryRun: Type.Optional(Type.Boolean({ description: "Build and report the payload without posting it (default false)." })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const report = await syncIndicatorHistory({ dryRun: params.dryRun, reason: "agent-tool" });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(report) }],
+      details: report,
+    };
+  },
+});
+
+// Flow-1 SARIMA exploration: the agent sets the params, the human reviews
+// the artifacts. The canonical output is freeze-ready — spec +
+// residualQuantiles transcribe directly into a frozen pipeline contract.
+const runSarimaTool = defineTool({
+  name: "run_sarima",
+  label: "Run SARIMA",
+  description:
+    "Fit a SARIMA(p,d,q)(P,D,Q)[s] model (statsmodels, local, deterministic) " +
+    "to a backbone series or inline observations. Returns canonical JSON: " +
+    "forecasts with prediction intervals, coefficients, diagnostics (AIC/BIC, " +
+    "Ljung-Box, Jarque-Bera), residual quantiles, and the freeze-ready spec. " +
+    "Use for interactive ARIMA exploration; freezing into a pipeline contract " +
+    "is a separate, explicit step.",
+  parameters: Type.Object({
+    seriesId: Type.Optional(Type.String({ description: "Backbone series from data/series-map.json (e.g. 'm3_total_shipments_nsa'). Reads artifacts.db." })),
+    observations: Type.Optional(Type.Array(Type.Object({ date: Type.String(), value: Type.Number() }), { description: "Inline observations [{date:'YYYY-MM', value}] — alternative to seriesId." })),
+    order: Type.Tuple([Type.Integer(), Type.Integer(), Type.Integer()], { description: "[p, d, q]" }),
+    seasonal_order: Type.Tuple([Type.Integer(), Type.Integer(), Type.Integer(), Type.Integer()], { description: "[P, D, Q, s] e.g. [1,1,0,12]" }),
+    transformation: Type.Optional(Type.Union([Type.Literal("none"), Type.Literal("log")], { description: "default 'none'" })),
+    trend: Type.Optional(Type.Union([Type.Literal("n"), Type.Literal("c"), Type.Literal("drift")], { description: "'drift' = constant in the differenced model; default 'n'" })),
+    horizon: Type.Optional(Type.Integer({ description: "forecast steps ahead; default 1" })),
+    piLevels: Type.Optional(Type.Array(Type.Number(), { description: "prediction interval levels; default [0.8, 0.95]" })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const outcome = await runSarima({
+      seriesId: params.seriesId,
+      observations: params.observations,
+      order: params.order as [number, number, number],
+      seasonal_order: params.seasonal_order as [number, number, number, number],
+      transformation: params.transformation,
+      trend: params.trend,
+      horizon: params.horizon,
+      piLevels: params.piLevels,
+    });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(outcome.ok ? outcome.result : outcome) }],
+      details: outcome,
+    };
+  },
+});
+
 const visualizationTools = createVisualizationTools({
   artifactStore,
   cwd: process.cwd(),
@@ -188,7 +255,7 @@ const visualizationTools = createVisualizationTools({
   onCatalogChanged: () => hostRef.current?.broadcastCatalogUpdated(),
 });
 
-const customTools = [...mcpTools, askUserTool, helloTool, pullIndicatorDatasetTool, ...visualizationTools];
+const customTools = [...mcpTools, askUserTool, helloTool, pullIndicatorDatasetTool, syncIndicatorHistoryTool, runSarimaTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 
