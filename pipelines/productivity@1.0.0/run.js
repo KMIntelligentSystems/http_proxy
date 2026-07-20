@@ -82,6 +82,7 @@ process.stdin.on("end", () => {
     pi95,
     drift: { features: [], widened: false },
     delta: { newMonth: point != null ? 1 : 0, revision: 0 },
+    _chartSeries: { label: "Mfg productivity proxy (real output / aggregate hours)", values: prod.slice(-120).map((p) => ({ date: p.date, value: p.productivity })) },
     _nObs: prod.length,
     _nResiduals: residuals.length,
   };

@@ -149,7 +149,7 @@ export async function runOracle(
  *  an API call. The LLM replaces this when REFRESH_LLM_KEY is set. */
 async function scriptedDriver(session: RefreshSession, db: DatabaseSync): Promise<string> {
   const seq: ToolCall[] = [
-    { callId: "s1", tool: "read_indicator_dataset", args: {} },
+    { callId: "s1", tool: "read_indicator_dataset", args: {} }, 
     { callId: "s2", tool: "read_prior_forecast", args: {} },
     { callId: "s3", tool: "run_nowcast_skill", args: {} },
     { callId: "s4", tool: "write_forecast_artifact", args: { analysisMd: `Scripted refresh for ${session.contract.subjectId} ${session.referenceMonth} (LLM unset; REFRESH_LLM_KEY not configured).` } },

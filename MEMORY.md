@@ -18,12 +18,19 @@ Key properties of the catalog path:
 
 1. **Dedup happens in SQL, not in the React reducer.** Both `buildCatalog()`
    and `query_artifacts` should pivot off the `v_artifact_head` view (head
-   of the `replaces_id` chain, with `role IN ('memory','catalog')`
-   excluded). The legacy "near-random survivor" title-dedup bug is gone
+   of the `replaces_id` chain, with `memory`/`catalog`/`dataset-csv` roles
+   and `application/json`/`text/csv` mime excluded). The legacy
+   "near-random survivor" title-dedup bug is gone
    provided every read goes through that view.
-2. **All roles are visible** in the catalog tree except `memory` and
-   `catalog` (which are excluded by the view). CSVs, markdown, JSON,
-   manifests, and HTML pages all surface under their bucket.
+2. **Only renderable content roles are visible** in the catalog tree.
+   The `v_artifact_head` view excludes `memory`, `catalog`, `dataset-csv`
+   roles AND `application/json` / `text/csv` mime types; `buildCatalog()`
+   re-applies the same exclusions. Markdown, manifests, and HTML pages
+   surface under their bucket; **CSVs and JSON do not** — they live in the
+   raw `artifact` table / `artifact_latest` view only (see § "Catalog
+   restructuring"). Querying `v_artifact_head` for a CSV returns zero rows
+   even when CSVs are persisted — this has already caused one false
+   "no CSVs in the db" report (2026-07-20).
    **The agent controls what the sidebar shows** via `catalogFilter` —
    the sidebar tree is empty on startup and only populates when the agent
    sets a filter through `query_artifacts` (see AGENTS.md § "Prompt-Driven
@@ -308,9 +315,11 @@ ORDER BY name;
 ### Recommended SELECT pattern (use `v_artifact_head`)
 
 The canonical user-facing read pivots off the `v_artifact_head` view. It
-gives you head-of-`replaces_id`-chain rows with `role IN ('memory',
-'catalog')` already excluded — the same dedup the sidebar tree applies, so
-the agent and the UI cannot disagree about the corpus.
+gives you head-of-`replaces_id`-chain rows with `memory`/`catalog`/
+`dataset-csv` roles and `application/json`/`text/csv` mime already
+excluded — the same dedup the sidebar tree applies, so
+the agent and the UI cannot disagree about the corpus. (For CSV/JSON/
+memory rows, use `artifact_latest` — see § "Catalog restructuring".)
 
 ```sql
 SELECT id, title, filename, mime_type, role, description, content, tags
@@ -387,7 +396,7 @@ Current known registry state:
 
 | Category | Subjects |
 |----------|----------|
-| Economics | `M3 Manufacturing Shipments`; `M3 Series Inventory` |
+| Economics | `M3 Manufacturing Analysis`; `M3 Forecasts`; `M3 STL Seasonal Adjustment`; `M3 Output Nowcast`; `Manufacturing Productivity Proxy`; `Indicator Backbone Series` |
 
 Operational rules:
 
@@ -464,6 +473,9 @@ Check these before fetching fresh data:
 | `dist/oe_histogram_density.html` | Standalone D3 histogram chart artifact. |
 | `dist/tx_nonfarm.json` | Texas CES nonfarm payroll (SA + NSA), 120 monthly points each, 2014–2023. |
 | `data/m3_total_mfg_shipments_nsa.csv` | NSA Total Manufacturing Shipments (MTM/VS), 291 obs, Jan 2002–Mar 2026. From Census M3 API. |
+| `data/series-map.json` | Checked-in backbone registry: canonical CSV → seriesId, validation bounds, consumers. Drives `load-index-csvs.mjs` + the refresh-history bridge. |
+| Backbone CSVs (`m3_nsa_total_mfg.csv`, `fred_ipman.csv`, `ces_mfg_employment_sa.csv`, `ces_mfg_hours_sa.csv`) | Canonical index series. Persisted to artifacts.db ONLY via `npm run data:load-index-csvs` (the sanctioned writer) — never ad-hoc `persist_artifacts`. |
+| `data/nowcast_indicator_panel.csv` | LASSO nowcast fitting panel (gitignored, local-only) — needed to freeze `m3-leading-indicator-nowcast` weights. |
 | `data/lookups/` | `oe_occupations.json`, `oe_areas.json`, `oe_datatypes.json`, `oe_industries.json`, `ln_concepts.json`, `surveys.json`, `m3_series.json`. |
 
 ## Statistical Methods Inventory
@@ -607,20 +619,30 @@ Without the `content` column, every row is silently skipped with the message
 you up when you only want metadata. Workaround: include `content` even if
 you discard it, or bypass with a direct `node:sqlite` query.
 
-### The catalog view: `v_artifact_head`
+### The catalog views: `v_artifact_head` vs `artifact_latest`
 
 ```sql
-CREATE VIEW v_artifact_head AS
+CREATE VIEW v_artifact_head AS           -- UI-facing dedup (hides plumbing)
   SELECT a.*
   FROM artifact a
   LEFT JOIN artifact b ON b.replaces_id = a.id
   WHERE b.id IS NULL
-    AND a.role NOT IN ('memory', 'catalog')
+    AND a.role NOT IN ('memory', 'catalog', 'dataset-csv')
+    AND a.mime_type NOT IN ('application/json', 'text/csv');
+
+CREATE VIEW artifact_latest AS           -- head-of-chain, NO exclusions
+  SELECT a.* FROM artifact a
+  LEFT JOIN artifact b ON b.replaces_id = a.id WHERE b.id IS NULL;
 ```
 
 Heads are rows where no other artifact's `replaces_id` points back → the
-terminal node of each chain. `memory` and `catalog` rows are excluded. This
-view is the authoritative dedup for both the sidebar tree and the orchestrator.
+terminal node of each chain. `v_artifact_head` is the authoritative dedup
+for the sidebar tree and user-facing queries. **`artifact_latest` is the
+read-path for hidden rows** — persisted CSVs (`dataset-csv`), JSON model
+cards (`statistical-analysis`), memory, catalog. The refresh-history bridge
+and `run_sarima`'s backbone reader query `artifact_latest`; anything hunting
+for CSV/JSON content must too. Use the raw `artifact` table only when
+version history matters.
 
 ### Subject/session/artifact chain
 
@@ -693,11 +715,75 @@ It can be required via absolute path: `require('C:/repos/http_proxy/node_modules
 However, prefer `node:sqlite` `DatabaseSync` for one-off queries — it eliminates
 the native-binding headache.
 
+## Refresh data plane (flow 2)
+
+The unattended refresh architecture (AGENTS.md § "Refresh architecture
+(flow 2)") has its own operational state, separate from artifacts.db.
+
+**Stores and dirs:**
+
+- `data/refresh.db` — the refresh-daemon's SQLite: `daemon_receipt`,
+  `indicator_dataset`, `indicator_vintage`, `indicator_history` (backbone +
+  every ingested observation, keyed `(series_id, date)`, YYYY-MM), and
+  `refresh_job` (waiting-inputs → running → candidate | abstained | failed |
+  rejected; M4 leases requeue expired `running`).
+- `data/refresh-results/<subject>/<month>/` — signed candidates:
+  `refresh_result.json` (point, PIs, hash quadruple + signature),
+  `analysis.md`, `forecast.csv`. Last-writer-wins per (subject, month).
+- `data/contracts/*.contract.json` — frozen contracts; `pipelineDigest`
+  pins the skill entrypoint (self-contained rule — the digest covers ONLY
+  the entrypoint file). `pipelines/<name>@<ver>/` holds the skills.
+
+**Backbone path (deterministic):** `data/series-map.json` (checked-in
+registry + closed allowlist) → `npm run data:load-index-csvs`
+(validation, sha256-idempotent, `replaces_id` versioning; reserved session
+`bootstrap-loader`, subject "Indicator Backbone Series") → artifacts.db
+`dataset-csv` rows (hidden from the UI; read via `artifact_latest`) →
+`src/refresh-history-bridge.ts` triggers (host boot, artifact-save hook,
+`sync_indicator_history` tool) → `POST /refresh/bootstrap` (HMAC) →
+`indicator_history`. Dates normalize to YYYY-MM at the bridge so CSV and
+broadcast observations collide on the same upsert key.
+
+**On-demand refresh:** `POST /refresh/run` (HMAC) synthesizes a
+deterministic dataset from the history tail (no volatile fields in the
+hashed payload → same history = same hash = deduped re-run) and enqueues
+jobs for contracts whose required series are present in history. The
+`run_refresh` agent tool wraps trigger + poll + collection (signed results
++ 120-month history — the coder hand-off payload). Read endpoints:
+`GET /refresh/results`, `/refresh/result`, `/refresh/prior-state`,
+`/refresh/jobs`.
+
+**Hermetic testing:** `REFRESH_DB` and `REFRESH_RESULTS_DIR` env overrides
+redirect daemon + broker to throwaway state. Smoke suite:
+`npm run test:bridge-smoke`, `test:sarima-skill`, `test:run-refresh`
+(temp-dir hermetic). Legacy p2/p3/e2e tests share the dev DB (see
+contamination below).
+
+**Caveats (as of 2026-07-20):**
+
+- ~~The dev `data/refresh.db` is contaminated~~ **RESOLVED 2026-07-20**:
+  wiped and reseeded via the bridge — 4 series, 1,120 real obs, YYYY-MM
+  keys, zero jobs/datasets/receipts; `data/refresh-results/` purged of the
+  dummy-data candidates. (Historical note: `fred_ipman`, `bls_ces_*` held
+  genHistory dummy values; the legacy p2/p3/e2e tests share the dev DB and
+  will re-contaminate it if run without the `REFRESH_DB` override — prefer
+  the hermetic smokes.)
+- `m3-leading-indicator-nowcast` is a scaffold (exit 3) — jobs fail closed
+  until `weights.json` is frozen (needs `data/nowcast_indicator_panel.csv`,
+  gitignored/local-only).
+- `piWideningFactor` (contracts) and `delta.revision` (skills) are inert.
+- SARIMA skill: residual Ljung-Box shows autocorrelation (lag-12 p≈2e-11)
+  — PIs may be optimistic. AIC differs from the May 2026 card (−1110.3 vs
+  −1056.0; the original ad-hoc fit's options are unknowable) while the
+  forecasts reproduce within 0.02%.
+- Skills run on the `py` launcher (`PYTHON_BIN` env) — NOT the codeGen MCP
+  venv. Same packages (statsmodels 0.14.6), different interpreter.
+
 ## Architecture
 
 - **Python MCP venv:** `C:\repos\codeGen-mcp-server\venv\Scripts\python.exe`
 - **BLS API key:** in `data/.env` as `BLS_API_KEY`
 - **Census API key:** in `data/.env` as `CENSUS_API_KEY`
 - **Artifact store:** `data/artifacts/` on disk, served at `/ui/api/artifacts/<id>`
-- **React UI:** sidebar filter hides only `role === "memory"`. Any other role (or no role) is visible. Charts auto-selected, rendered in iframe.
+- **React UI:** the sidebar/catalog shows only renderable content roles — `memory`, `catalog`, `dataset-csv` roles and `application/json`/`text/csv` mime are excluded at the `v_artifact_head` view level (re-filtered in `buildCatalog()`). Charts auto-selected, rendered in iframe.
 - **Launch:** `npm run build && npm run build:web && npm run dev:tui`

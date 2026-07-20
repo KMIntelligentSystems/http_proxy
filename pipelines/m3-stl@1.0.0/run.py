@@ -95,6 +95,7 @@ def main():
         "pi95": pi95,
         "drift": {"features": [], "widened": False},
         "delta": {"newMonth": 1 if new_month else 0, "revision": 0},
+        "_chartSeries": {"label": "M3 NSA Total Mfg Shipments (millions $)", "values": [{"date": d, "value": v} for d, v in series[-120:]]},
         "_nObs": int(len(series)),
         "_trendNext": float(trend_next),
         "_seasonalAvg": seasonal_avg,

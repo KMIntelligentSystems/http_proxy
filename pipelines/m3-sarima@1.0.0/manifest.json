@@ -13,5 +13,5 @@
     "trend": "drift",
     "piLevels": [0.80, 0.95]
   },
-  "status": "scaffold — skill executable TODO. The pinned spec is frozen from the May 2026 model card (mqnf8wxi); the refit implementation + frozen residual distribution land in a follow-up. The contract is recorded so the broker routes here; run_nowcast_skill will reject with 'skill not implemented' until then."
+  "status": "implemented 2026-07-20 — spec validated interactively via the run_sarima tool against the May 2026 model card (mqnf8wxi-97a29b71): point within 0.02%, PI bounds within ~0.07%. run.py is self-contained (digest coverage rule)."
 }

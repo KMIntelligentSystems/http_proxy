@@ -31,7 +31,8 @@ const DATA_DIR = path.resolve(__dirname, "..", "data");
 // REFRESH_DB env override: lets tests/smoke-runs use a throwaway DB instead of
 // the shared dev data/refresh.db (the test-contamination issue's minimal enabler).
 const REFRESH_DB = process.env["REFRESH_DB"] ?? path.join(DATA_DIR, "refresh.db");
-const RESULTS_DIR = path.join(DATA_DIR, "refresh-results");
+// Same override as the broker's — reads and writes must agree on the tree.
+const RESULTS_DIR = process.env["REFRESH_RESULTS_DIR"] ?? path.join(DATA_DIR, "refresh-results");
 
 const PORT = Number(process.env["PORT"] ?? process.env["REFRESH_PORT"] ?? 8792);
 const DAEMON_URL = process.env["DAEMON_URL"] ?? "http://127.0.0.1:8791";
@@ -353,6 +354,21 @@ const server = http.createServer(async (req, res) => {
     res.end(JSON.stringify({ subjectId, history: out }));
     return;
   }
+  if (req.method === "POST" && url.pathname === "/refresh/run") {
+    // On-demand refresh: enqueue jobs for contracts whose required series are
+    // present in indicator_history, keyed by a deterministic synthetic dataset
+    // built from the history tail. Same history → same content hash → INSERT OR
+    // IGNORE dedups (rerun-on-change only). This is the interactive path's
+    // trigger (the orchestrator's run_refresh tool); broadcasts remain the
+    // unattended path. HMAC-authed like /refresh/bootstrap.
+    return handleRefreshRun(req, res);
+  }
+  if (req.method === "GET" && url.pathname === "/refresh/jobs") {
+    const rows = db.prepare("SELECT id, contract_id, reference_month, state, created_at, updated_at FROM refresh_job ORDER BY updated_at DESC LIMIT 50").all();
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ jobs: rows }));
+    return;
+  }
   if (req.method === "POST" && url.pathname === "/refresh/bootstrap") {
     // One-time seed of pre-broadcast history so the target is self-contained
     // on a fresh deploy (the gitignored data/*.csv do not ship in the image).
@@ -364,6 +380,56 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not found" }));
 });
+
+/** POST /refresh/run — see route comment. Body: { contractId?, referenceMonth? }. */
+async function handleRefreshRun(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  const raw = Buffer.concat(chunks);
+  const provided = req.headers["x-daemon-sig"] as string | undefined;
+  if (!provided || !constantTimeHexEqualStr(hmacSign(raw.toString("utf8")), provided)) {
+    res.writeHead(401); res.end(JSON.stringify({ error: "bad run sig" })); return;
+  }
+  let body: any; try { body = JSON.parse(raw.toString("utf8") || "{}"); } catch { res.writeHead(400); res.end(JSON.stringify({ error: "bad json" })); return; }
+  const now = new Date().toISOString();
+  const contracts = loadContracts().filter((c) => !body.contractId || c.contractId === body.contractId);
+  const outcomes: any[] = [];
+  for (const c of contracts) {
+    // Readiness: every required series has at least one observation.
+    const missing = c.requiredSeries.filter((s: string) => !db.prepare("SELECT 1 FROM indicator_history WHERE series_id = ? LIMIT 1").get(s));
+    if (missing.length) { outcomes.push({ contractId: c.contractId, enqueued: false, reason: `series missing from history: ${missing.join(", ")}` }); continue; }
+    // Reference month: the latest month common to all required series (so the
+    // skill's broadcast-append is a no-op and it forecasts the FOLLOWING month).
+    let refMonth = body.referenceMonth as string | undefined;
+    if (!refMonth) {
+      const maxes = c.requiredSeries.map((s: string) => (db.prepare("SELECT MAX(date) m FROM indicator_history WHERE series_id = ?").get(s) as any)?.m as string);
+      refMonth = maxes.sort()[0];
+    }
+    // Deterministic synthetic dataset from the history tail at refMonth.
+    const indicators = c.requiredSeries.map((s: string) => {
+      const row = db.prepare("SELECT value FROM indicator_history WHERE series_id = ? AND date = ?").get(s, refMonth) as any;
+      return { seriesId: s, observations: [{ date: refMonth, value: row?.value ?? 0 }] };
+    });
+    // NO volatile fields (timestamps) in the hashed payload — the content hash
+    // must be a pure function of the history state so re-runs dedup.
+    const dataset: any = {
+      schemaVersion: 1, datasetId: "", referenceMonth: refMonth, target: c.target, source: "ondemand",
+      releaseDate: "", asOf: refMonth, indicators,
+      provenance: { fetchedAt: "", sourceHost: "indicator_history", sourceHash: "" },
+    };
+    const contentHash = sha256Hex(Buffer.from(JSON.stringify(dataset)));
+    dataset.datasetId = `ds-ondemand-${contentHash.slice(0, 12)}`;
+    db.prepare(
+      "INSERT OR IGNORE INTO indicator_dataset (dataset_id, source, target, reference_month, release_date, as_of, content_hash, payload_json, received_at) VALUES (?,?,?,?,?,?,?,?,?)"
+    ).run(dataset.datasetId, "ondemand", c.target, refMonth, "", now, contentHash, JSON.stringify(dataset), now);
+    const ins = db.prepare(
+      "INSERT OR IGNORE INTO refresh_job (id, contract_id, target, reference_month, input_fingerprint, state, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+    ).run(`job-${c.contractId}-${dataset.datasetId}`, c.contractId, c.target, refMonth, contentHash, "waiting-inputs", now, now);
+    outcomes.push({ contractId: c.contractId, enqueued: ins.changes > 0, datasetId: dataset.datasetId, referenceMonth: refMonth, reason: ins.changes > 0 ? null : "already ran for this history state" });
+  }
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ ok: true, results: outcomes }));
+}
 
 function listResultDirs(sub?: string): string[] {
   const base = sub ? path.join(RESULTS_DIR, sub) : RESULTS_DIR;

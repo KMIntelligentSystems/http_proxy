@@ -27,7 +27,10 @@ import type { DatabaseSync } from "node:sqlite";
 import type { BroadcastBody } from "./crypto.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const RESULTS_DIR = path.resolve(__dirname, "..", "..", "data", "refresh-results");
+// REFRESH_RESULTS_DIR env override: lets tests/smoke-runs use a throwaway
+// results tree instead of the shared dev data/refresh-results (same minimal
+// enabler as the daemon's REFRESH_DB override).
+const RESULTS_DIR = process.env["REFRESH_RESULTS_DIR"] ?? path.resolve(__dirname, "..", "..", "data", "refresh-results");
 const PIPELINES_DIR = path.resolve(__dirname, "..", "..", "pipelines");
 
 // Result-signing key (the airlock holds it; the Oracle never sees it).
@@ -90,7 +93,7 @@ export function readPriorForecast(db: DatabaseSync, subjectId: string, reference
   }
   // Prior signed refresh-result for this subject (the previous month's output).
   let priorRefreshResult: any = null;
-  const resultsRoot = path.resolve(__dirname, "..", "..", "data", "refresh-results", subjectId);
+  const resultsRoot = path.join(RESULTS_DIR, subjectId);
   if (fs.existsSync(resultsRoot)) {
     const months = fs.readdirSync(resultsRoot).filter((d) => d < referenceMonth).sort();
     if (months.length) {

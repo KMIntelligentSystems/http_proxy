@@ -18,6 +18,7 @@ import { createArtifactStore } from "./artifacts.js";
 import { pullIndicatorDataset } from "./daemon-tools.js";
 import { syncIndicatorHistory } from "./refresh-history-bridge.js";
 import { runSarima } from "./sarima-tools.js";
+import { runRefresh } from "./refresh-runner.js";
 import { loadProjectEnv } from "./env.js";
 import { applyModelSelection, startHost, type HostServer } from "./host.js";
 import { createMcpTools } from "./mcp-tools.js";
@@ -248,6 +249,35 @@ const runSarimaTool = defineTool({
   },
 });
 
+// The user's flow-1 → flow-2 trigger: "apply the new indicators". Triggers an
+// on-demand refresh (frozen skills against the refreshed history), waits for
+// terminal job states, and returns the signed results + history — the exact
+// payload the orchestrator hands to the coder sub-agent for the updated chart.
+const runRefreshTool = defineTool({
+  name: "run_refresh",
+  label: "Run Refresh",
+  description:
+    "Apply the latest leading indicators: trigger an on-demand refresh on the " +
+    "target daemon (frozen skills re-execute against the refreshed " +
+    "indicator_history), wait for the jobs to finish, and return the signed " +
+    "results (point, PIs, analysis, provenance hashes) plus the series history " +
+    "needed to chart them. Typical sequence: pull_indicator_dataset → " +
+    "run_refresh → hand the results to the coder for an updated chart. " +
+    "Re-runs only when the history changed (deterministic dataset hash).",
+  parameters: Type.Object({
+    contractId: Type.Optional(Type.String({ description: "Run one contract only (e.g. 'm3-forecast-v1'); default: all ready contracts." })),
+    referenceMonth: Type.Optional(Type.String({ description: "Override the reference month YYYY-MM; default: latest month common to the contract's required series." })),
+    timeoutMs: Type.Optional(Type.Integer({ description: "Max wait for jobs to finish; default 90000." })),
+  }),
+  execute: async (_toolCallId, params) => {
+    const outcome = await runRefresh({ contractId: params.contractId, referenceMonth: params.referenceMonth, timeoutMs: params.timeoutMs });
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(outcome) }],
+      details: outcome,
+    };
+  },
+});
+
 const visualizationTools = createVisualizationTools({
   artifactStore,
   cwd: process.cwd(),
@@ -255,7 +285,7 @@ const visualizationTools = createVisualizationTools({
   onCatalogChanged: () => hostRef.current?.broadcastCatalogUpdated(),
 });
 
-const customTools = [...mcpTools, askUserTool, helloTool, pullIndicatorDatasetTool, syncIndicatorHistoryTool, runSarimaTool, ...visualizationTools];
+const customTools = [...mcpTools, askUserTool, helloTool, pullIndicatorDatasetTool, syncIndicatorHistoryTool, runSarimaTool, runRefreshTool, ...visualizationTools];
 
 // ─── Agent session runtime ───────────────────────────────────────────────────
 

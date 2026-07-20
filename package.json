@@ -23,6 +23,8 @@
     "test:p3-oracle": "tsx scripts/test-p3-oracle.ts",
     "data:load-index-csvs": "node scripts/load-index-csvs.mjs",
     "test:bridge-smoke": "node scripts/smoke-refresh-bridge.mjs",
+    "test:sarima-skill": "node scripts/smoke-sarima-skill.mjs",
+    "test:run-refresh": "node scripts/smoke-run-refresh.mjs",
     "test:p3-real-llm": "tsx scripts/test-p3-real-llm.ts"
   },
   "dependencies": {

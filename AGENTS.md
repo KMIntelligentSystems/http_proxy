@@ -168,6 +168,57 @@ table. Key implications for how you act:
 Respect the user's review power: they may open any artifact mid-turn to
 check your work, and their next prompt often references what they saw.
 
+## Refresh architecture (flow 2)
+
+Two flows coexist. Everything above this section is **flow 1** — interactive,
+human-in-the-loop, artifacts published only by the user's Save. **Flow 2** is
+the unattended refresh: signed broadcasts (or an on-demand trigger) run frozen
+skills and produce signed *candidates*. The bridges between them are explicit
+user acts: "freeze" (flow-1 judgment becomes a flow-2 contract) and "apply the
+new indicators" (flow-2 results return to flow 1 for visualization + publish).
+
+```
+source oracle ──signed broadcast (HMAC)──► refresh-daemon :8792 ──► refresh.db
+                                              verify·dedup·ingest     history·jobs
+data/*.csv ─► load-index-csvs ─► artifacts.db ─► bridge ─► /refresh/bootstrap ──┘
+job runner ─► oracle + 4-verb airlock ─► digest-pinned skill ─► signed candidate
+                                                    data/refresh-results/<subject>/<month>/
+```
+
+Key facts:
+
+- **Candidates are proposals, not publications.** `write_forecast_artifact`
+  writes `refresh_result.json` (point, PIs, hash quadruple + signature),
+  `analysis.md`, `forecast.csv` under `data/refresh-results/`. NOTHING from
+  flow 2 enters artifacts.db. The chart the user sees is flow-1 work: the
+  orchestrator reads the signed results (`run_refresh`) and delegates to the
+  `coder`; the user's Save is the publish gate.
+- **No LLM-authored numbers.** The oracle drives four verbs
+  (read·read·skill·write); the broker fills every number, hash, and the
+  signature. Abstain is a first-class terminal.
+- **Skills are frozen and digest-pinned** per contract
+  (`data/contracts/*.contract.json` → `pipelines/<name>@<ver>/`). The
+  entrypoint must be self-contained — `pipelineDigest` hashes only that file.
+  Status: m3-stl ✅, m3-sarima ✅, productivity ✅,
+  m3-leading-indicator-nowcast 🚧 (scaffold — jobs fail closed until weights
+  are frozen).
+- **refresh.db ≠ artifacts.db.** refresh.db (history, datasets, jobs) is the
+  daemon's; artifacts.db stays human-write-only. Backbone CSVs reach
+  refresh.db only via the deterministic bridge:
+  `scripts/load-index-csvs.mjs` → artifacts.db → `src/refresh-history-bridge.ts`
+  → `/refresh/bootstrap`.
+- Design docs: `docs/two-daemon-refresh-architecture.md`,
+  `docs/refresh-4-verb-catalog.md`; security review + fixes:
+  `conversations/oracle-airlock-review-recommendations-2026-07-19.md`.
+- Smoke suite (hermetic, temp state only): `test:bridge-smoke`,
+  `test:sarima-skill`, `test:run-refresh` (+ legacy `test:p2-*`, `test:p3-*`,
+  `test:refresh-e2e`).
+
+**Milestone hygiene.** Any change that adds or alters machinery (tools,
+daemons, pipelines, data paths, contracts) must update the knowledge surfaces
+— AGENTS.md, MEMORY.md, `.pi/skills/` — in the SAME change. The orchestrator's
+instructions are part of the system; knowledge-surface drift is a defect.
+
 ## Data Sources
 
 **Default source: `data/artifacts.db`.** Before reaching for any external API, run a
@@ -429,6 +480,10 @@ One table covers both new prompts and follow-up feedback:
 | Standalone analysis / Q&A without visualization | Answer directly, or with one `text/markdown` artifact. No pipeline. |
 | "Results of X data survey" (plural, vague) | Multi-artifact bundle — see Data Sources § "Results of X". |
 | "Pull leading indicators" / "Get latest FRED data" / "Fetch data for <month>" | `pull_indicator_dataset(source, month, series?)`. Wake the daemon for fresh data. The daemon must be running (`serve-http`). Call BEFORE delegating to `statistician` or `research` when the user asks for current economic data. |
+| "Apply / run the new indicators", "refresh the nowcast" | The flagship refresh flow: `pull_indicator_dataset` (fresh indicators, mirrored to history) → `run_refresh` (frozen skills execute on the refreshed history; returns signed results + history) → `delegate` to `coder` with the full result payload → present pending tree. Save = publish. |
+| "Sync / load / update index CSVs", "update the backbone" | Sanctioned writer only: `npm run data:load-index-csvs` (validated, hash-idempotent, `replaces_id`-versioned), then `sync_indicator_history` to push to refresh.db. **Never** ad-hoc `persist_artifacts` a CSV — that is how the pre-registry duplicates happened. |
+| "Run sarima" / "fit an ARIMA" (interactive) | `run_sarima` tool — typed params, deterministic local statsmodels fit, freeze-ready canonical output. |
+| "Freeze" (a validated model into a contract) | Follow `.pi/skills/pipeline-freeze/SKILL.md`. **Explicit user instruction only — never freeze autonomously.** |
 | Forecast, nowcast, prediction, output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill |
 | Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` |
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
@@ -529,6 +584,7 @@ When you delegate to a sub-agent:
 2. **Build the instruction** with: the user's original prompt (verbatim), the specific task (e.g. "Mode A: Discovery", "Mode B: CSV extraction"), the upstream content, and a list of upstream artifact IDs for provenance.
 3. **Two-channel completion.** Trust `artifact_created` WS events for what was produced (they carry every `ArtifactRecord` field). The agent's trailing ```json``` block is a self-report — parse the **last** one only, and proceed without it if absent or malformed.
 4. **Retain memory IDs** between calls to the same agent.
+5. **Refresh charts carry provenance.** When delegating a chart that visualizes signed refresh results (from `run_refresh`), include the full result payload (point, PIs, `analysisMd`, hash quadruple + signature) and the series history; the chart's source line must cite the short `outputHash` + signature so the published artifact traces to the signed candidate.
 
 Agents never touch the filesystem. They read what the orchestrator passes in and may emit one `text/markdown` artifact per turn with `role: "memory"`. Memory artifacts are visible in the artifact panel but visually de-emphasized; they are not shown to the end user as content.
 
@@ -705,6 +761,9 @@ Before presenting work to the user, verify:
 | `read` / `write` / `edit` | File operations |
 | `delegate` | Hand off to a specialist sub-agent (see Sub-agents section) |
 | `pull_indicator_dataset` | Wake the daemon to fetch leading-indicator data from FRED, BLS, or Census for a given reference month. Returns structured JSON with observations, units, and provenance. The daemon must be running (`cd daemon/airlock && cargo run -- serve-http --port 8791`). Use when the user asks for fresh economic data or a nowcast needs updated indicators. |
+| `run_refresh` | Trigger an on-demand refresh (frozen skills vs the refreshed `indicator_history`), wait for terminal job states, return signed results + history for the coder hand-off. Re-runs only when the history changed (deterministic dataset hash). |
+| `sync_indicator_history` | Push the persisted backbone CSVs (artifacts.db) to refresh.db via the HMAC-authed `/refresh/bootstrap` bridge. Idempotent; `dryRun` previews without posting. |
+| `run_sarima` | Interactive SARIMA(p,d,q)(P,D,Q)[s] fit (local statsmodels, deterministic). Canonical JSON: forecasts + PIs, coefficients, diagnostics, residual quantiles, freeze-ready spec. |
 
 ## Conversation Summary
 
@@ -732,3 +791,4 @@ next session's bootstrapping step.
 - Attribute data sources in the visualization
 - If a tool fails, diagnose and retry or use an alternative approach
 - For tool-specific quirks, pre-existing data files, and BLS API nuances, see `./MEMORY.md`
+- **Milestone hygiene:** machinery changes (tools, daemons, pipelines, data paths, contracts) must update AGENTS.md, MEMORY.md, and `.pi/skills/` in the same change — the knowledge surfaces are part of the system
