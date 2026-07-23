@@ -9,6 +9,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import { createArtifactStore, type ArtifactStore, isUtf8ArtifactMime } from "./artifacts.js";
 import { syncIndicatorHistory } from "./refresh-history-bridge.js";
+import { handleSchedulerRequest } from "./scheduler-api.js";
 import type { UserQuestionManager } from "./user-questions.js";
 import { loadProjectEnv } from "./env.js";
 
@@ -1624,6 +1625,15 @@ const server = http.createServer((req, res) => {
     // orchestrator (if an agent session is active).
     if (pathname === "/ui/api/daemon/broadcast" && req.method === "POST") {
       handleDaemonBroadcast(req, res, ctx);
+      return;
+    }
+
+    // ── /ui/api/scheduler/* — dev-only Windows Task Scheduler bridge (the
+    // React Scheduler panel). Guarded inside the module (win32 + non-prod).
+    if (pathname.startsWith("/ui/api/scheduler")) {
+      handleSchedulerRequest(req, res, pathname, PROJECT_ROOT).catch((err) =>
+        sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) })
+      );
       return;
     }
 

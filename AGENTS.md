@@ -213,6 +213,18 @@ Key facts:
 - Smoke suite (hermetic, temp state only): `test:bridge-smoke`,
   `test:sarima-skill`, `test:run-refresh` (+ legacy `test:p2-*`, `test:p3-*`,
   `test:refresh-e2e`).
+- **Dev scheduling (browser configures, OS executes).** The React Scheduler
+  panel (calendar toggle, bottom-right) drives dev-guarded host endpoints
+  `/ui/api/scheduler/*` (`src/scheduler-api.ts`; win32 + non-production
+  only), which register `DVA-*` Windows Scheduled Tasks running the
+  deterministic runner `scripts/scheduled-indicator-run.mjs` (signed
+  RunRequest → source `/run` → dataset pull → mirror to
+  `/refresh/bootstrap` → optional `/refresh/run`; logs in
+  `data/scheduler-logs/`). The closed series allowlist is
+  `data/lookups/scheduler_series.json` (mirror of the source daemon's 14
+  `[[series]]` with release-aware suggested schedules). In production the
+  panel is disabled — use Railway cron against the same runner, or the
+  source daemon's own `[schedule]` loop.
 
 **Milestone hygiene.** Any change that adds or alters machinery (tools,
 daemons, pipelines, data paths, contracts) must update the knowledge surfaces

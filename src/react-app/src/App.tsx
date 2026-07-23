@@ -9,6 +9,7 @@ import { CatalogTree } from "./components/CatalogTree";
 import { ModelSelector } from "./components/ModelSelector";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { ThinkingPanel } from "./components/ThinkingPanel";
+import { SchedulerPanel } from "./components/SchedulerPanel";
 import { useAuth } from "./lib/auth";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
@@ -22,6 +23,7 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
   const conversation = useConversation();
   const thinking = useThinking();
   const [aborting, setAborting] = useState(false);
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
   const {
     config,
     lookupData,
@@ -283,6 +285,11 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
           working={working}
           onToggle={thinking.togglePanel}
           onClose={thinking.closePanel}
+        />
+        <SchedulerPanel
+          open={schedulerOpen}
+          onToggle={() => setSchedulerOpen((v) => !v)}
+          onClose={() => setSchedulerOpen(false)}
         />
       </nav>
       <aside className="sidebar">

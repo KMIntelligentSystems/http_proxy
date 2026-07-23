@@ -472,7 +472,7 @@ Check these before fetching fresh data:
 | `dist/oe_histogram_density.json` | 12-bin PDF histogram (BLS wage intervals A–L). 772 occupations, 146.4M workers. |
 | `dist/oe_histogram_density.html` | Standalone D3 histogram chart artifact. |
 | `dist/tx_nonfarm.json` | Texas CES nonfarm payroll (SA + NSA), 120 monthly points each, 2014–2023. |
-| `data/m3_total_mfg_shipments_nsa.csv` | NSA Total Manufacturing Shipments (MTM/VS), 291 obs, Jan 2002–Mar 2026. From Census M3 API. |
+| `data/_archive/` (2026-07-23) | Retired duplicates (`m3_total_mfg_shipments_nsa.csv` — byte-identical to canonical; `m3_shipments_nsa_apr2026.csv`) + derived nowcast outputs (`m3_features`, `nowcast_history`, `nowcast_residuals`, `productivity_proxy_monthly`, `stl_m3_sa_series`). Not referenced by any live code. |
 | `data/series-map.json` | Checked-in backbone registry: canonical CSV → seriesId, validation bounds, consumers. Drives `load-index-csvs.mjs` + the refresh-history bridge. |
 | Backbone CSVs (`m3_nsa_total_mfg.csv`, `fred_ipman.csv`, `ces_mfg_employment_sa.csv`, `ces_mfg_hours_sa.csv`) | Canonical index series. Persisted to artifacts.db ONLY via `npm run data:load-index-csvs` (the sanctioned writer) — never ad-hoc `persist_artifacts`. |
 | `data/nowcast_indicator_panel.csv` | LASSO nowcast fitting panel (gitignored, local-only) — needed to freeze `m3-leading-indicator-nowcast` weights. |
@@ -778,6 +778,23 @@ contamination below).
   forecasts reproduce within 0.02%.
 - Skills run on the `py` launcher (`PYTHON_BIN` env) — NOT the codeGen MCP
   venv. Same packages (statsmodels 0.14.6), different interpreter.
+
+**Dev scheduling (added 2026-07-23):** the browser CONFIGURES, the OS
+EXECUTES. React `SchedulerPanel` (calendar toggle, bottom-right) →
+dev-guarded host endpoints `/ui/api/scheduler/*` (`src/scheduler-api.ts`;
+win32 + `NODE_ENV != production` only — prod uses Railway cron or the
+source daemon's own `[schedule]` loop in `C:\repos\daemon\daemon\airlock\config.toml`)
+→ Windows Scheduled Tasks (`DVA-*`) whose action is the checked-in runner
+`scripts/scheduled-indicator-run.mjs` (signed RunRequest → source `/run`
+→ pull dataset → mirror to `/refresh/bootstrap` → optional `/refresh/run`;
+logs to `data/scheduler-logs/*.json`; exit code = Task Scheduler "Last Run
+Result"). Series allowlist: `data/lookups/scheduler_series.json` (mirror of
+the source config's 14 `[[series]]` + release-aware suggested schedules;
+`bls_ces_mfg_employment` deliberately absent — human-maintained CSV per
+owner decision). Gotchas: schtasks `/sd` is SYSTEM-LOCALE dependent (detect
+via `(Get-Culture).DateTimeFormat.ShortDatePattern`, cached); Git-bash
+mangles `/create`-style args (MSYS path conversion) — execFile from Node is
+unaffected; task slugs must be sanitized (series ids carry underscores).
 
 ## Architecture
 

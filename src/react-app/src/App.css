@@ -1261,3 +1261,114 @@ body {
   border-color: rgba(210,168,255,.25);
   color: #d2a8ff;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Scheduler panel (dev-only) — third slide-out, anchored left of thinking.
+   ───────────────────────────────────────────────────────────────────────── */
+.sched-toggle {
+  position: fixed;
+  bottom: 16px;
+  right: 128px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  z-index: 41;
+  transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.sched-toggle:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+.sched-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(480px, 94vw);
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  z-index: 43;
+  display: flex; flex-direction: column;
+  overflow-y: auto;
+  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.45);
+  animation: panel-slide 0.18s ease-out;
+}
+.sched-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+}
+.sched-header h3 { font-size: 14px; font-weight: 600; color: var(--text); margin: 0; flex: 1; }
+.sched-dev-badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  color: #d2a8ff; border: 1px solid rgba(210,168,255,.35);
+  border-radius: 4px; padding: 1px 5px; vertical-align: middle;
+}
+.sched-close {
+  background: transparent; border: none; color: var(--text-dim);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.sched-close:hover { color: var(--text); }
+
+.sched-section { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.sched-section h4 { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 10px; }
+.sched-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 8px; font-size: 13px; color: var(--text);
+}
+.sched-row label:first-child { color: var(--text-dim); min-width: 76px; }
+.sched-row select, .sched-row input[type="month"], .sched-row input[type="date"], .sched-row input[type="time"], .sched-row input[type="number"] {
+  background: #0d1117; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; font-size: 12px;
+}
+.sched-num { width: 60px; }
+.sched-check { cursor: pointer; }
+.sched-check input { accent-color: var(--accent); }
+
+.sched-series-list {
+  display: flex; flex-direction: column; gap: 4px;
+  max-height: 180px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 8px; margin-bottom: 10px;
+}
+.sched-series-item {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text); cursor: pointer;
+}
+.sched-series-item input { accent-color: var(--accent); }
+
+.sched-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.sched-actions button {
+  background: #0d1117; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; font-size: 12px; cursor: pointer;
+}
+.sched-actions button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.sched-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.sched-error {
+  margin: 10px 14px 0; padding: 8px 10px;
+  border: 1px solid #f78166; border-radius: 6px;
+  color: #f78166; font-size: 12px;
+}
+.sched-lastrun {
+  margin: 10px 0 0; padding: 8px;
+  background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 11px; color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-all; max-height: 140px; overflow-y: auto;
+}
+.sched-table { width: 100%; border-collapse: collapse; font-size: 12px; color: var(--text); }
+.sched-table th { text-align: left; color: var(--text-dim); font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.sched-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.sched-del { background: transparent; border: none; color: #f78166; cursor: pointer; font-size: 12px; }
+.sched-del:hover { text-decoration: underline; }
+.sched-dim { color: var(--text-dim); font-size: 12px; margin: 0; }
+.sched-logs { list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.sched-logs li { padding: 3px 0; color: var(--text); }
+.sched-log-ok b { color: #3fb950; }
+.sched-log-err b { color: #f78166; }
