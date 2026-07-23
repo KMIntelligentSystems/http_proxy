@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "description": "Checked-in mapping between canonical index CSV files and the indicator_history seriesIds they seed. Consumed by scripts/load-index-csvs.mjs (validation + artifacts.db load) and, downstream, by the refresh-history bridge (artifacts.db -> /refresh/bootstrap). Only series listed here may be seeded into the target's indicator_history (closed seed surface).",
+  "series": {
+    "m3_total_shipments_nsa": {
+      "canonicalFile": "m3_nsa_total_mfg.csv",
+      "header": "date,value",
+      "source": "Census M3 (Manufacturers' Shipments)",
+      "units": "Millions of Dollars",
+      "cadence": "monthly",
+      "seasonalAdjustment": "not_seasonally_adjusted",
+      "valueRange": [150000, 900000],
+      "minObs": 200,
+      "consumedBy": ["sub-stl-deepseek", "sub-m3-forecasts", "sub-mfg-productivity"]
+    },
+    "fred_ipman": {
+      "canonicalFile": "fred_ipman.csv",
+      "header": "date,value",
+      "source": "FRED IPMAN (Industrial Production: Manufacturing)",
+      "units": "Index 2017=100",
+      "cadence": "monthly",
+      "seasonalAdjustment": "seasonally_adjusted",
+      "valueRange": [50, 120],
+      "minObs": 200,
+      "consumedBy": ["sub-statlearn-deepseek", "sub-mfg-productivity"]
+    },
+    "bls_ces_mfg_employment": {
+      "canonicalFile": "ces_mfg_employment_sa.csv",
+      "header": "date,value",
+      "source": "BLS CES Manufacturing Employment",
+      "units": "Thousands of Persons",
+      "cadence": "monthly",
+      "seasonalAdjustment": "seasonally_adjusted",
+      "valueRange": [10000, 17000],
+      "minObs": 200,
+      "consumedBy": ["sub-mfg-productivity"]
+    },
+    "bls_ces_mfg_hours": {
+      "canonicalFile": "ces_mfg_hours_sa.csv",
+      "header": "date,value",
+      "source": "BLS CES Manufacturing Average Weekly Hours",
+      "units": "Hours",
+      "cadence": "monthly",
+      "seasonalAdjustment": "seasonally_adjusted",
+      "valueRange": [30, 50],
+      "minObs": 200,
+      "consumedBy": ["sub-mfg-productivity", "sub-statlearn-deepseek"]
+    }
+  }
+}

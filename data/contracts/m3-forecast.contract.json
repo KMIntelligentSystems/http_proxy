@@ -1,0 +1,25 @@
+{
+  "contractId": "m3-forecast-v1",
+  "subjectId": "sub-m3-forecasts",
+  "target": "m3_shipments",
+  "semantics": "b-refit-pinned",
+  "pipeline": "m3-sarima@1.0.0",
+  "pipelineDigest": "sha256:8f16dfe110f10591997170e43908829cf5df8a4db6527e6c29cabbda3fc344de",
+  "envLock": "requirements.txt",
+  "envHash": "sha256:3f1e5bfc58f2b68d5c3f6cf32d8102879ebe576d4d3a136a3fe430e20a29f192",
+  "regimeDummies": [
+    "covid_2020q2",
+    "m3_sa_freeze"
+  ],
+  "requiredSeries": [
+    "m3_total_shipments_nsa"
+  ],
+  "optionalSeries": [],
+  "readiness": "new-vintage",
+  "piWideningFactor": 1.5,
+  "replacesTitlePatterns": [
+    "M3 NSA Total Manufacturing Shipments — with % Forecast",
+    "M3 % Forecast — SARIMA Model Card"
+  ],
+  "skillStatus": "scaffold — refit implementation TODO (pipeline manifest status)"
+}

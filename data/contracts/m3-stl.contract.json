@@ -1,0 +1,24 @@
+{
+  "contractId": "m3-stl-v1",
+  "subjectId": "sub-stl-deepseek",
+  "target": "m3_shipments",
+  "semantics": "b-refit-pinned",
+  "pipeline": "m3-stl@1.0.0",
+  "pipelineDigest": "sha256:db39e52aa930957f270c7053f957f641ffa05bbd14353dee7bcbbb73f14f56b8",
+  "envLock": "requirements.txt",
+  "envHash": "sha256:29b482ff6fb4a8f3456e14294feecc0e4975e8ad69b964326eb301e948e59c0f",
+  "regimeDummies": [
+    "covid_2020q2",
+    "m3_sa_freeze"
+  ],
+  "requiredSeries": [
+    "m3_total_shipments_nsa"
+  ],
+  "optionalSeries": [],
+  "readiness": "new-vintage",
+  "piWideningFactor": 1.5,
+  "replacesTitlePatterns": [
+    "STL Analysis — M3 NSA Total Mfg Shipments%",
+    "Chart: M3 Total Mfg Shipments — STL SA%"
+  ]
+}

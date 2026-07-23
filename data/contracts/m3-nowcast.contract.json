@@ -1,0 +1,20 @@
+{
+  "contractId": "m3-nowcast-v1",
+  "subjectId": "sub-statlearn-deepseek",
+  "target": "m3_new_orders",
+  "semantics": "a-frozen-rescore",
+  "pipeline": "m3-leading-indicator-nowcast@1.0.0",
+  "pipelineDigest": "sha256:de7f2c747de1323340c035b279f8a0c7a99dbc08b96079fcdbf3d85d8a5af403",
+  "envLock": "requirements.txt",
+  "envHash": "sha256:5da8cb169f5b0d995e8f02fb1795543ace8fc157b8e132e63028d7393b4c5d71",
+  "regimeDummies": ["covid_2020q2", "m3_sa_freeze"],
+  "requiredSeries": ["m3_new_orders", "m3_unfilled_orders", "fred_mcumfn"],
+  "optionalSeries": ["fred_ipman", "fred_tcu", "bls_ces_mfg_hours"],
+  "readiness": "all-required",
+  "revisionPolicy": "rerun-on-fingerprint-change",
+  "piWideningFactor": 1.5,
+  "replacesTitlePatterns": ["Manufacturing Output Nowcast%", "Nowcast Report: Manufacturing Output%"],
+  "selectedEstimator": "lasso_cv",
+  "excludedEstimators": ["ols", "stepwise_bic"],
+  "skillStatus": "scaffold — frozen LASSO weights TODO (re-fit against the indicator panel to extract coef/scaler/feature-order)"
+}

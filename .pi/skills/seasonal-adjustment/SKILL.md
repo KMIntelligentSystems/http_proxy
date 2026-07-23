@@ -221,8 +221,9 @@ of an M3 series:
    response has duplicate columns (time is at index 8); HTTP 204
    means no data (check before JSON parse).
 
-   Pre-fetched file: `data/m3_total_mfg_shipments_nsa.csv`
-   (291 obs, Jan 2002–Mar 2026).
+   Pre-fetched file: `data/m3_nsa_total_mfg.csv` (canonical backbone file,
+   292 obs, Jan 2002–Apr 2026; the older duplicate
+   `data/m3_total_mfg_shipments_nsa.csv` was archived to `data/_archive/`).
 
 2. Run X-13 (§4a) on the NSA history through end-2025 to fit the
    model — this matches the freeze cutoff and uses only “live”

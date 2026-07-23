@@ -362,7 +362,7 @@ export async function dispatch(
       } catch (e) { return { result: toolErr(call.callId, "read_failed", String(e)) }; }
     }
     case "run_nowcast_skill": {
-      // The oracle may pass options from a CLOSED, schema-validated menu only
+      // The oracle may pass options from a CLOSED, schema-validated menu onlyI 
       // (e.g. { vintageComparison: true }). The broker assembles the actual
       // inputs — the oracle cannot inject series, weights, or code.
       if (!session.dataset || !session.prior) {

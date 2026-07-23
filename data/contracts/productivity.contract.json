@@ -1,0 +1,26 @@
+{
+  "contractId": "productivity-v1",
+  "subjectId": "sub-mfg-productivity",
+  "target": "m3_shipments",
+  "semantics": "c-rederive",
+  "pipeline": "productivity@1.0.0",
+  "pipelineDigest": "sha256:17cd17c45e07dab125f7a5d91ba4aa85890c58d33120552561d789845cc9e130",
+  "envLock": "requirements.txt",
+  "envHash": "sha256:86a6829bf248601f96079ac183df95e674d3ed39db19e95e38551e078668641e",
+  "regimeDummies": [
+    "covid_2020q2"
+  ],
+  "requiredSeries": [
+    "m3_total_shipments_nsa",
+    "fred_ipman",
+    "bls_ces_mfg_employment",
+    "bls_ces_mfg_hours"
+  ],
+  "optionalSeries": [],
+  "readiness": "all-required",
+  "piWideningFactor": 1.5,
+  "replacesTitlePatterns": [
+    "Productivity Proxy — % Forecast (Seasonal RW)",
+    "Manufacturing Productivity Proxy — Monthly%"
+  ]
+}
