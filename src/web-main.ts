@@ -224,8 +224,11 @@ const runSarimaTool = defineTool({
   parameters: Type.Object({
     seriesId: Type.Optional(Type.String({ description: "Backbone series from data/series-map.json (e.g. 'm3_total_shipments_nsa'). Reads artifacts.db." })),
     observations: Type.Optional(Type.Array(Type.Object({ date: Type.String(), value: Type.Number() }), { description: "Inline observations [{date:'YYYY-MM', value}] — alternative to seriesId." })),
-    order: Type.Tuple([Type.Integer(), Type.Integer(), Type.Integer()], { description: "[p, d, q]" }),
-    seasonal_order: Type.Tuple([Type.Integer(), Type.Integer(), Type.Integer(), Type.Integer()], { description: "[P, D, Q, s] e.g. [1,1,0,12]" }),
+    // NOTE: Type.Tuple emits JSON-Schema tuple form (items: [...]) which strict
+    // provider validators (e.g. Moonshot/Kimi) reject — items must be an object.
+    // Use fixed-length Type.Array instead; same runtime shape [p,d,q].
+    order: Type.Array(Type.Integer(), { minItems: 3, maxItems: 3, description: "[p, d, q]" }),
+    seasonal_order: Type.Array(Type.Integer(), { minItems: 4, maxItems: 4, description: "[P, D, Q, s] e.g. [1,1,0,12]" }),
     transformation: Type.Optional(Type.Union([Type.Literal("none"), Type.Literal("log")], { description: "default 'none'" })),
     trend: Type.Optional(Type.Union([Type.Literal("n"), Type.Literal("c"), Type.Literal("drift")], { description: "'drift' = constant in the differenced model; default 'n'" })),
     horizon: Type.Optional(Type.Integer({ description: "forecast steps ahead; default 1" })),

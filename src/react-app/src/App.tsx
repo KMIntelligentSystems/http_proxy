@@ -10,11 +10,17 @@ import { ModelSelector } from "./components/ModelSelector";
 import { ConversationPanel } from "./components/ConversationPanel";
 import { ThinkingPanel } from "./components/ThinkingPanel";
 import { SchedulerPanel } from "./components/SchedulerPanel";
+import { LoginScreen } from "./components/LoginScreen";
 import { useAuth } from "./lib/auth";
 import { abortAgent, answerUserQuestion, artifactEvents, type UserQuestion } from "./lib/agent-bridge";
 
 export function App() {
-  const auth = useAuth();
+  const { auth, loading, refresh } = useAuth();
+  // Brief blank while /ui/api/auth/me resolves — avoids flashing the login screen.
+  if (loading) return null;
+  // No resolved identity → collect credentials. This is what scopes the
+  // sidebar catalog + Documents panel to the logged-in user (session.user_id).
+  if (!auth) return <LoginScreen onLogin={refresh} />;
   return <AuthenticatedApp auth={auth} />;
 }
 

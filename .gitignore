@@ -40,6 +40,8 @@ tmp*/
 
 # db
 *.db
+*.db-shm
+*.db-wal
 data/*.db
 data/*.sqlite
 data/*.sqlite3
@@ -48,5 +50,9 @@ data/*.sqlite3
 __pycache__/
 *.pyc
 
-# ephemeral scripts
-/scripts/
+# ephemeral scripts (permanent infrastructure scripts are un-ignored below)
+/scripts/*
+!/scripts/load-index-csvs.mjs
+!/scripts/smoke-refresh-bridge.mjs
+!/scripts/smoke-sarima-skill.mjs
+!/scripts/smoke-run-refresh.mjs

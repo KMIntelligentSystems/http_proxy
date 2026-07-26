@@ -91,8 +91,9 @@ The orchestrator reads artifact contents and passes them inside delegation instr
     Use the user-scoping subquery from step 3. Map keywords to DB tags, roles,
     categories, and subjects. **Always pass `catalogFilter`** in the same
     `query_artifacts` call so the sidebar catalog tree shows only matching entries.
-    Do NOT run a broad unfiltered SELECT — the sidebar starts empty and only
-    populates when you explicitly filter.
+    Do NOT run a broad unfiltered SELECT — scope to the prompt's concepts.
+    The sidebar shows the logged-in user's full tree by default; your
+    `catalogFilter` narrows it to the matching concepts.
 4. Introduce yourself as the Data Visualization Agent.
 5. Summarize prior session state (open items, accomplishments, DB inventory totals).
 6. Present what you're ready to work on next.
@@ -334,7 +335,8 @@ query_artifacts({
 ```
 
 The `catalogFilter` parameter controls what the **sidebar catalog tree**
-displays. Without it, the sidebar stays empty (or shows the last filter).
+displays. Without it, the sidebar shows the user's full tree (or the last
+filter the agent set).
 Always pass `catalogFilter` with the first `query_artifacts` of a new
 concept. Subsequent queries in the same prompt can omit it to keep the
 current filter, or override it to narrow/broaden.

@@ -35,6 +35,18 @@ if (BASIC_AUTH_USER && BASIC_AUTH_PASS && BASIC_AUTH_USERS.size === 0) {
 }
 const BASIC_AUTH_ENABLED = BASIC_AUTH_USERS.size > 0;
 
+// Case-insensitive username lookup — returns the canonical (configured) casing
+// so the forwarded x-authenticated-user header matches the host's identity checks.
+function lookupBasicUser(name: string): { canonical: string; pass: string } | null {
+  const exact = BASIC_AUTH_USERS.get(name);
+  if (exact !== undefined) return { canonical: name, pass: exact };
+  const lower = name.toLowerCase();
+  for (const [k, v] of BASIC_AUTH_USERS) {
+    if (k.toLowerCase() === lower) return { canonical: k, pass: v };
+  }
+  return null;
+}
+
 const LOOPBACK = ["127.0.0.1", "::1", "localhost"];
 
 function isLoopback(addr: string): boolean {
@@ -77,8 +89,8 @@ function checkAuthWithUser(req: http.IncomingMessage): [boolean, string | null] 
     if (idx < 0) return [false, null];
     const user = decoded.slice(0, idx);
     const pass = decoded.slice(idx + 1);
-    const expectedPass = BASIC_AUTH_USERS.get(user);
-    if (expectedPass && safeEqual(pass, expectedPass)) return [true, user];
+    const match = lookupBasicUser(user);
+    if (match && safeEqual(pass, match.pass)) return [true, match.canonical];
   }
 
   return [false, null];

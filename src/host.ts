@@ -44,6 +44,19 @@ function parseBasicUsers(raw: string): Map<string, string> {
 }
 const BASIC_AUTH_USERS = parseBasicUsers(BASIC_AUTH_USERS_RAW);
 
+// Case-insensitive username lookup — returns the canonical (configured) casing
+// so downstream identity checks (`currentUser === "admin"`, DB user rows, role
+// assignment) stay consistent regardless of how the name was typed at login.
+function lookupBasicUser(name: string): { canonical: string; pass: string } | null {
+  const exact = BASIC_AUTH_USERS.get(name);
+  if (exact !== undefined) return { canonical: name, pass: exact };
+  const lower = name.toLowerCase();
+  for (const [k, v] of BASIC_AUTH_USERS) {
+    if (k.toLowerCase() === lower) return { canonical: k, pass: v };
+  }
+  return null;
+}
+
 // BLS API key — prefer process.env (set by Railway or loadProjectEnv), fall back to data/.env
 let BLS_API_KEY = process.env["BLS_API_KEY"]?.trim().replace(/["']/g, "") ?? "";
 if (!BLS_API_KEY) {
@@ -876,9 +889,9 @@ const server = http.createServer((req, res) => {
           if (idx >= 0) {
             const user = decoded.slice(0, idx);
             const pass = decoded.slice(idx + 1);
-            const expectedPass = BASIC_AUTH_USERS.get(user);
-            if (expectedPass && pass === expectedPass) {
-              currentUser = user;
+            const match = lookupBasicUser(user);
+            if (match && pass === match.pass) {
+              currentUser = match.canonical;
             }
           }
         } catch { /* keep loopback */ }
@@ -1018,19 +1031,20 @@ const server = http.createServer((req, res) => {
             sendJson(res, 400, { error: "Username and password are required." });
             return;
           }
-          const expectedPass = BASIC_AUTH_USERS.get(username);
-          if (!expectedPass || password !== expectedPass) {
+          const match = lookupBasicUser(username);
+          if (!match || password !== match.pass) {
             sendJson(res, 401, { error: "Invalid credentials." });
             return;
           }
+          const canonicalUser = match.canonical;
           // Ensure the user row exists in the DB.
           try {
             const sqldb = new DatabaseSync(path.resolve(PROJECT_ROOT, "data", "artifacts.db"));
             sqldb.prepare("INSERT OR IGNORE INTO user (id, display_name, created_at) VALUES (?, ?, ?)")
-              .run(username, username, new Date().toISOString());
+              .run(canonicalUser, canonicalUser, new Date().toISOString());
             sqldb.close();
           } catch { /* schema may not exist yet — harmless */ }
-          sendJson(res, 200, { ok: true, username, role: username === "admin" ? "admin" : "user" });
+          sendJson(res, 200, { ok: true, username: canonicalUser, role: canonicalUser === "admin" ? "admin" : "user" });
         })
         .catch((err) => sendJson(res, 400, { error: err instanceof Error ? err.message : String(err) }));
       return;
@@ -1748,9 +1762,9 @@ wss.on("connection", (clientSocket, req) => {
       const qUser = wsUrl.searchParams.get("user");
       const qPass = wsUrl.searchParams.get("pass");
       if (qUser && qPass) {
-        const expectedPass = BASIC_AUTH_USERS.get(qUser);
-        if (expectedPass && qPass === expectedPass) {
-          wsUser = qUser;
+        const match = lookupBasicUser(qUser);
+        if (match && qPass === match.pass) {
+          wsUser = match.canonical;
         }
       }
     }

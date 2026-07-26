@@ -163,8 +163,8 @@ export type CatalogTree = {
 
 /** Server-side filter applied to buildCatalog(). Set by the agent via
  *  query_artifacts when the user's prompt carries domain concepts.
- *  When null/empty, buildCatalog() returns an empty tree — the sidebar
- *  shows nothing until the agent explicitly filters. */
+ *  When null/empty, buildCatalog() returns the user's full visible tree —
+ *  the filter only ever narrows the sidebar, never gates it. */
 export type CatalogFilter = {
   tags?: string[];
   roles?: string[];
@@ -191,15 +191,15 @@ export class ArtifactStore {
   currentUserId: string | null = null;
 
   /** Set a server-side filter that buildCatalog() applies. When null or
-   *  all fields empty, the catalog returns an empty tree. Called by the
-   *  agent (query_artifacts tool) after extracting concepts from the
-   *  user's prompt. */
+   *  all fields empty, the catalog shows the scoped user's full tree.
+   *  Called by the agent (query_artifacts tool) after extracting concepts
+   *  from the user's prompt. */
   setCatalogFilter(filter: CatalogFilter | null): void {
     this.catalogFilter = filter;
   }
 
   /** Remove the active catalog filter. The next buildCatalog() call
-   *  returns an empty tree until a new filter is set. */
+   *  returns the scoped user's full tree again. */
   clearCatalogFilter(): void {
     this.catalogFilter = null;
   }
@@ -337,9 +337,10 @@ export class ArtifactStore {
     });
 
     // ── Apply server-side catalog filter ──────────────────────────────────
-    // When the agent hasn't set a filter (startup), return an empty catalog.
-    // The sidebar shows nothing until the agent extracts concepts from the
-    // user's prompt and runs a filtered query_artifacts call.
+    // Default (no filter): show ALL visible artifacts for the scoped user —
+    // this is what populates the left "Documents" panel on login. When the
+    // agent sets a filter (query_artifacts catalogFilter), the tree narrows
+    // to the matching concepts instead.
     const filter = this.catalogFilter;
     const hasFilter = filter && (
       (filter.tags && filter.tags.length > 0) ||
@@ -350,8 +351,8 @@ export class ArtifactStore {
 
     let filtered: typeof visible;
     if (!hasFilter) {
-      return { schemaVersion: 1, generatedAt: now, buckets: [], collections: this.loadCollections() };
-    }
+      filtered = visible;
+    } else {
 
     filtered = visible.filter((r) => {
       // OR across filter fields, OR within each field's values
@@ -370,6 +371,7 @@ export class ArtifactStore {
       }
       return false;
     });
+    }
 
     // Group: category → subject → role → items
     const bucketMap = new Map<string, CatalogBucket>();

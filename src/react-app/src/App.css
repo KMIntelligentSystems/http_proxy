@@ -1330,6 +1330,20 @@ body {
 .sched-check { cursor: pointer; }
 .sched-check input { accent-color: var(--accent); }
 
+.sched-row input[type="text"].sched-name {
+  flex: 1; min-width: 140px;
+  background: #0d1117; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; font-size: 12px;
+}
+.sched-name-hint {
+  margin: -4px 0 8px; padding-left: 84px;
+  font-size: 11px; color: var(--text-dim);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  word-break: break-all;
+}
+.sched-name-warn { color: #f78166; }
+
 .sched-series-list {
   display: flex; flex-direction: column; gap: 4px;
   max-height: 180px; overflow-y: auto;

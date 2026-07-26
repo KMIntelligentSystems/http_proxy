@@ -53,6 +53,23 @@ just the local default). The `/ui/ws/agent` WebSocket requires the
 `x-loopback: 1` header that only the proxy injects; going directly to the host
 `:3100` or to Vite's own WS relay is a brittle path.
 
+## Auth & login (BASIC_AUTH_USERS)
+
+Credentials come from `BASIC_AUTH_USERS` (format `admin:pass1,user:pass2`) in
+`.env`; legacy `BASIC_AUTH_USER`/`BASIC_AUTH_PASS` is the single-user fallback.
+**Username matching is case-insensitive** (fixed 2026-07-26): a shared
+`lookupBasicUser()` helper in both `host.ts` and `proxy.ts` tries exact match,
+then a case-folded scan, and returns the **canonical configured casing**. That
+canonical name is what gets validated at all four credential checkpoints —
+`POST /ui/api/auth/login`, the request-handler Basic-Auth fallback that sets
+`currentUser`, the `/ui/ws/agent` `?user=&pass=` check, and the proxy's Basic
+Auth — and it is what flows into `x-authenticated-user`, the `user` DB row,
+role assignment (`=== "admin"`), and multi-tenant artifact scoping. Passwords
+remain case-sensitive (constant-time compare in the proxy). Gotcha: the host
+**forwards any request lacking `x-loopback: 1` to PROXY_URL** — direct curl
+tests against the host port silently test the *proxy's* host, not the one you
+started. Pass `-H "x-loopback: 1"` when exercising host routes directly.
+
 ## Browser event contract (`agent-bridge.ts`)
 
 The React app opens a WebSocket to `/ui/ws/agent` at module load and
@@ -229,6 +246,17 @@ choking:
 "C:\repos\codeGen-mcp-server\venv\Scripts\python.exe" data/_tmp.py && rm data/_tmp.py
 ```
 Keep only the script's *output* (CSV, JSON) — the script itself is ephemeral. **Do not persist Python scripts** to `data/` or a `scripts/` directory. A stale fetch script is worse than useless: it misleads future runs into thinking it still works. When the CSV needs refreshing, write a new script.
+
+## Provider quirk: Moonshot/Kimi rejects tuple-form tool schemas
+
+Moonshot's tool-schema validator requires every `items` to be an **object**.
+TypeBox `Type.Tuple([...])` emits draft-07 tuple form (`items: [ {...}, ... ]`),
+so any tool using it makes **every** provider request fail with
+`400 ... 'properties.<name>.items': items must be an object` — regardless of the
+prompt, since all tool schemas ride on every call. OpenAI accepts tuple form, so
+this only bites on Kimi models. **Rule: never use `Type.Tuple` in pi tool
+parameters; use `Type.Array(T, { minItems: n, maxItems: n })` for fixed-length
+arrays.** (Fixed 2026-07-25 in `run_sarima`, `src/web-main.ts`.)
 
 ## BLS API v2 — OEWS limitation
 
