@@ -817,12 +817,33 @@ source daemon's own `[schedule]` loop in `C:\repos\daemon\daemon\airlock\config.
 → pull dataset → mirror to `/refresh/bootstrap` → optional `/refresh/run`;
 logs to `data/scheduler-logs/*.json`; exit code = Task Scheduler "Last Run
 Result"). Series allowlist: `data/lookups/scheduler_series.json` (mirror of
-the source config's 14 `[[series]]` + release-aware suggested schedules;
-`bls_ces_mfg_employment` deliberately absent — human-maintained CSV per
-owner decision). Gotchas: schtasks `/sd` is SYSTEM-LOCALE dependent (detect
+the source config's 15 `[[series]]` + release-aware suggested schedules).
+Gotchas: schtasks `/sd` is SYSTEM-LOCALE dependent (detect
 via `(Get-Culture).DateTimeFormat.ShortDatePattern`, cached); Git-bash
 mangles `/create`-style args (MSYS path conversion) — execFile from Node is
 unaffected; task slugs must be sanitized (series ids carry underscores).
+
+**`targets` ≠ series ids (fixed 2026-07-26).** A RunRequest's `targets` are
+validated against a CLOSED set — `KNOWN_TARGETS` in
+`daemon/airlock/src/service.rs`: `m3_new_orders`, `m3_unfilled_orders`,
+`m3_shipments`, `mfg_capacity`. The runner previously sent `targets:
+[seriesIds[0]]`, so it 400'd ("unknown target") for every FRED and BLS
+request and only ever worked for Census M3. Each catalog entry now carries a
+`daemonTarget` field (FRED/BLS → `mfg_capacity`) which the runner de-dupes
+into `targets`. If you add a series, set its `daemonTarget`.
+
+**`bls_ces_mfg_employment` is now daemon-fetchable (2026-07-26),**
+superseding the 2026-07-23 human-maintained-CSV decision. Added as
+`[[series]]` in the source `config.toml` (`CES3000000001`, Thousands of
+Persons, SA, `reference_lag_months = 1`, range 10000–17000) and mirrored
+into `scheduler_series.json` (day 8, with the hours series). `fetch_bls` is
+generic over `provider_series_id` — no Rust change was needed. Verified
+end-to-end: live fetch → mirror → `indicator_history` 2026-06 = 12598, and
+re-running is idempotent (one row per `(series_id, date)`). The canonical
+CSV path (`series-map.json` → `ces_mfg_employment_sa.csv` → loader →
+bridge) still works and remains the fallback; both converge on
+`indicator_history`. It no longer gates the productivity contract's
+common-latest-month rule when scheduled.
 
 ## Architecture
 

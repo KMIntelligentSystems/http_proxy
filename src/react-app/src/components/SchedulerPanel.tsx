@@ -17,6 +17,20 @@ interface SchedulerPanelProps { open: boolean; onToggle: () => void; onClose: ()
 
 const API = "/ui/api/scheduler";
 
+/** Mirror of scheduler-api.ts's slug sanitizer — keep the two in sync. */
+const sanitizeSlug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+/**
+ * Derive the DVA-* task name exactly as POST /tasks does, so the user sees the
+ * name before submitting. Without an explicit `name` the host falls back to the
+ * FIRST SELECTED SERIES — two subsets of one source that share a first series
+ * collide, and schtasks /create /f overwrites silently. Hence the preview.
+ */
+function deriveTaskName(source: string, name: string, firstSeries: string | undefined): string {
+  const slug = `${source}-${sanitizeSlug(name) || sanitizeSlug(firstSeries ?? "")}`.slice(0, 44);
+  return `DVA-${slug}`;
+}
+
 /**
  * Dev-only scheduler console: configure indicator-fetch schedules from the
  * catalog of the source daemon's 14 series. "Run now" executes the runner
@@ -41,6 +55,7 @@ export function SchedulerPanel({ open, onToggle, onClose }: SchedulerPanelProps)
   const [dayOfWeek, setDayOfWeek] = useState("MON");
   const [onceDate, setOnceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [withRefresh, setWithRefresh] = useState(true);
+  const [name, setName] = useState("");
 
   const refresh = useCallback(async () => {
     try {
@@ -66,6 +81,8 @@ export function SchedulerPanel({ open, onToggle, onClose }: SchedulerPanelProps)
     if (!catalog) return;
     const ss = catalog.series.filter((s) => s.source === source);
     setSelected(new Set(ss.map((s) => s.id)));
+    setName(""); // never carry a task name across sources
+
     const sug = ss[0]?.suggestedSchedule;
     if (sug) {
       setKind((sug.kind as typeof kind) ?? "monthly");
@@ -87,7 +104,12 @@ export function SchedulerPanel({ open, onToggle, onClose }: SchedulerPanelProps)
     series: [...selected],
     month: month === "latest" ? "latest" : month,
     withRefresh,
+    ...(name.trim() ? { name: name.trim() } : {}),
   });
+
+  const taskName = deriveTaskName(source, name, [...selected][0]);
+  const nameCollides = tasks.some((t) => t.name === taskName);
+  const nameInvalid = !/^DVA-[a-z0-9-]{1,48}$/.test(taskName);
 
   const runNow = async () => {
     setBusy(true); setError(null); setLastRun(null);
@@ -111,6 +133,7 @@ export function SchedulerPanel({ open, onToggle, onClose }: SchedulerPanelProps)
       const r = await fetch(`${API}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...body(), recurrence }) });
       const j = await r.json();
       if (!r.ok) setError(j.error ?? `schedule failed (${r.status})`);
+      else setName(""); // avoid silently reusing a name on the next submission
       await refresh();
     } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
     finally { setBusy(false); }
@@ -201,9 +224,28 @@ export function SchedulerPanel({ open, onToggle, onClose }: SchedulerPanelProps)
               <input type="checkbox" checked={withRefresh} onChange={(e) => setWithRefresh(e.target.checked)} />
               also trigger refresh (frozen skills) after fetch
             </label>
+            <div className="sched-row">
+              <label htmlFor="sched-task-name">Task name</label>
+              <input
+                id="sched-task-name"
+                type="text"
+                className="sched-name"
+                value={name}
+                placeholder="optional — defaults to first series"
+                onChange={(e) => setName(e.target.value)}
+                aria-describedby="sched-task-name-hint"
+              />
+            </div>
+            <p id="sched-task-name-hint" className={`sched-name-hint${nameCollides || nameInvalid ? " sched-name-warn" : ""}`}>
+              {nameInvalid
+                ? "⚠ name sanitizes to an invalid task name — use letters or digits"
+                : nameCollides
+                  ? `⚠ ${taskName} already exists — scheduling overwrites it`
+                  : `Task: ${taskName}`}
+            </p>
             <div className="sched-actions">
               <button onClick={runNow} disabled={busy || selected.size === 0}>Run now</button>
-              <button onClick={schedule} disabled={busy || selected.size === 0}>Schedule task</button>
+              <button onClick={schedule} disabled={busy || selected.size === 0 || nameInvalid}>Schedule task</button>
               <button onClick={openTaskScheduler} title="Open Windows Task Scheduler">Open Task Scheduler</button>
             </div>
             {lastRun && <pre className="sched-lastrun">{lastRun}</pre>}

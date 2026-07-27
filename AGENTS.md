@@ -222,10 +222,14 @@ Key facts:
   RunRequest → source `/run` → dataset pull → mirror to
   `/refresh/bootstrap` → optional `/refresh/run`; logs in
   `data/scheduler-logs/`). The closed series allowlist is
-  `data/lookups/scheduler_series.json` (mirror of the source daemon's 14
-  `[[series]]` with release-aware suggested schedules). In production the
-  panel is disabled — use Railway cron against the same runner, or the
-  source daemon's own `[schedule]` loop.
+  `data/lookups/scheduler_series.json` (mirror of the source daemon's 15
+  `[[series]]` with release-aware suggested schedules, each carrying the
+  `daemonTarget` that the RunRequest's closed-set `targets` requires). In
+  production the panel is disabled — use Railway cron against the same
+  runner, or the source daemon's own `[schedule]` loop. All 15 series are
+  machine-fetchable as of 2026-07-26: `bls_ces_mfg_employment`
+  (`CES3000000001`) was added to the source config, retiring the
+  human-maintained-CSV step (the CSV path remains as fallback).
 
 **Milestone hygiene.** Any change that adds or alters machinery (tools,
 daemons, pipelines, data paths, contracts) must update the knowledge surfaces
