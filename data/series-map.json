@@ -45,6 +45,17 @@
       "valueRange": [30, 50],
       "minObs": 200,
       "consumedBy": ["sub-mfg-productivity", "sub-statlearn-deepseek"]
+    },
+    "bls_ppi_mfg": {
+      "canonicalFile": "ppi_mfg_nsa.csv",
+      "header": "date,value",
+      "source": "BLS PPI (Industry Net Output: Total Manufacturing Industries)",
+      "units": "Index",
+      "cadence": "monthly",
+      "seasonalAdjustment": "not_seasonally_adjusted",
+      "valueRange": [100, 400],
+      "minObs": 200,
+      "consumedBy": ["sub-mfg-productivity"]
     }
   }
 }
