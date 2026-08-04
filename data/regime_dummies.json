@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "description": "Canonical, checked-in catalog of known data regime breaks for the data sources this project uses. This is the SINGLE source of truth for dummy encoding — the frozen-skill contracts hash-reference this file so two recomputations encoding a break differently cannot diverge under the same skill_version. Populate via PR; never edit in place without bumping the schemaVersion.",
+  "breaks": [
+    {
+      "id": "covid_2020q2",
+      "label": "COVID-19 additive outliers 2020-Q2",
+      "sources": ["census", "fred", "bls"],
+      "encoding": "pulse",
+      "definition": "1 if date in {2020-04, 2020-05, 2020-06}, else 0",
+      "appliesTo": ["monthly"],
+      "note": "Treat with robust loss / X-13 AO detection. The pulse encodes the acute demand shock; some series also show a 2020-03 level shift."
+    },
+    {
+      "id": "m3_sa_freeze",
+      "label": "M3 seasonally-adjusted model freeze",
+      "sources": ["census"],
+      "encoding": "step",
+      "definition": "1 if date >= 2026-01, else 0",
+      "appliesTo": ["monthly"],
+      "note": "Census froze the M3 SA model from Jan 2026; SA series are not updated. All M3 refresh work uses NSA data throughout and sets this dummy so models aware of the regime change can adjust. Active now."
+    },
+    {
+      "id": "m3_nondurable_advance_expansion",
+      "label": "M3 Advance-report nondurable coverage expansion",
+      "sources": ["census"],
+      "encoding": "step",
+      "definition": "1 if date >= 2025-07, else 0",
+      "appliesTo": ["monthly"],
+      "note": "Affects nondurable Advance vintages only. Included for completeness; not active in the total-manufacturing contracts."
+    }
+  ],
+  "encodingRecipes": {
+    "step": "1 if date >= break, else 0",
+    "pulse": "1 if date == break, else 0 (use a date-set for multi-month pulses)",
+    "trendShift": "(monthIndex(date) - monthIndex(break)) * step_dummy"
+  },
+  "references": [
+    "Bai & Perron (2003), Computation and analysis of multiple structural change models. J. Applied Econometrics 18(1), 1-22.",
+    "Census Bureau X-13ARIMA-SEATS docs §7 (regression spec) for the user-regressor encoding of step/pulse dummies in SA."
+  ]
+}

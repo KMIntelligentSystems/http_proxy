@@ -110,7 +110,13 @@ function openDb(): DatabaseSync {
       value      REAL NOT NULL,
       is_preliminary INTEGER NOT NULL DEFAULT 0,
       observed_at TEXT NOT NULL,
-      PRIMARY KEY (series_id, date)
+      PRIMARY KEY (series_id, date),
+      -- Hard-enforce the canonical YYYY-MM month key so no writer (broadcast,
+      -- bootstrap, CSV bridge) can reintroduce YYYY-MM-DD rows that dodge the
+      -- (series_id, date) PK and duplicate a month. Binds on fresh DBs only
+      -- (CREATE ... IF NOT EXISTS won't alter an existing table); the write-side
+      -- .slice(0,7) normalization is what protects the already-live DB.
+      CHECK (length(date) = 7)
     );
     CREATE TABLE IF NOT EXISTS refresh_job (
       id               TEXT PRIMARY KEY,
@@ -258,7 +264,12 @@ async function handleBroadcast(req: http.IncomingMessage, res: http.ServerRespon
     for (const ind of pulled.dataset.indicators ?? []) {
       vstmt.run(body.datasetId, ind.seriesId, body.referenceMonth, pulled.dataset.provenance?.fetchedAt ?? now, pulled.dataset.provenance?.sourceHash ?? "", ind.isPreliminary ? 1 : 0);
       for (const obs of ind.observations ?? []) {
-        hstmt.run(ind.seriesId, obs.date, obs.value, obs.isPreliminary ? 1 : 0, now);
+        // Normalize to YYYY-MM. indicator_history is keyed (series_id, date) and
+        // is written by THREE paths (this broadcast ingest, /refresh/bootstrap, and
+        // the CSV backbone bridge). If they disagree on date format the PK doesn't
+        // collide and months duplicate. YYYY-MM is the canonical key — enforce it
+        // here at the DB boundary so no caller's format can leak through.
+        hstmt.run(ind.seriesId, String(obs.date).slice(0, 7), obs.value, obs.isPreliminary ? 1 : 0, now);
       }
     }
     db.exec("COMMIT");
@@ -453,7 +464,9 @@ async function handleBootstrap(req: http.IncomingMessage, res: http.ServerRespon
   db.exec("BEGIN IMMEDIATE");
   try {
     for (const s of body.series ?? []) {
-      for (const o of s.observations ?? []) { hstmt.run(s.seriesId, o.date, o.value, o.isPreliminary ? 1 : 0, now); n++; }
+      // Normalize to YYYY-MM at the DB boundary (see broadcast-ingest note) so the
+      // (series_id, date) key is canonical regardless of what the caller sends.
+      for (const o of s.observations ?? []) { hstmt.run(s.seriesId, String(o.date).slice(0, 7), o.value, o.isPreliminary ? 1 : 0, now); n++; }
     }
     db.exec("COMMIT");
   } catch (err) { db.exec("ROLLBACK"); res.writeHead(500); res.end(JSON.stringify({ error: "storage_error" })); return; }
