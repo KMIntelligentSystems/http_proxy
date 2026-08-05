@@ -1,16 +1,18 @@
 ---
 name: regime-dummies
-description: Detect and encode structural breaks (policy shocks, data-methodology changes, hiatuses) as covariates in time-series and regression models. Catalogs known breaks for the data sources this project uses. Status — STUB.
+description: Detect and encode structural breaks (policy shocks, data-methodology changes, hiatuses) as covariates in time-series and regression models. Catalogs known breaks for the data sources this project uses. The canonical, checked-in dummy table is data/regime_dummies.json — the single source of truth that frozen-skill contracts hash-reference.
 ---
 
-# Regime Dummies Skill — STUB
+# Regime Dummies Skill
 
-**Status:** stub — populate on first use.
+**Status:** canonical table populated at `data/regime_dummies.json`.
 
 Referenced by `industry-output-nowcast` (§2 feature engineering)
 and by `seasonal-adjustment` (X-13 outlier handling). Centralizes
 the project's catalog of known data regime breaks so each analysis
-doesn't re-derive them.
+doesn't re-derive them — and so frozen refresh contracts bind to a
+fixed encoding (two recomputations encoding a break differently
+cannot diverge under the same `skill_version`).
 
 ## Intended contents (when populated)
 
