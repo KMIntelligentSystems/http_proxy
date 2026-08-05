@@ -45,6 +45,7 @@ tmp*/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/scheduler-logs/*
 
 # python
 __pycache__/

@@ -49,6 +49,13 @@ Lagged values of the target itself (annual output for years
 Feature-engineering rules:
 
 - Work in **log differences** (or YoY growth for monthly indicators).
+- For Census M3 monthly levels used in a release-stage ADL, require a
+  contiguous 16-month window ending at the latest permissible reference
+  month. This is the minimum operational fetch window that supports YoY
+  growth at `t` and the own-lag block `g_(t-1), g_(t-2), g_(t-3)`; 13 levels
+  support only `g_t`. Scheduled M3 ingestion fetches three calendar years,
+  excludes observations after the requested reference month, retains the 16
+  levels ending there, and upserts them into `indicator_history`.
 - For each monthly predictor at cutoff `t`, build:
   - Year-to-date mean / sum through month `t`.
   - 3-month and 12-month growth rates at month `t`.

@@ -229,7 +229,11 @@ Key facts:
   runner, or the source daemon's own `[schedule]` loop. All 15 series are
   machine-fetchable as of 2026-07-26: `bls_ces_mfg_employment`
   (`CES3000000001`) was added to the source config, retiring the
-  human-maintained-CSV step (the CSV path remains as fallback).
+  human-maintained-CSV step (the CSV path remains as fallback). Census M3
+  scheduler fetches request three years separately, reject observations after
+  the requested reference month, and retain the 16 levels ending there; this
+  avoids multi-year API 500s and supplies a leakage-safe window for YoY ADL
+  features through `g_(t-1..t-3)`.
 
 **Milestone hygiene.** Any change that adds or alters machinery (tools,
 daemons, pipelines, data paths, contracts) must update the knowledge surfaces

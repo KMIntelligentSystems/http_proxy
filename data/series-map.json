@@ -56,6 +56,17 @@
       "valueRange": [100, 400],
       "minObs": 200,
       "consumedBy": ["sub-mfg-productivity"]
+    },
+    "fred_cfnai": {
+      "canonicalFile": "fred_cfnai.csv",
+      "header": "date,value",
+      "source": "FRED CFNAI (Chicago Fed National Activity Index)",
+      "units": "Index",
+      "cadence": "monthly",
+      "seasonalAdjustment": "seasonally_adjusted",
+      "valueRange": [-25, 15],
+      "minObs": 200,
+      "consumedBy": ["sub-statlearn-deepseek"]
     }
   }
 }

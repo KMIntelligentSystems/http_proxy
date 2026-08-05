@@ -559,8 +559,9 @@ Endpoint: `https://api.census.gov/data/timeseries/eits/m3`
 | `for=us:*` mandatory | Omitting → HTTP 400 "missing for argument". Not obvious from docs. |
 | Duplicate columns in response | Header row has duplicate `data_type_code`, `category_code`, `seasonally_adj`. Time is at **index 8**, not 5. Parse by index, not by column name. |
 | HTTP 204 = empty | No data for that filter combo returns 204 with empty body. Must check `len(raw) == 0` before `json.loads()`. |
-| `time=YYYY` → monthly | A yearly `time` param returns all 12 monthly rows, not annual aggregate. |
-| `seasonally_adj` values | Literal `"no"` or `"yes"`, not a code. |
+| `time=YYYY` → monthly | A yearly `time` param returns all 12 monthly rows, not annual aggregate. Parse the returned `time` column as the observation month; `time_slot_id` is `"0"` and is not a date. |
+| Repeated `time` instability | More than two repeated `time=YYYY` predicates can return HTTP 500. The source daemon fetches each year separately and combines responses. For M3 ADL inputs it requests three calendar years and retains the latest 16 monthly levels—enough for YoY growth through lags `g_(t-1..t-3)`, including a January target. |
+| `seasonally_adj` values | Literal `"no"` or `"yes"`, not a code. The daemon maps provider suffixes `NSA` → `no`, `SA` → `yes`. |
 | NSA not on FRED | FRED mirrors SA M3 but rarely NSA. Always use Census API for NSA. |
 | Old lookup IDs wrong | The `VS41` / `NO41` notation from Census flat-file docs does **not** work in the API. Use `category_code` + `data_type_code` from `data/lookups/m3_series.json`. |
 | No multi-year range param | `time=YYYY` returns 12 months for that year. No `time=2002-2026` or `time=FROM&time=TO` range. N years = N serial calls. |
@@ -831,6 +832,16 @@ validated against a CLOSED set — `KNOWN_TARGETS` in
 request and only ever worked for Census M3. Each catalog entry now carries a
 `daemonTarget` field (FRED/BLS → `mfg_capacity`) which the runner de-dupes
 into `targets`. If you add a series, set its `daemonTarget`.
+
+**Census M3 scheduler fetches support release-stage ADL history (2026-08-05).**
+The source airlock uses the Census-required `for=us:*`, `seasonally_adj=no|yes`,
+and `time=YYYY` predicates, parses observation months from `time` rather than
+`time_slot_id`, and requests each of three calendar years separately to avoid
+the API's repeated-time HTTP 500 behavior. It first excludes observations after
+the requested reference month (preventing future leakage on historical reruns),
+then retains the 16 levels ending at that month so mirrored `indicator_history`
+can form YoY growth at `t` plus `g_(t-1..t-3)`. The scheduler mirror upserts
+these rows on `(series_id,date)`.
 
 **`bls_ces_mfg_employment` is now daemon-fetchable (2026-07-26),**
 superseding the 2026-07-23 human-maintained-CSV decision. Added as
