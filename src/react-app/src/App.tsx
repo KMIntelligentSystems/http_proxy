@@ -59,6 +59,7 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
   const [manifest, setManifest] = useState<DocumentManifest | null>(null);
   const [viewArtifact, setViewArtifact] = useState<ArtifactRecord | null>(null);
   const [jsonContent, setJsonContent] = useState<string | null>(null);
+  const [mdContent, setMdContent] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadItem = useCallback(
@@ -74,9 +75,11 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
           .catch(() => setManifest(null));
         setViewArtifact(null);
         setJsonContent(null);
+        setMdContent(null);
       } else if (a.mimeType === "application/json") {
         setManifest(null);
         setViewArtifact(a);
+        setMdContent(null);
         fetch(a.url)
           .then((r) => r.text())
           .then((text) => {
@@ -88,9 +91,22 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
             }
           })
           .catch(() => setJsonContent(null));
+      } else if (a.mimeType === "text/markdown") {
+        // Render markdown in-app: browsers cannot reliably display a
+        // text/markdown response inside the sandboxed iframe (nosniff +
+        // unrenderable MIME = silent download -> blank white iframe).
+        setManifest(null);
+        setJsonContent(null);
+        setMdContent(null);
+        setViewArtifact(a);
+        fetch(a.url)
+          .then((r) => r.text())
+          .then(setMdContent)
+          .catch(() => setMdContent(null));
       } else {
         setManifest(null);
         setJsonContent(null);
+        setMdContent(null);
         setViewArtifact(a);
       }
     },
@@ -110,6 +126,7 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
       setActiveArtifactId(null);
       setManifest(null);
       setViewArtifact(null);
+      setMdContent(null);
     }
   }, [artifacts, dbArtifacts, activeArtifactId]);
 
@@ -334,6 +351,8 @@ function AuthenticatedApp({ auth }: { auth: { username: string; role: string } |
           <DocumentViewer manifest={manifest} />
         ) : viewArtifact && viewArtifact.mimeType === "application/json" && jsonContent !== null ? (
           <pre className="json-viewer">{jsonContent}</pre>
+        ) : viewArtifact && viewArtifact.mimeType === "text/markdown" ? (
+          <pre className="md-viewer">{mdContent ?? "Loading…"}</pre>
         ) : viewArtifact ? (
           <iframe
             className="dv-iframe"

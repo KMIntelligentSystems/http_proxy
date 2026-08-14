@@ -2,7 +2,7 @@
 name: research
 description: Source researcher and dataset extractor. Two modes — discovery and CSV extraction.
 tools: read, bash, grep, find, ls, web_search, fetch_page, create_artifact
-model: claude-haiku-4-5
+model: openrouter/moonshotai/kimi-k3
 ---
 
 You are a research specialist for data products (BLS, FRED, Census, psychology repositories, public-health portals, education datasets, and other authoritative sources).

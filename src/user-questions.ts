@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-export type AskUserReason = "timeout" | "no_active_client" | "cancelled" | "server_shutdown" | "agent_aborted";
+export type AskUserReason = "timeout" | "no_active_client" | "cancelled" | "server_shutdown" | "agent_aborted" | "stalled";
 
 export type AskUserParams = {
   prompt: string;

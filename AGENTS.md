@@ -448,11 +448,23 @@ Available specialist agents:
 | `research` | Source discovery (Mode A) and CSV extraction (Mode B) | `text/markdown`, `application/json`, `text/csv` |
 | `statistician` | Applied statistical analysis: density, regression, time-series, seasonal adjustment, causal. **Method-agnostic** — picks the right technique from `.pi/skills/` and runs it in Python with explicit uncertainty. | `text/markdown`, `application/json`, `text/csv` (all `role: statistical-analysis` except CSVs which are `dataset-csv`) |
 | `narrator` | Prose sections and chart briefs | `text/markdown`, `application/json` |
-| `coder` | Self-contained D3 chart HTML | `text/html` |
+| `coder` | Self-contained D3 chart HTML **files** written to `data/staging/charts/` — the orchestrator then promotes each file with `create_artifact` and browser-validates it | files on disk → promoted to `text/html` |
 | `stylist` | Page composition (reads outline + theme), `role: "page"` HTML artifacts, document manifest. Does NOT invent CSS — references an existing `role: "shared-css"` theme artifact via `manifest.cssArtifactId`. | `text/html`, `application/vnd.dva.document+json` |
 | `cataloguer` | Catalog curator. Five JSON-job modes (relabel, infer-metadata, tag-pivots, suggest-collection, health-check). Returns proposals; orchestrator applies them. **User-initiated only** — the orchestrator delegates to the cataloguer only for explicit curation requests ("audit catalog", "relabel these", "suggest a collection", "health-check"). The word "catalogue" alone is a **display** verb (route to `query_artifacts`, see routing table) and must NOT trigger the cataloguer. No host-side scheduling. | `application/json` (proposal payload), optional `text/markdown` memory |
 
 > Validation is done by orchestrator + Playwright. There is no dedicated validator sub-agent.
+
+> **Sub-agent tool constraint (hard).** Delegation spawns the *vanilla* pi CLI
+> (`--no-extensions --no-skills`), so sub-agent children have ONLY pi's
+> built-in tools (`read`, `write`, `bash`, `grep`, `find`, `ls`). Custom
+> tools (`create_artifact`, `query_artifacts`, `execute_python`,
+> `web_search`, `fetch_page`, `playwright_*`, `create_document`) do NOT
+> exist in the child — frontmatter lines declaring them are inert. Any
+> sub-agent whose deliverable is an artifact (coder, and the same caveat
+> applies to narrator/stylist/cataloguer `create_artifact` calls) must
+> instead write files to disk; the orchestrator promotes them via
+> `create_artifact`. The statistician works because its deliverables are
+> already files on disk (CSVs/JSON/markdown under a run directory).
 
 ### Agents are roles, skills are methods
 
@@ -509,6 +521,7 @@ One table covers both new prompts and follow-up feedback:
 | Forecast, nowcast, prediction, output projection | `research` (data) → `statistician` + `industry-output-nowcast` skill |
 | Distribution / density / quantile fitting | `research` (data) → `statistician` + `oews-histogram` |
 | Seasonal adjustment, structural-break test, etc. | `statistician` + matching `.pi/skills/` entry |
+| Formula derivation/verification, back-transform bias corrections, delta-method intervals | `statistician` + `symbolic-derivation` — formulas authored as data, engine (Symbolica) derives/verifies; numeric core stays in numpy/sklearn |
 | Multi-page narrative, briefing, report, document | Full document pipeline (see workflow below) |
 | "Compose / build a document" (with or without selected artifacts) | Document compose flow — read the head document-outline for the active subject, `ask_user` for any missing field (audience / theme / framing), then `delegate` to `stylist`. See § "Document Outline". |
 | "Catalog / show me / surface / display / pull up <X>" | `query_artifacts` with a targeted WHERE clause (concept extraction from <X>) **and** `catalogFilter`. No pipeline, no sub-agent. The word "catalog" is the display verb — it means *push matching rows to the Documents panel and scope the sidebar tree*. Do not delegate to the cataloguer for display. |
@@ -637,7 +650,7 @@ For a multi-page document prompt:
 1. **Research discovery** → notes + link inventory.
 2. **Research CSV extraction** (Mode B) for each chart that needs tabular data → CSV + metadata.
 3. **Narrator** → prose sections + chart briefs (each brief references a `datasetArtifactId`).
-4. **Coder** (one call per brief) → one chart HTML artifact per brief. If a brief has no dataset, coder fails back; do extraction, retry.
+4. **Coder** (batched briefs per call) → one chart HTML **file** per brief under `data/staging/charts/`; the orchestrator promotes each file with `create_artifact` and Playwright-validates it. If a brief has no dataset, coder fails back; do extraction, retry.
 5. **Update the document outline** (see § "Document Outline") — list each produced artifact as a section with its type (`heading` / `text` / `chart`) and `artifactId`. Set `status: ready-to-compose` once the outline is complete.
 6. **`ask_user` for any missing outline fields** — `audience`, `theme`, framing notes. Do not delegate to stylist until the outline has them.
 7. **Stylist** → reads outline + theme artifact → N `role: "page"` HTML artifacts + document manifest. Stylist does NOT author CSS; it references the agreed `role: "shared-css"` theme via `manifest.cssArtifactId`.

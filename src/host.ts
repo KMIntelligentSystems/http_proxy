@@ -91,9 +91,13 @@ const WS_KEEPALIVE_INTERVAL_MS = 30_000;
 // stream, tool wrapper blocked indefinitely, host bug, etc.) and emit a
 // synthetic agent_prompt_stalled event so the React UI can un-spin.
 //
-// We do NOT forcibly abort the underlying session — the user has a manual
-// Abort button — because doing so could race with a turn that's actually
-// about to make progress. We just inform the client.
+// Waiting on a pending ask_user question does NOT count as a stall — the
+// loop is alive, just blocked on human input (see the tick below).
+//
+// On a real stall we abort the session: releasing promptInFlight alone is
+// insufficient because the /prompt 409 gate also checks session.isStreaming,
+// which remains true while the pi loop is wedged. Abort unwinds the loop so
+// the user can actually submit again.
 //
 // State is at module scope because attachAgentEventBridge() (also module
 // scope) needs to update lastAgentEventAt on every broadcast.
@@ -108,6 +112,11 @@ let lastStallSessionId: string | null = null;
 // The active agent session, exposed so the broadcast endpoint can inject
 // notification prompts into the orchestrator when new data arrives.
 let activeAgentSession: AgentSession | undefined;
+
+// The user-question manager, captured at startHost() so the stall watchdog
+// can (a) suppress false stalls while the agent is legitimately waiting on
+// the user and (b) cancel pending questions when it aborts a wedged turn.
+let activeUserQuestionManager: UserQuestionManager | undefined;
 
 const DAEMON_URL = process.env["DAEMON_URL"] ?? "http://127.0.0.1:8791";
 const DAEMON_HMAC_KEY = process.env["DAEMON_HMAC_KEY"] ?? "dev-insecure-hmac-key-change-me";
@@ -203,6 +212,17 @@ function startPromptStallTimer(sessionId: string | null): void {
       clearPromptStallTimer();
       return;
     }
+    // Waiting on the user (pending ask_user question) is EXPECTED silence —
+    // the agent loop is alive, just blocked on human input, and question
+    // broadcasts travel the manager transport (not session.subscribe), so
+    // they never refresh lastAgentEventAt. The default question timeout
+    // (300s, clampable to 30min) exceeds PROMPT_STALL_MS, so without this
+    // check the watchdog would declare a false stall mid-question. Reset
+    // the silence clock instead; the question's own timeout bounds the wait.
+    if (activeUserQuestionManager && activeUserQuestionManager.getPendingCount() > 0) {
+      lastAgentEventAt = Date.now();
+      return;
+    }
     const silentMs = Date.now() - lastAgentEventAt;
     if (silentMs > PROMPT_STALL_MS) {
       const totalMs = Date.now() - promptStartedAt;
@@ -221,6 +241,20 @@ function startPromptStallTimer(sessionId: string | null): void {
         turnAgeMs: totalMs,
         receivedAt: new Date().toISOString(),
       });
+      // Clearing promptInFlight alone is NOT enough to release the user:
+      // the 409 gate also checks session.isStreaming, which stays true
+      // while the pi agent loop is wedged (hung provider stream, dangling
+      // tool promise, etc.) — leaving the user locked out with "Agent is
+      // already processing a prompt" forever. Abort the session (same
+      // path as the manual Abort button) so the loop unwinds, isStreaming
+      // clears, and the dangling prompt() promise settles.
+      activeUserQuestionManager?.cancelAll("stalled");
+      const session = activeAgentSession;
+      if (session && typeof session.abort === "function") {
+        Promise.resolve(session.abort()).catch((err: unknown) => {
+          console.error(`[agent prompt stalled] session.abort() failed: ${err instanceof Error ? err.message : String(err)}`);
+        });
+      }
     }
   }, 15_000);
   if (typeof (handle as any).unref === "function") (handle as any).unref();
@@ -852,6 +886,7 @@ ctx.userQuestionManager?.setTransport({
   }),
   getClientCount: () => agentClients.size,
 });
+activeUserQuestionManager = ctx.userQuestionManager;
 const detachArtifactEvents = artifactStore.onCreated((artifact) => {
   broadcastAgentWsMessage({
     type: "artifact_created",
@@ -1340,7 +1375,10 @@ const server = http.createServer((req, res) => {
           sendJson(res, 200, dbHit.record);
           return;
         }
-        const mime = dbHit.record.mimeType;
+        // Browsers cannot reliably render text/markdown (inside the sandboxed
+        // viewer iframe, nosniff + unrenderable MIME = blank white frame), so
+        // serve markdown artifacts as text/plain.
+        const mime = dbHit.record.mimeType === "text/markdown" ? "text/plain" : dbHit.record.mimeType;
         res.writeHead(200, {
           "Content-Type": isUtf8ArtifactMime(mime) ? `${mime}; charset=utf-8` : mime,
           "Cache-Control": "no-store",
@@ -1361,10 +1399,11 @@ const server = http.createServer((req, res) => {
         return;
       }
       const data = fs.readFileSync(hit.filePath);
+      const fileMime = hit.record.mimeType === "text/markdown" ? "text/plain" : hit.record.mimeType;
       res.writeHead(200, {
-        "Content-Type": isUtf8ArtifactMime(hit.record.mimeType)
-          ? `${hit.record.mimeType}; charset=utf-8`
-          : hit.record.mimeType,
+        "Content-Type": isUtf8ArtifactMime(fileMime)
+          ? `${fileMime}; charset=utf-8`
+          : fileMime,
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
         "Content-Disposition": `inline; filename="${hit.record.filename.replace(/["\\]/g, "_")}"`,

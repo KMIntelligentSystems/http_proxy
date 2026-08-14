@@ -147,7 +147,7 @@ async function runAgent(
   args.push(`Task: ${task}`);
 
   return new Promise<RunResult>((resolve, reject) => {
-    //node cli.js --mode json -p --no-session --no-extensions --no-skills --no-prompt-templates --no-themes --model claude-haiku-4-5 --tools read,bash,grep,find,ls --append-system-prompt /tmp/pi-sub-XXXX/prompt.md "Task: Say    hello..."
+    //node cli.js --mode json -p --no-session --no-extensions --no-skills --no-prompt-templates --no-themes --model openrouter/moonshotai/kimi-k3 --tools read,bash,grep,find,ls --append-system-prompt /tmp/pi-sub-XXXX/prompt.md "Task: Say    hello..."
     const proc = spawn(piCmd.command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],

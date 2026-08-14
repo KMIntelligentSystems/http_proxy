@@ -11,7 +11,19 @@ framing.
 ## Frontend rendering rules
 
 The React UI (`/ui`, `src/react-app/src/App.tsx`) renders artifacts in an
-`<iframe>`. The sidebar is now a **catalog tree** (`CatalogTree.tsx`) reading
+`<iframe>` — **except `application/json` and `text/markdown`, which are
+fetched and rendered in-app** (`<pre class="json-viewer">` / `<pre class="md-viewer">`).
+Markdown must NOT go through the iframe: the host serves it verbatim as
+`text/markdown` + `X-Content-Type-Options: nosniff`, and inside the
+sandboxed viewer iframe (`sandbox="allow-scripts"`) an unrenderable MIME is
+silently treated as a blocked download → **blank white iframe, no console
+error** (reported 2026-08-09, "ADL nowcast run analysis is blank"). Whether
+it renders at all is browser-dependent, so never rely on it. Defense in
+depth: `src/host.ts` also maps `text/markdown` → `text/plain` on the
+`GET /ui/api/artifacts/<id>` serving path (both DB and file-store branches),
+so direct iframe loads degrade to readable plain text. Any new non-HTML
+text MIME type added to `ALLOWED_MIME_TYPES` needs the same treatment.
+The sidebar is now a **catalog tree** (`CatalogTree.tsx`) reading
 from `GET /ui/api/catalog`, not a flat list of `artifact_created` events.
 
 Key properties of the catalog path:
@@ -99,14 +111,24 @@ about what the user is actually seeing while you work.
 
 ### Stall watchdogs (defensive)
 
-Two independent watchdogs protect against hung turns. Neither forcibly aborts
-the session; they just release the `working` guard so the UI un-spins.
+Two independent watchdogs protect against hung turns. The client-side ones
+just release the `working` guard so the UI un-spins. The server-side one
+also **aborts the wedged session** (see below) — releasing `promptInFlight`
+alone is insufficient because the `/prompt` 409 gate also checks
+`session.isStreaming`, which stays true while the pi agent loop is hung.
 
 | Watchdog | Where | Threshold | Fires on |
 |---|---|---|---|
 | Client liveness | `agent-bridge.ts` | 75s no inbound WS bytes | half-open socket (edge idle timeout) |
 | Client turn stall | `agent-bridge.ts` | 180s no `agent_event` while `working` | model provider hung the stream |
-| Server turn stall | `host.ts` | 240s no `agent_event` | same, server-side |
+| Server turn stall | `host.ts` | 240s no `agent_event` | same, server-side; also cancels pending `ask_user` questions (reason `stalled`) and calls `session.abort()` |
+
+The server watchdog **suppresses false stalls while an `ask_user` question
+is pending** — question broadcasts travel the manager transport, not
+`session.subscribe`, so they never refresh `lastAgentEventAt`, and the
+default question timeout (300s, max 30min) exceeds the 240s threshold.
+Waiting on the user is expected silence, bounded by the question's own
+timeout.
 
 If you ever see `agent_prompt_stalled` arrive, the turn was released — the
 user can Submit again. Do not loop trying to "finish" a stalled turn.
@@ -518,6 +540,9 @@ The statistician sub-agent is **method-agnostic**; specific techniques live as s
 | `walk-forward-cv` | Time-series CV | Stub |
 | `bootstrap-ci` | Non-parametric uncertainty | Stub |
 | `regime-dummies` | Structural breaks / data hiatuses | Stub |
+| `tornqvist-aggregation` | Superlative index aggregation | Complete |
+| `adl-monthly-nowcast` | Monthly ADL nowcast under release admissibility | Complete |
+| `symbolic-derivation` | CAS-as-a-tool (Symbolica): derivation, verification, delta-method, Jensen corrections | Complete |
 
 New technique = new skill folder under `.pi/skills/`. Do not put methods in the agent prompts.
 

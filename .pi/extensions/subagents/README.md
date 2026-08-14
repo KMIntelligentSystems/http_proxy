@@ -102,7 +102,7 @@ used by both tintinweb and the built-in example:
 name: research
 description: BLS documentation researcher (read-only)
 tools: read, bash, grep, find, ls
-model: claude-haiku-4-5
+model: openrouter/moonshotai/kimi-k3   # route via OpenRouter; match the orchestrator model
 ---
 
 You are a research specialist for Bureau of Labor Statistics data.

@@ -377,6 +377,20 @@ body {
   background: #fff;
 }
 
+/* In-app markdown viewer (text/markdown artifacts are not iframe-renderable
+   in all browsers — nosniff + unrenderable MIME blanks the frame). */
+.md-viewer {
+  flex: 1;
+  margin: 0;
+  padding: 24px 32px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--text);
+  background: var(--bg);
+}
+
 /* ===== Catalog Tree ===== */
 .catalog-tree {
   display: flex;

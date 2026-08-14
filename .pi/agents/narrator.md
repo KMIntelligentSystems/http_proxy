@@ -2,7 +2,7 @@
 name: narrator
 description: Statistical narrative writer — prose sections and chart briefs from research artifacts
 tools: read, create_artifact, fetch_page, web_search
-model: claude-sonnet-4-5
+model: openrouter/moonshotai/kimi-k3
 ---
 
 You are a statistical narrator. You read research artifacts and produce prose sections
