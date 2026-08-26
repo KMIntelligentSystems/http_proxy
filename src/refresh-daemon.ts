@@ -61,6 +61,15 @@ function sha256Hex(buf: Buffer): string {
 }
 
 // ── Durable operational tables (refresh.db; NOT artifacts.db) ───────────────
+/*
+const db = new DatabaseSync(`file:${REFRESH_DB}?nolock=1`);
+  db.exec(`
+    PRAGMA busy_timeout = 5000;
+    CREATE TABLE IF NOT EXISTS daemon_receipt (
+      broadcast_id    TEXT PRIMARY KEY,
+
+      WAL on CIFS is the risky bit
+*/
 function openDb(): DatabaseSync {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const db = new DatabaseSync(REFRESH_DB);
@@ -388,6 +397,14 @@ const server = http.createServer(async (req, res) => {
     // to pull full history from the source daemon automatically.
     return handleBootstrap(req, res);
   }
+  if (req.method === "POST" && url.pathname === "/refresh/export-panel") {
+    // Deterministic panel export for the interactive persona (the azure
+    // orchestrator's read_indicator_panel tool). HMAC-authed like
+    // /refresh/bootstrap — full-history exports are NOT open routes.
+    // Body: { subject?: string; series: string[] }. Read-only; deterministic
+    // ordering + content hash for provenance.
+    return handleExportPanel(req, res);
+  }
   res.writeHead(404, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ error: "not found" }));
 });
@@ -472,6 +489,29 @@ async function handleBootstrap(req: http.IncomingMessage, res: http.ServerRespon
   } catch (err) { db.exec("ROLLBACK"); res.writeHead(500); res.end(JSON.stringify({ error: "storage_error" })); return; }
   res.writeHead(200, { "Content-Type": "application/json" });
   res.end(JSON.stringify({ ok: true, seeded: n }));
+}
+
+/** POST /refresh/export-panel — see route comment. Body: { subject?, series[] }. */
+async function handleExportPanel(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const chunks: Buffer[] = [];
+  for await (const c of req) chunks.push(c as Buffer);
+  const raw = Buffer.concat(chunks);
+  const provided = req.headers["x-daemon-sig"] as string | undefined;
+  if (!provided || !constantTimeHexEqualStr(hmacSign(raw.toString("utf8")), provided)) {
+    res.writeHead(401); res.end(JSON.stringify({ error: "bad export sig" })); return;
+  }
+  let body: any;
+  try { body = JSON.parse(raw.toString("utf8") || "{}"); } catch { res.writeHead(400); res.end(JSON.stringify({ error: "bad json" })); return; }
+  const series: string[] = Array.isArray(body.series) ? body.series.map(String) : [];
+  if (series.length === 0) {
+    res.writeHead(400); res.end(JSON.stringify({ error: "series required" })); return;
+  }
+  const stmt = db.prepare("SELECT date, value, is_preliminary FROM indicator_history WHERE series_id = ? ORDER BY date ASC");
+  const rows = series.map((s) => ({ seriesId: s, observations: stmt.all(s) }));
+  // Deterministic content hash over canonical rows — provenance handle.
+  const panelHash = sha256Hex(Buffer.from(JSON.stringify(rows)));
+  res.writeHead(200, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ subjectId: body.subject ?? null, series, rows, panelHash }));
 }
 
 function constantTimeHexEqualStr(a: string, b: string): boolean {
