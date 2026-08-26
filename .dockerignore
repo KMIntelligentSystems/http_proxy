@@ -1,9 +1,12 @@
 .git
-env
+.env
+**/.env*
 node_modules
+**/node_modules
+**/dist
 data
-dist
 scripts
 src/react-app
 conversations
+*.log
 .dockerignore-build
