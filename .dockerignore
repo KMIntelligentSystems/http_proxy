@@ -1,0 +1,9 @@
+.git
+env
+node_modules
+data
+dist
+scripts
+src/react-app
+conversations
+.dockerignore-build

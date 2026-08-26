@@ -57,3 +57,4 @@ __pycache__/
 !/scripts/smoke-refresh-bridge.mjs
 !/scripts/smoke-sarima-skill.mjs
 !/scripts/smoke-run-refresh.mjs
+.build-refresh/

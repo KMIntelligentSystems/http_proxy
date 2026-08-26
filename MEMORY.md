@@ -798,6 +798,24 @@ registry + closed allowlist) → `npm run data:load-index-csvs`
 `indicator_history`. Dates normalize to YYYY-MM at the bridge so CSV and
 broadcast observations collide on the same upsert key.
 
+**Azure bootstrap (2026-08-24):** `scripts/upload-backbone-to-azure.mjs`
+exports head-of-chain `text/csv` rows (closed `data/series-map.json`
+allowlist) and pushes them to the Azure artifact-service catalog —
+`POST /artifacts/upload` → `POST /artifacts` (role `user`), tagged with
+the exact seriesId, as user `admin-bootstrap`. All 13 series uploaded
+13/13 (CLI: `node scripts/upload-backbone-to-azure.mjs`, `--list`,
+`--sync-dry-run`, `--base <url>`). The broker contract lives in
+`/repos/azure-foundry/src/hosted-agent/broker.ts`; the server-side
+`/refresh-sync` route lives in `/repos/daemon/daemon/artifact-service/src/server.ts`
+(+ `refresh-sync.ts` port of the bridge). **Deployed ACA revision was
+stale → `/refresh-sync` 404**; redeploy `Dockerfile.artifact-service`
+(with `REFRESH_DAEMON_URL` + `DAEMON_HMAC_KEY` set) before the operator's
+`/refresh-sync` can report anything but `missing`. **Redeployed 2026-08-24
+to `artifact-service:0.1.6` (revision 0000010): dryRun listed 13
+`would-send`; POST `dryRun:false` returned HTTP 200, all 13 `sent`.**
+The `hmac-key` secret (visible via `az containerapp secret show -n refresh-daemon`)
+was set on `artifact-service` and referenced as `DAEMON_HMAC_KEY=secretref:hmac-key`.
+
 **On-demand refresh:** `POST /refresh/run` (HMAC) synthesizes a
 deterministic dataset from the history tail (no volatile fields in the
 hashed payload → same history = same hash = deduped re-run) and enqueues
@@ -832,6 +850,30 @@ contamination below).
   forecasts reproduce within 0.02%.
 - Skills run on the `py` launcher (`PYTHON_BIN` env) — NOT the codeGen MCP
   venv. Same packages (statsmodels 0.14.6), different interpreter.
+- Python env additions by pip (no requirements.txt in repo — record additions
+  here): sklearn 1.9.0 (2026-08-09, ADL run); **symbolica 2.2.0**
+  (2026-08-14, `symbolic-derivation` skill). UNLICENSED symbolica traps: one
+  instance **per machine** enforced natively (hard `exit(127)` on contention),
+  banner written to fd 1 (Python-level `redirect_stdout` does NOT swallow it —
+  use the fd-level `os.dup2` preamble in the skill), Unicode math italic crashes
+  cp1252 consoles (`PYTHONUTF8=1`). VS Code Python tooling held the instance
+  lock once and blocked all agent runs — find the holder with:
+  `powershell "Get-Process python | %{$p=$_; try{$p.Modules|?{$_.FileName -like '*symbolica*'}|%{$p.Id}}catch{}}"`.
+  **LICENSED as of 2026-08-15** (hobbyist key). Mechanism (validated):
+  `set_license_key(key)` is **per-process only in 2.2.0 — it writes nothing
+  to disk** despite its docstring ("for this computer"), so a fresh process
+  reverts to restricted mode. The native code reads env var
+  `SYMBOLICA_LICENSE` at import; persisted via
+  `setx SYMBOLICA_LICENSE "<key>"` → `HKCU\Environment` (verified by
+  `reg query`). Env vars are inherited from the parent process, so only
+  shells/IDEs started **after** the setx see it; test in a fresh shell with
+  `py -3 -c "import symbolica; print(symbolica.is_licensed())"` → expect no
+  banner, `True`. Licensed mode removes: fd-1 banner (the `os.dup2` preamble
+  is no longer needed, keep only the UTF-8 console line), the one-instance-
+  per-machine lock (two concurrent instances verified exit 0, 2026-08-15),
+  and the single-core limit. Key also lives in the (non-persisted) shell env
+  vars `SYMBOLICA_NAME` / `SYMBOLICA_EMAIL` / `SYMBOLICA_KEY` if rotation is
+  ever needed.
 
 **Dev scheduling (added 2026-07-23):** the browser CONFIGURES, the OS
 EXECUTES. React `SchedulerPanel` (calendar toggle, bottom-right) →

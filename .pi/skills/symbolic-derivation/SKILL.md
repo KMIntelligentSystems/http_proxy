@@ -1,6 +1,6 @@
 ---
 name: symbolic-derivation
-description: Author mathematical formulas AS DATA and let an external symbolic engine (Symbolica) derive, verify, evaluate, and render them — back-transforms and their biases, delta-method standard errors and intervals, Jensen/smearing corrections, machine-verified identities, and report-ready LaTeX generated from the same expression objects. Use whenever a run would otherwise hand-code the same formula three times (code + prose + chart labels) or rely on the agent remembering a correction the machine can derive. Engine — Symbolica Python bindings by default; Rust crate reserved for the frozen airlock path; SymPy as fallback where Symbolica's calculus surface is too narrow. Status — Complete (validated 2026-08-14 against data/adl-nowcast-2026-06; test report conversations/symbolic-layer-test-2026-08-14.md).
+description: Author mathematical formulas AS DATA and let an external symbolic engine (Symbolica) derive, verify, evaluate, and render them — back-transforms and their biases, delta-method standard errors and intervals, Jensen/smearing corrections, machine-verified identities, and report-ready LaTeX generated from the same expression objects. Use whenever a run would otherwise hand-code the same formula three times (code + prose + chart labels) or rely on the agent remembering a correction the machine can derive. Engine — Symbolica Python bindings by default; Rust crate reserved for the frozen airlock path; SymPy as fallback where Symbolica's calculus surface is too narrow. Status — Complete (validated 2026-08-14 against data/adl-nowcast-2026-06; test report conversations/symbolic-layer-test-2026-08-14.md; licensed via SYMBOLICA_LICENSE env var 2026-08-15).
 ---
 
 # Symbolic Derivation — CAS-as-a-tool
@@ -49,20 +49,34 @@ had missed, auto-generated LaTeX, and reproduced the run's numpy point level
 | **Symbolica Rust crate** | Only when a derivation enters the frozen refresh path (airlock verb or digest-pinned pipeline) — no Python runtime, kernel codegen, exact rational arithmetic. |
 | **SymPy** | Fallback for calculus/statsSymbolic gaps (integration, distributions). Never mix engines inside one derivation chain. |
 
-**License**: Symbolica is source-available; unlicensed = restricted mode (1 core,
-banner on stdout). Free hobbyist key: `symbolica.request_hobbyist_license(name, email)`
-once, then set the key via env/config. Commercial use requires a paid license —
-**resolve before any production/frozen use.**
+**License**: **LICENSED (hobbyist key) as of 2026-08-15.** The native engine reads
+env var `SYMBOLICA_LICENSE` at import; the key is persisted in `HKCU\Environment`
+via `setx`, so every process launched from a post-2026-08-15 shell starts licensed
+(no banner, all cores, no instance lock). Gotcha: `set_license_key()` in 2.2.0 is
+**per-process only** (writes nothing to disk despite its docstring) — do not rely
+on it; the env var is the mechanism. Symbolica is source-available; unlicensed =
+restricted mode (1 core, banner on stdout). Commercial use requires a paid
+license — **resolve before any production/frozen use.**
 
-## 3. Procedure
+## 3. ProcedureS
 
 Work in Python via the `py` launcher (MEMORY.md: skills run on `py`, `PYTHON_BIN` env).
 
-1. **Suppress the banner + fix the console.** Unlicensed mode prints a ~10-line banner
-   at import that **bypasses Python's `sys.stdout` — it is a native write to fd 1**
-   (validated: `contextlib.redirect_stdout` swallows 0 bytes), so only fd-level
-   redirection suppresses it. The pretty-printer also emits Unicode math italic (𝑒, 𝜎)
-   that crashes cp1252 Windows consoles. Standard preamble (validated 2026-08-14):
+1. **Fix the console (and the banner, if ever unlicensed).** Since 2026-08-15 the
+   machine is licensed via the `SYMBOLICA_LICENSE` env var, so no banner prints —
+   the only preamble still required is the console encoding fix: the pretty-printer
+   emits Unicode math italic (𝑒, 𝜎) that crashes cp1252 Windows consoles.
+
+   ```python
+   import sys
+   from symbolica import S, E, N
+   sys.stdout.reconfigure(encoding='utf-8')  # Unicode math italic; or PYTHONUTF8=1
+   ```
+
+   **Unlicensed fallback** (validated 2026-08-14; keep for any machine without the
+   key): the banner bypasses `sys.stdout` — it is a native write to fd 1
+   (`contextlib.redirect_stdout` swallows 0 bytes) — so only fd-level redirection
+   suppresses it:
 
    ```python
    import os, sys
@@ -71,10 +85,8 @@ Work in Python via the `py` launcher (MEMORY.md: skills run on `py`, `PYTHON_BIN
    os.dup2(_devnull, 1)                      # native banner writes to fd 1 → devnull
    from symbolica import S, E, N
    os.dup2(_saved, 1); os.close(_saved); os.close(_devnull)
-   sys.stdout.reconfigure(encoding='utf-8')  # Unicode math italic; or PYTHONUTF8=1
+   sys.stdout.reconfigure(encoding='utf-8')
    ```
-
-   (Or install a free hobbyist license key, which removes the banner at source.)
 
 2. **Author formulas as data.** Symbols via `S('name')`, expressions via `E('...')` or
    arithmetic on symbols. These strings are what would later be hashed/frozen — keep
@@ -146,11 +158,12 @@ what distributional assumption) vs empirical, and what their disagreement diagno
 
 | Failure | Symptom | Fix |
 |---|---|---|
-| License banner (native fd-1 write) | Corrupted stdout JSON; `redirect_stdout` swallows 0 bytes | fd-level `os.dup2` preamble (§3) or license key |
+| License banner (native fd-1 write) | Corrupted stdout JSON; `redirect_stdout` swallows 0 bytes | **Resolved 2026-08-15** by `SYMBOLICA_LICENSE` env var; on unlicensed machines use the fd-level `os.dup2` fallback preamble (§3) |
 | cp1252 crash printing expressions | `UnicodeEncodeError` on 𝑒/𝜎 | `PYTHONUTF8=1` or §3 preamble |
 | `.evaluate()` TypeError | Missing `constants` arg | Call `.evaluate({})` |
 | Complex return from evaluate | `(693992.12+0j)` | Assert imag≈0, take `.real` |
 | Silent wrong algebra | — | Never report an unverified identity; `.expand()==0` or it didn't happen |
+| Single-instance contention | `exit(127)`; "Cannot start new unlicensed Symbolica instance since there is already another one running on the machine" | **Resolved 2026-08-15** by the license (two concurrent instances verified exit 0). Unlicensed = one instance **per machine**, enforced natively; find the lock holder with `powershell "Get-Process python | %{$p=$_; try{$p.Modules|?{$_.FileName -like '*symbolica*'}|%{$p.Id}}catch{}}"` and serialize runs. |
 
 ## References
 
