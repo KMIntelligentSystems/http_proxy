@@ -1,12 +1,11 @@
+# Anchored root rules (avoid accidental glob of repo internals like **/x)
 .git
 .env
-**/.env*
 node_modules
-**/node_modules
-**/dist
+dist
 data
-scripts
-src/react-app
 conversations
+src/react-app
+scripts
 *.log
 .dockerignore-build
