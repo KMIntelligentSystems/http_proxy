@@ -511,7 +511,10 @@ export async function runWaitingJobs(db: DatabaseSync, _daemonUrl: string): Prom
       const ctx = buildTaskContext(job, contract, ds.dataset_id);
       // M3: the session enforces the SAME budget the TaskContext advertises.
       const session = new RefreshSession(contract, job.reference_month, ds.dataset_id, ctx.budget);
-      const { runOracle } = await import("./oracle.js");
+      // Use Foundry oracle if configured, otherwise OpenRouter (legacy).
+      const useFoundry = process.env["USE_FOUNDRY_LLM"] === "1" || process.env["AZURE_AI_PROJECT_ENDPOINT"];
+      const { runOracle } = useFoundry ? await import("./oracle-foundry.js") : await import("./oracle.js");
+      console.log(`[broker] Using ${useFoundry ? "Foundry" : "OpenRouter"} LLM for ${job.id}`);
       const terminal = await runOracle(ctx, session, db);
 
       // H2: "stored" is only credible if the write verb actually ran this run.
