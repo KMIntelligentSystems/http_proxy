@@ -22,7 +22,8 @@ const FOUNDRY_MODEL = process.env["REFRESH_LLM_MODEL"] ?? "gpt-4.1-mini";
 const FOUNDRY_TOKEN = process.env["FOUNDRY_ACCESS_TOKEN"]; // Short-lived Entra token
 
 // ── (B) the system prompt — the rules of engagement ───────────────────────
-export const REFRESH_SYSTEM_PROMPT = `You are the Refresh Oracle for the manufacturing nowcast target daemon. You drive a closed tool loop to apply verified leading-indicator broadcasts to frozen forecast skills.
+export const REFRESH_SYSTEM_PROMPT = `You are the Refresh Oracle for the manufacturing nowcast target daemon. 
+You drive a closed tool loop to apply verified leading-indicator broadcasts to frozen forecast skills.
 
 YOUR JOB is given in the first user message (the TaskContext): which contract, reference month, pinned pipeline, verified dataset, in-scope series, and budget. Work that one job, then terminate.
 
@@ -157,7 +158,7 @@ export async function runOracle(
   for (let i = 0; i < ctx.budget.max_tool_calls + 2; i++) {
     let resp: Response;
     try {
-      resp = await fetch(`${FOUNDRY_ENDPOINT}/evaluations`, {
+      resp = await fetch(`${FOUNDRY_ENDPOINT}/openai/v1/responses`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -246,3 +247,25 @@ async function scriptedDriver(session: RefreshSession, db: DatabaseSync): Promis
   }
   return terminal ?? "failed";
 }
+
+/*
+
+ ### Deployment Commands
+
+ ```bash
+   # 1. Enable managed identity
+   az containerapp identity assign --name refresh-daemon --resource-group nowcasting --system-assigned
+
+   # 2. Grant Foundry access
+   az role assignment create --assignee <principal-id> --role "Azure AI Developer" --scope <foundry-project>
+
+   # 3. Set env vars                                                                                                                                                                                                                                         
+   az containerapp update --name refresh-daemon --resource-group nowcasting \                                                                                                                                                                                
+     --set-env-vars USE_FOUNDRY_LLM=1 AZURE_AI_PROJECT_ENDPOINT="https://..."
+
+   # 4. Restart                                                                                                                                                                                                                                              
+   az containerapp restart --name refresh-daemon --resource-group nowcasting                                                                                                                                                                                 
+ ```
+
+
+*/

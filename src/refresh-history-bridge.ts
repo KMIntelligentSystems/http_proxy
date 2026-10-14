@@ -24,7 +24,7 @@
  * TRIGGER POINTS
  *   1. host boot (seed-on-start; best-effort — never blocks or crashes the host)
  *   2. POST /ui/api/artifacts/<id>/save when the saved artifact is a dataset CSV
- *   3. the `sync_indicator_history` agent tool (web-main.ts)
+` agent tool (web-main.ts)
  */
 import crypto from "node:crypto";
 import fs from "node:fs";
